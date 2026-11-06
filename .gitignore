@@ -1,0 +1,18 @@
+# Python / FastAPI
+backend/.env
+backend/__pycache__/
+backend/venv/
+backend/.venv/
+backend/uploads/
+uploads/
+
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+frontend/.env
+
+# System
+.DS_Store
+Thumbs.db

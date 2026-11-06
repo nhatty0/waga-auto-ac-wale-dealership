@@ -1,0 +1,41 @@
+# Global configuration
+{
+	admin off
+}
+
+# ========================================================
+# Waga Dealership Hub (AutoShowroom Ethiopia) Production Caddy
+# Reverse Proxy: Next.js (port 3000) & FastAPI (port 8000)
+# Domain: car.wagadelivery.com
+# ========================================================
+
+car.wagadelivery.com:8080, :8080 {
+	encode gzip zstd
+
+	# Route API endpoints directly to FastAPI backend
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# Route FastAPI interactive docs
+	handle /docs* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle /openapi.json {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# Route uploaded static vehicle media
+	handle /static/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	handle /uploads/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# Route all frontend pages, SSR, and assets to Next.js
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}

@@ -1,0 +1,105 @@
+import logging
+from typing import Optional, Any, Dict
+from sqlalchemy.orm import Session
+import models
+from settings import settings
+from telegram import format_booking_lead_caption, send_telegram_lead
+from sms import send_lead_sms
+
+logger = logging.getLogger(__name__)
+
+
+async def dispatch_lead_multichannel(
+    booking: Any,
+    vehicle_title: str,
+    vehicle_price: float = 0.0,
+    dealership_id: Optional[int] = None,
+    db: Optional[Session] = None
+) -> Dict[str, Any]:
+    """
+    Multi-Channel Lead Dispatch:
+    - Priority 1 (Telegram): If dealership.telegram_chat_id is present, dispatch the formatted
+      lead via the platform bot to that chat ID.
+    - Priority 2 (SMS Fallback via AfroMessage): If Telegram is not connected or Telegram dispatch fails,
+      dispatch an instant SMS alert to the dealer's registered phone number:
+      "አዲስ የመኪና ቀጠሮ ከ Waga! ደንበኛ: [Name] ([Phone]) ለመኪና: [Car Title]። እባክዎ ደውለው ያነጋግሯቸው።"
+    """
+    local_db = False
+    if db is None:
+        from database import SessionLocal
+        db = SessionLocal()
+        local_db = True
+
+    dealer = None
+    try:
+        if dealership_id:
+            dealer = db.query(models.Dealership).filter(models.Dealership.id == dealership_id).first()
+    finally:
+        if local_db and db:
+            db.close()
+
+    result = {
+        "telegram_sent": False,
+        "sms_sent": False,
+        "channel": None,
+        "error": None
+    }
+
+    if not dealer:
+        logger.warning(f"No dealership found for ID {dealership_id}. Lead dispatch skipped.")
+        return result
+
+    # Resolve platform bot token (or dealer custom token if legacy record exists)
+    bot_token = (
+        (dealer.telegram_bot_token.strip() if dealer.telegram_bot_token and dealer.telegram_bot_token.strip() else None)
+        or settings.TELEGRAM_PLATFORM_BOT_TOKEN
+        or settings.TELEGRAM_BOT_TOKEN
+    )
+
+    customer_name = getattr(booking, "customer_name", "Valued Customer")
+    customer_phone = getattr(booking, "phone_number", "")
+
+    # ==========================================
+    # Priority 1: Telegram Notification
+    # ==========================================
+    if dealer.telegram_chat_id and dealer.telegram_chat_id.strip() and bot_token:
+        chat_id = dealer.telegram_chat_id.strip()
+        success, info = await send_telegram_lead(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            booking=booking,
+            vehicle_title=vehicle_title,
+            vehicle_price=vehicle_price,
+            dealer_name=dealer.name
+        )
+        if success:
+            result["telegram_sent"] = True
+            result["channel"] = "telegram"
+            logger.info(f"✓ [LEAD DISPATCH] Priority 1 (Telegram) succeeded for {dealer.name} (Chat: {chat_id})")
+            return result
+        else:
+            logger.warning(f"⚠️ [LEAD DISPATCH] Priority 1 (Telegram) failed: {info}. Falling back to Priority 2 (SMS).")
+            result["error"] = info
+
+    # ==========================================
+    # Priority 2: SMS Fallback via AfroMessage
+    # ==========================================
+    dealer_phone = getattr(dealer, "phone_number", None)
+    if dealer_phone and dealer_phone.strip():
+        sms_success = await send_lead_sms(
+            dealer_phone=dealer_phone.strip(),
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            vehicle_title=vehicle_title
+        )
+        if sms_success:
+            result["sms_sent"] = True
+            result["channel"] = "sms"
+            logger.info(f"✓ [LEAD DISPATCH] Priority 2 (AfroMessage SMS) delivered to dealer {dealer_phone}")
+            return result
+        else:
+            logger.error(f"✗ [LEAD DISPATCH] Priority 2 (AfroMessage SMS) failed to {dealer_phone}")
+    else:
+        logger.warning(f"⚠️ [LEAD DISPATCH] Dealership {dealer.id} has no phone_number configured for SMS fallback.")
+
+    return result

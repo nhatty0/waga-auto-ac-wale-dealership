@@ -1,0 +1,348 @@
+const fs = require('fs');
+const path = require('path');
+const sharp = require('../node_modules/sharp');
+
+function getSvgMarkup({ maskable = false, forFavicon = false } = {}) {
+  const transform = maskable 
+    ? 'transform="translate(256, 256) scale(0.74) translate(-256, -256)"'
+    : '';
+
+  // Background style
+  let background;
+  if (maskable) {
+    // Full bleed, no rounded corners for Android adaptive safe zone
+    background = `
+      <rect width="512" height="512" fill="#09090b"/>
+      <rect width="512" height="512" fill="url(#bgObsidian)"/>
+    `;
+  } else if (forFavicon) {
+    background = `
+      <rect x="8" y="8" width="496" height="496" rx="108" fill="#09090b"/>
+      <rect x="8" y="8" width="496" height="496" rx="108" fill="url(#bgObsidian)"/>
+      <rect x="8" y="8" width="496" height="496" rx="108" fill="none" stroke="url(#borderMetallic)" stroke-width="4"/>
+    `;
+  } else {
+    background = `
+      <rect x="8" y="8" width="496" height="496" rx="108" fill="#09090b"/>
+      <rect x="8" y="8" width="496" height="496" rx="108" fill="url(#bgObsidian)"/>
+      <rect x="8" y="8" width="496" height="496" rx="108" fill="none" stroke="url(#borderMetallic)" stroke-width="3"/>
+      <rect x="12" y="12" width="488" height="488" rx="104" fill="none" stroke="#FFFFFF" stroke-opacity="0.04" stroke-width="1.5"/>
+    `;
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Deep Obsidian Radial Gradient (#09090b) -->
+    <radialGradient id="bgObsidian" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#161619"/>
+      <stop offset="50%" stop-color="#0c0c0e"/>
+      <stop offset="100%" stop-color="#050507"/>
+    </radialGradient>
+
+    <!-- Metallic Outer Border Gradient (#27272a, #52525b, #71717a) -->
+    <linearGradient id="borderMetallic" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#52525b"/>
+      <stop offset="25%" stop-color="#27272a"/>
+      <stop offset="50%" stop-color="#71717a"/>
+      <stop offset="75%" stop-color="#27272a"/>
+      <stop offset="100%" stop-color="#3f3f46"/>
+    </linearGradient>
+
+    <!-- Crisp Titanium White Gradients (#F8FAFC, #FFFFFF, #CBD5E1) -->
+    <linearGradient id="titaniumLight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="50%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#CBD5E1"/>
+    </linearGradient>
+
+    <linearGradient id="titaniumDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E2E8F0"/>
+      <stop offset="50%" stop-color="#94A3B8"/>
+      <stop offset="100%" stop-color="#475569"/>
+    </linearGradient>
+
+    <!-- Vibrant Amber / Gold Gradients (#F59E0B, #FDE68A, #D97706) -->
+    <linearGradient id="amberGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE68A"/>
+      <stop offset="35%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+
+    <linearGradient id="amberPure" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#B45309"/>
+    </linearGradient>
+
+    <!-- Center Showroom Underglow -->
+    <radialGradient id="stageGlow" cx="50%" cy="56%" r="48%">
+      <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.30"/>
+      <stop offset="55%" stop-color="#F59E0B" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Windshield Tint -->
+    <linearGradient id="windshieldTint" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#090c12"/>
+      <stop offset="55%" stop-color="#121822"/>
+      <stop offset="100%" stop-color="#07090d"/>
+    </linearGradient>
+
+    <!-- Laser Headlight Glow Filters -->
+    <filter id="headlightBlur" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <filter id="crispGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.5" result="glow"/>
+      <feComposite in="SourceGraphic" in2="glow" operator="over"/>
+    </filter>
+
+    <filter id="badgeShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  ${background}
+
+  <g ${transform}>
+    <!-- Ambient Stage Underglow -->
+    <ellipse cx="256" cy="275" rx="195" ry="125" fill="url(#stageGlow)"/>
+
+    <!-- ========================================================
+         1. SLANTED AERODYNAMIC ROOFLINE & GREENHOUSE
+         ======================================================== -->
+    <!-- Cockpit Glass Area -->
+    <path d="M 164 212 C 190 142 224 122 256 122 C 288 122 322 142 348 212 C 314 222 198 222 164 212 Z" 
+          fill="url(#windshieldTint)" stroke="#1e293b" stroke-width="1.5"/>
+
+    <!-- Windshield Horizon Light Sheen -->
+    <path d="M 196 176 C 224 162 256 160 286 166" 
+          stroke="url(#titaniumLight)" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.45"/>
+
+    <!-- Slanted Aerodynamic Roofline Arch (Titanium White) -->
+    <path d="M 150 220 C 178 136 220 114 256 114 C 292 114 334 136 362 220 C 348 220 338 212 330 192 C 310 140 282 128 256 128 C 230 128 202 140 182 192 C 174 212 164 220 150 220 Z" 
+          fill="url(#titaniumLight)"/>
+
+    <!-- ========================================================
+         2. SCULPTED SUPERCAR FRONT FASCIA & FENDERS
+         ======================================================== -->
+    <!-- Left Fender Shoulder Arch -->
+    <path d="M 72 284 C 70 256 86 234 116 222 C 142 212 160 216 174 220 L 166 238 C 150 232 136 230 118 238 C 96 248 88 264 92 284 Z" 
+          fill="url(#titaniumDark)"/>
+
+    <!-- Right Fender Shoulder Arch -->
+    <path d="M 440 284 C 442 256 426 234 396 222 C 370 212 352 216 338 220 L 346 238 C 362 232 376 230 394 238 C 416 248 424 264 420 284 Z" 
+          fill="url(#titaniumDark)"/>
+
+    <!-- Hood Center Powerdome Creases -->
+    <path d="M 218 218 L 256 204 L 294 218 L 278 234 L 256 224 L 234 234 Z" 
+          fill="#11141c" stroke="#27272a" stroke-width="1.2"/>
+    <polygon points="256,202 258,224 254,224" fill="url(#amberGold)"/>
+
+    <!-- ========================================================
+         3. AGGRESSIVE HYPERCAR LED HEADLIGHTS
+         Fierce, razor-sharp slanted LED lightbars glaring forward
+         ======================================================== -->
+    <!-- Left LED Headlight Assembly -->
+    <!-- Amber DRL Eyebrow Glow -->
+    <polygon points="98,244 196,270 190,282 92,256" fill="#F59E0B" opacity="0.7" filter="url(#headlightBlur)"/>
+    <!-- Black Bezel Housing -->
+    <polygon points="100,246 194,269 188,278 94,255" fill="#09090b" stroke="#F59E0B" stroke-width="1.8"/>
+    <!-- Intense Pure White Laser LED Core Strip -->
+    <polygon points="106,248 190,268 186,274 102,254" fill="#FFFFFF" filter="url(#crispGlow)"/>
+    <!-- Secondary Lower Amber DRL Claw -->
+    <polygon points="120,265 180,280 176,285 116,270" fill="url(#amberGold)"/>
+
+    <!-- Right LED Headlight Assembly -->
+    <!-- Amber DRL Eyebrow Glow -->
+    <polygon points="414,244 316,270 322,282 420,256" fill="#F59E0B" opacity="0.7" filter="url(#headlightBlur)"/>
+    <!-- Black Bezel Housing -->
+    <polygon points="412,246 318,269 324,278 418,255" fill="#09090b" stroke="#F59E0B" stroke-width="1.8"/>
+    <!-- Intense Pure White Laser LED Core Strip -->
+    <polygon points="406,248 322,268 326,274 410,254" fill="#FFFFFF" filter="url(#crispGlow)"/>
+    <!-- Secondary Lower Amber DRL Claw -->
+    <polygon points="392,265 332,280 336,285 396,270" fill="url(#amberGold)"/>
+
+    <!-- Dark Center Grille Intake Cavity -->
+    <path d="M 194 274 L 256 290 L 318 274 L 328 348 L 256 368 L 184 348 Z" 
+          fill="#0a0b0e" stroke="#1c202a" stroke-width="1.5"/>
+
+    <!-- ========================================================
+         4. THE PROMINENT STYLIZED "W" BRAND MONOGRAM
+         Sleek, bold, faceted, floating right in the center stage
+         ======================================================== -->
+    <g filter="url(#badgeShadow)">
+      <!-- Outer Left Blade (Titanium White) -->
+      <polygon points="166,270 190,270 216,346 192,346" fill="url(#titaniumLight)"/>
+      <polygon points="190,270 200,270 224,342 216,346" fill="url(#titaniumDark)"/>
+
+      <!-- Inner Left Blade (Titanium White / Silver) -->
+      <polygon points="256,252 256,276 226,352 208,352" fill="url(#titaniumLight)"/>
+      <polygon points="256,252 248,252 218,348 226,352" fill="#CBD5E1"/>
+
+      <!-- Inner Right Blade (Vibrant Amber Gold) -->
+      <polygon points="256,252 256,276 286,352 304,352" fill="url(#amberGold)"/>
+      <polygon points="256,252 264,252 294,348 286,352" fill="url(#amberPure)"/>
+
+      <!-- Outer Right Blade (Vibrant Amber Gold) -->
+      <polygon points="346,270 322,270 296,346 320,346" fill="url(#amberGold)"/>
+      <polygon points="322,270 312,270 288,342 296,346" fill="#B45309"/>
+
+      <!-- Center Apex Power Jewel -->
+      <polygon points="256,242 264,258 256,264 248,258" fill="#FFFFFF"/>
+    </g>
+
+    <!-- ========================================================
+         5. LOWER AERODYNAMIC SPLITTER & GROUND EFFECT
+         ======================================================== -->
+    <!-- Main Carbon Ground Splitter Lip -->
+    <path d="M 82 360 L 256 390 L 430 360 L 418 346 L 256 370 L 94 346 Z" 
+          fill="#16171a" stroke="#2d3038" stroke-width="1.5"/>
+
+    <!-- Amber Illuminated Neon Splitter Strip -->
+    <path d="M 86 363 L 256 392 L 426 363" 
+          stroke="url(#amberGold)" stroke-width="4.5" stroke-linecap="round" fill="none" filter="url(#crispGlow)"/>
+
+    <!-- Crisp Center Titanium Highlight -->
+    <path d="M 174 380 L 256 392 L 338 380" 
+          stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" fill="none"/>
+
+    <!-- Aerodynamic Endplates / Canards -->
+    <polygon points="76,344 90,346 84,364 70,360" fill="url(#titaniumLight)"/>
+    <polygon points="436,344 422,346 428,364 442,360" fill="url(#amberGold)"/>
+  </g>
+</svg>`;
+}
+
+function createIco(pngBuffers) {
+  const headerSize = 6;
+  const dirEntrySize = 16;
+  const numImages = pngBuffers.length;
+  let offset = headerSize + dirEntrySize * numImages;
+
+  const header = Buffer.alloc(headerSize);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // type 1 = ICO
+  header.writeUInt16LE(numImages, 4); // count
+
+  const entries = [];
+  for (const item of pngBuffers) {
+    const entry = Buffer.alloc(dirEntrySize);
+    entry.writeUInt8(item.width >= 256 ? 0 : item.width, 0);
+    entry.writeUInt8(item.height >= 256 ? 0 : item.height, 1);
+    entry.writeUInt8(0, 2); // color palette
+    entry.writeUInt8(0, 3); // reserved
+    entry.writeUInt16LE(1, 4); // color planes
+    entry.writeUInt16LE(32, 6); // bits per pixel
+    entry.writeUInt32LE(item.buffer.length, 8); // image size
+    entry.writeUInt32LE(offset, 12); // file offset
+    entries.push(entry);
+    offset += item.buffer.length;
+  }
+
+  return Buffer.concat([header, ...entries, ...pngBuffers.map(b => b.buffer)]);
+}
+
+async function buildAll() {
+  const publicDir = path.resolve(__dirname, '../public');
+  const iconsDir = path.join(publicDir, 'icons');
+  const appDir = path.resolve(__dirname, '../src/app');
+
+  if (!fs.existsSync(iconsDir)) {
+    fs.mkdirSync(iconsDir, { recursive: true });
+  }
+
+  console.log('Generating SVGs...');
+  const standardSvg = getSvgMarkup({ maskable: false });
+  const maskableSvg = getSvgMarkup({ maskable: true });
+  const faviconSvg = getSvgMarkup({ forFavicon: true });
+
+  // 1. Base Vector Logo: frontend/public/logo.svg
+  const logoPath = path.join(publicDir, 'logo.svg');
+  fs.writeFileSync(logoPath, standardSvg, 'utf8');
+  console.log(`Saved: ${logoPath}`);
+
+  // 2. Favicon SVG: frontend/public/favicon.svg and frontend/src/app/favicon.svg
+  const faviconSvgPath = path.join(publicDir, 'favicon.svg');
+  fs.writeFileSync(faviconSvgPath, faviconSvg, 'utf8');
+  console.log(`Saved: ${faviconSvgPath}`);
+
+  // 3. Render PNGs using Sharp
+  console.log('Rendering PWA icon suite with Sharp...');
+
+  // 3a. icon-512x512.png
+  const icon512Path = path.join(iconsDir, 'icon-512x512.png');
+  await sharp(Buffer.from(standardSvg))
+    .resize(512, 512)
+    .png({ quality: 100, compressionLevel: 9 })
+    .toFile(icon512Path);
+  console.log(`Saved: ${icon512Path}`);
+
+  // 3b. icon-192x192.png
+  const icon192Path = path.join(iconsDir, 'icon-192x192.png');
+  await sharp(Buffer.from(standardSvg))
+    .resize(192, 192)
+    .png({ quality: 100, compressionLevel: 9 })
+    .toFile(icon192Path);
+  console.log(`Saved: ${icon192Path}`);
+
+  // 3c. icon-maskable-512x512.png (with 20% safe zone padding)
+  const iconMaskablePath = path.join(iconsDir, 'icon-maskable-512x512.png');
+  await sharp(Buffer.from(maskableSvg))
+    .resize(512, 512)
+    .png({ quality: 100, compressionLevel: 9 })
+    .toFile(iconMaskablePath);
+  console.log(`Saved: ${iconMaskablePath}`);
+
+  // 3d. apple-touch-icon.png (180x180 for iOS home screen)
+  const appleTouchPath = path.join(publicDir, 'apple-touch-icon.png');
+  await sharp(Buffer.from(standardSvg))
+    .resize(180, 180)
+    .png({ quality: 100, compressionLevel: 9 })
+    .toFile(appleTouchPath);
+  console.log(`Saved: ${appleTouchPath}`);
+
+  // 3e. Generate Multi-Resolution favicon.ico
+  console.log('Generating multi-resolution favicon.ico (16x16, 32x32, 48x48)...');
+  const buf16 = await sharp(Buffer.from(standardSvg)).resize(16, 16).png().toBuffer();
+  const buf32 = await sharp(Buffer.from(standardSvg)).resize(32, 32).png().toBuffer();
+  const buf48 = await sharp(Buffer.from(standardSvg)).resize(48, 48).png().toBuffer();
+
+  const icoBuffer = createIco([
+    { width: 16, height: 16, buffer: buf16 },
+    { width: 32, height: 32, buffer: buf32 },
+    { width: 48, height: 48, buffer: buf48 },
+  ]);
+
+  const faviconIcoPublic = path.join(publicDir, 'favicon.ico');
+  const faviconIcoApp = path.join(appDir, 'favicon.ico');
+  fs.writeFileSync(faviconIcoPublic, icoBuffer);
+  fs.writeFileSync(faviconIcoApp, icoBuffer);
+  console.log(`Saved: ${faviconIcoPublic}`);
+  console.log(`Saved: ${faviconIcoApp}`);
+
+  // Clean up test files in scripts
+  const cleanupFiles = [
+    'test-standard.svg', 'test-maskable.svg', 'test-512.png',
+    'variant-a.svg', 'variant-a-512.png', 'test-variant.js',
+    'variant-b.svg', 'variant-b-512.png', 'test-variant-b.js',
+    'variant-c.svg', 'variant-c-512.png', 'test-variant-c.js',
+    'minimalist.svg', 'minimalist-512.png', 'test-minimalist.js',
+    'supercar.svg', 'supercar-512.png', 'test-supercar.js',
+    'supercar-v2.svg', 'supercar-v2-512.png', 'test-supercar-v2.js'
+  ];
+  for (const f of cleanupFiles) {
+    const p = path.join(__dirname, f);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
+
+  console.log('Icon suite generation COMPLETE!');
+}
+
+buildAll().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

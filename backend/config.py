@@ -1,0 +1,11 @@
+from settings import settings, Settings
+
+TELEGRAM_PLATFORM_BOT_TOKEN = settings.TELEGRAM_PLATFORM_BOT_TOKEN
+TELEGRAM_PLATFORM_BOT_USERNAME = settings.TELEGRAM_PLATFORM_BOT_USERNAME
+
+__all__ = [
+    "settings",
+    "Settings",
+    "TELEGRAM_PLATFORM_BOT_TOKEN",
+    "TELEGRAM_PLATFORM_BOT_USERNAME",
+]

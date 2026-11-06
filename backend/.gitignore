@@ -1,0 +1,25 @@
+# Environment secrets & credentials
+.env
+.env.*
+!.env.example
+
+# Python virtual environment & cache
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.class
+*.pytest_cache/
+
+# Local databases & storage
+*.db
+*.sqlite
+*.sqlite3
+uploads/
+static/uploads/
+
+# IDE / OS junk
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
