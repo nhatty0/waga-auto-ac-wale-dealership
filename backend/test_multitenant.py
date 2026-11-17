@@ -132,7 +132,7 @@ def run_tests():
             "year": 2023,
             "price": 25000000.0,
             "mileage": 1200,
-            "condition": "Foreign Used",
+            "condition": "Excellent Condition",
             "fuel_type": "Gasoline",
             "transmission": "Automatic",
             "body_type": "SUV",

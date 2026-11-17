@@ -10,6 +10,7 @@ export interface FilterState {
   plateStatus: "All" | "Unregistered" | "new_series" | "Code 2" | "Code 3";
   bankLoanOnly: boolean;
   fuelType: "All" | "Gasoline" | "Electric" | "Hybrid" | "Diesel";
+  condition: "All" | "Brand New" | "Slightly Used" | "Excellent Condition" | "Good Condition";
 }
 
 interface FilterDrawerProps {
@@ -60,6 +61,14 @@ export default function FilterDrawer({
     { value: "Electric", label: t.electric },
     { value: "Hybrid", label: t.hybrid },
     { value: "Diesel", label: t.diesel },
+  ];
+
+  const conditionOptions: { value: FilterState["condition"]; label: string }[] = [
+    { value: "All", label: t.allOption },
+    { value: "Brand New", label: t.conditionBrandNew },
+    { value: "Slightly Used", label: t.conditionSlightlyUsed },
+    { value: "Excellent Condition", label: t.conditionExcellent },
+    { value: "Good Condition", label: t.conditionGood },
   ];
 
   const isPresetActive = (min: string, max: string) => {
@@ -289,6 +298,34 @@ export default function FilterDrawer({
                     type="button"
                     onClick={() =>
                       setFilters((prev) => ({ ...prev, fuelType: item.value }))
+                    }
+                    className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition ${
+                      active
+                        ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section 6: Vehicle Condition */}
+          <div className="space-y-2 pt-2 border-t border-zinc-800/80">
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+              ⭐ {t.conditionRow}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {conditionOptions.map((item) => {
+                const active = filters.condition === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() =>
+                      setFilters((prev) => ({ ...prev, condition: item.value }))
                     }
                     className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition ${
                       active

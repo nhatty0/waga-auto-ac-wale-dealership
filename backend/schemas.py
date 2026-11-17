@@ -71,6 +71,13 @@ class VehicleBase(BaseModel):
     bank_name: Optional[str] = None
     plate_status: Optional[str] = "Code 2"
     dealership_id: Optional[int] = None
+    # Rental Engine Extensions
+    listing_type: Optional[str] = "sale"  # "sale", "rent", "both"
+    rental_daily_rate: Optional[float] = None
+    daily_rental_rate: Optional[float] = None
+    daily_rate: Optional[float] = None
+    rental_available: Optional[bool] = True
+    with_driver_only: Optional[bool] = False
 
     @field_validator("plate_status")
     @classmethod
@@ -91,7 +98,7 @@ class VehicleBase(BaseModel):
             return s
         return s
 
-    @field_validator("price", "cash_price", "down_payment", "bank_loan_amount", "bank_loan")
+    @field_validator("price", "cash_price", "down_payment", "bank_loan_amount", "bank_loan", "rental_daily_rate")
     @classmethod
     def validate_non_negative_values(cls, v: Optional[float], info) -> Optional[float]:
         if v is not None and v < 0:
@@ -176,6 +183,7 @@ class DealershipUpdate(BaseModel):
     logo_url: Optional[str] = None
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
+    telegram_bot_username: Optional[str] = None
 
 
 class TelegramTestRequest(BaseModel):
@@ -195,10 +203,35 @@ class TelegramTestResponse(BaseModel):
 # ==========================================
 
 class SuperAdminStatsOut(BaseModel):
-    total_dealerships: int
-    total_active_listings: int
-    total_inventory_value: float
-    total_leads_generated: int
+    sales_count: Optional[int] = 0
+    rental_count: Optional[int] = 0
+    drivers_count: Optional[int] = 0
+    leads_count: Optional[int] = 0
+    total_sales_inventory: Optional[int] = 0
+    active_rental_fleet: Optional[int] = 0
+    registered_drivers: Optional[int] = 0
+    total_leads_bookings: Optional[int] = 0
+    total_dealerships: int = 1
+    total_active_listings: int = 0
+    total_inventory_value: float = 0.0
+    total_leads_generated: int = 0
+
+
+class AdminStatsOut(BaseModel):
+    sales_count: int
+    rental_count: int
+    drivers_count: int
+    leads_count: int
+    total_sales_inventory: Optional[int] = None
+    active_rental_fleet: Optional[int] = None
+    registered_drivers: Optional[int] = None
+    total_leads_bookings: Optional[int] = None
+    sales_inventory: Optional[int] = None
+    rental_fleet: Optional[int] = None
+    active_drivers: Optional[int] = None
+    total_inquiries_and_bookings: Optional[int] = None
+    total_sales_inquiries: Optional[int] = None
+    total_rental_bookings: Optional[int] = None
 
 
 class SuperAdminDealershipOut(BaseModel):
@@ -276,4 +309,236 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: dict
+
+
+# ==========================================
+# DRIVER & CAR RENTAL SCHEMAS
+# ==========================================
+
+class DriverBase(BaseModel):
+    full_name: str
+    phone_number: str
+    license_number: Optional[str] = None
+    is_active: Optional[bool] = True
+
+
+class DriverCreate(DriverBase):
+    dealership_id: Optional[int] = None
+
+
+class DriverUpdate(BaseModel):
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    license_number: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class DriverOut(DriverBase):
+    id: int
+    dealership_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RentalBookingCreate(BaseModel):
+    vehicle_id: int
+    customer_name: str
+    customer_phone: str
+    start_date: datetime
+    end_date: datetime
+    delivery_type: Optional[str] = "showroom_pickup"  # "showroom_pickup" or "doorstep_delivery"
+    delivery_address: Optional[str] = None
+    dealership_id: Optional[int] = None
+
+
+class AssignDriverRequest(BaseModel):
+    driver_id: int
+
+
+class RentalBookingStatusUpdate(BaseModel):
+    status: str
+
+
+class RentalBookingOut(BaseModel):
+    id: int
+    vehicle_id: int
+    customer_name: str
+    customer_phone: str
+    start_date: datetime
+    end_date: datetime
+    total_days: int
+    total_price: float
+    delivery_type: str
+    delivery_address: Optional[str] = None
+    assigned_driver_id: Optional[int] = None
+    status: str
+    dealership_id: Optional[int] = None
+    created_at: datetime
+    vehicle: Optional[VehicleOut] = None
+    assigned_driver: Optional[DriverOut] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ==========================================
+# EXECUTIVE OWNER DASHBOARD SCHEMAS
+# ==========================================
+
+class ExecutiveStatsOut(BaseModel):
+    sales_inventory: int
+    rental_fleet: int
+    active_drivers: int
+    total_inquiries_and_bookings: int
+    total_sales_inquiries: int
+    total_rental_bookings: int
+    total_inventory_value: float
+    dealership_name: str
+    sales_count: Optional[int] = None
+    rental_count: Optional[int] = None
+    drivers_count: Optional[int] = None
+    leads_count: Optional[int] = None
+    total_sales_inventory: Optional[int] = None
+    active_rental_fleet: Optional[int] = None
+    registered_drivers: Optional[int] = None
+    total_leads_bookings: Optional[int] = None
+
+
+class StaffUserOut(BaseModel):
+    id: int
+    phone_number: str
+    full_name: Optional[str] = None
+    role: str
+    is_active: bool
+    dealership_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class StaffInviteRequest(BaseModel):
+    phone_number: str
+    full_name: Optional[str] = None
+    role: str = "sales_agent"  # "subadmin", "sales_agent", "dealer_admin"
+
+
+class StaffStatusRequest(BaseModel):
+    is_active: Optional[bool] = None
+    role: Optional[str] = None
+
+
+# ==========================================
+# LOT INTAKE & GATE PASS SCHEMAS
+# ==========================================
+
+class GatePassBase(BaseModel):
+    driver_name: str
+    plate_number: Optional[str] = None
+    release_reason: str
+    authorized_by: str
+    date: Optional[datetime] = None
+    dealership_id: Optional[int] = None
+
+
+class GatePassCreate(GatePassBase):
+    slip_number: Optional[str] = None
+
+
+class GatePassOut(BaseModel):
+    id: int
+    slip_number: str
+    date: datetime
+    driver_name: str
+    plate_number: str
+    release_reason: str
+    authorized_by: str
+    lot_intake_id: Optional[int] = None
+    dealership_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class LotIntakeBase(BaseModel):
+    vehicle_name: str
+    year_of_production: Optional[int] = None
+    plate_number: str
+    primary_cash_price: Optional[float] = 0.0
+    primary_bank_price: Optional[float] = 0.0
+    final_cash_price: Optional[float] = 0.0
+    final_bank_price: Optional[float] = 0.0
+    received_date: Optional[datetime] = None
+    owner_name: str
+    owner_phone: str
+    remark: Optional[str] = None
+    received_by_name: Optional[str] = None
+    dealership_id: Optional[int] = None
+
+
+class LotIntakeCreate(LotIntakeBase):
+    publish_to_showroom: Optional[bool] = False
+
+
+class LotIntakeOut(LotIntakeBase):
+    id: int
+    is_in_lot: bool
+    published_vehicle_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    gate_passes: List[GatePassOut] = []
+
+    class Config:
+        from_attributes = True
+
+
+# ==========================================
+# VEHICLE HANDOVER & CONSIGNMENT SCHEMAS
+# ==========================================
+
+class HandoverBelonging(BaseModel):
+    item_name: str
+    quantity: str = "1"
+
+
+class VehicleHandoverBase(BaseModel):
+    owner_full_name: str
+    owner_phone: str
+    owner_subcity: Optional[str] = None
+    owner_woreda: Optional[str] = None
+    owner_house_no: Optional[str] = None
+    vehicle_type: str
+    manufacture_year: Optional[int] = None
+    chassis_number: Optional[str] = None
+    engine_number: Optional[str] = None
+    horsepower: Optional[str] = None
+    color: Optional[str] = None
+    plate_number: str
+    belongings_json: Optional[str] = "[]"
+    agreed_selling_price: Optional[float] = 0.0
+    commission_or_net_payout: Optional[str] = None
+    vehicle_id: Optional[int] = None
+    dealership_id: Optional[int] = None
+    date: Optional[datetime] = None
+
+
+class VehicleHandoverCreate(VehicleHandoverBase):
+    contract_number: Optional[str] = None
+    belongings: Optional[List[HandoverBelonging]] = None
+
+
+class VehicleHandoverOut(VehicleHandoverBase):
+    id: int
+    contract_number: str
+    date: datetime
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+
+
 

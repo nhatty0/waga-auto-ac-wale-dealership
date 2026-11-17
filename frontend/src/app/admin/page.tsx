@@ -32,10 +32,24 @@ import {
   QrCode,
   Globe,
   Building2,
+  Key,
+  Truck,
+  UserCheck,
+  ClipboardList,
+  DoorOpen,
+  FileSpreadsheet,
+  FileText,
+  Search,
+  Sparkles,
 } from "lucide-react";
-import { Vehicle, Appointment, User } from "@/types";
+import { Vehicle, Appointment, User, Driver, RentalBooking, LotIntake, GatePass, VehicleHandover } from "@/types";
 import PrintFlyerModal from "@/components/admin/PrintFlyerModal";
 import ShowroomQrModal from "@/components/admin/ShowroomQrModal";
+import GatePassModal from "@/components/GatePassModal";
+import BatchGatePassModal from "@/components/BatchGatePassModal";
+import ReceivingSheetPrint from "@/components/ReceivingSheetPrint";
+import HandoverFormModal from "@/components/HandoverFormModal";
+import HandoverPrintModal from "@/components/HandoverPrintModal";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
 import { getPlateLabel, getPlateBadgeClasses, getPlateType, extractPlateNumber } from "@/lib/plates";
@@ -198,9 +212,82 @@ export default function AdminDashboard() {
   };
 
   // Dashboard states
-  const [activeTab, setActiveTab] = useState<"inventory" | "appointments" | "settings">(
-    "inventory"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "inventory" | "appointments" | "rentals" | "lot_operations" | "drivers" | "settings"
+  >("inventory");
+
+  // Lot Operations & Gate Pass States
+  const [lotIntakes, setLotIntakes] = useState<LotIntake[]>([]);
+  const [loadingLotIntakes, setLoadingLotIntakes] = useState(false);
+  const [lotStatusFilter, setLotStatusFilter] = useState<"all" | "in_lot" | "released">("in_lot");
+  const [lotSearchQuery, setLotSearchQuery] = useState("");
+
+  // New Intake Modal States
+  const [showIntakeModal, setShowIntakeModal] = useState(false);
+  const [intakeSubmitting, setIntakeSubmitting] = useState(false);
+  const [intakeError, setIntakeError] = useState<string | null>(null);
+  const [intakeFormData, setIntakeFormData] = useState({
+    vehicle_name: "",
+    year_of_production: "" as number | "",
+    plate_number: "",
+    primary_cash_price: "" as number | "",
+    primary_bank_price: "" as number | "",
+    final_cash_price: "" as number | "",
+    final_bank_price: "" as number | "",
+    owner_name: "",
+    owner_phone: "",
+    remark: "",
+    received_by_name: "",
+    publish_to_showroom: false,
+  });
+
+  // Release Gate Pass Modal States
+  const [releasingIntake, setReleasingIntake] = useState<LotIntake | null>(null);
+  const [showReleaseModal, setShowReleaseModal] = useState(false);
+  const [releaseSubmitting, setReleaseSubmitting] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
+  const [releaseFormData, setReleaseFormData] = useState({
+    driver_name: "",
+    plate_number: "",
+    release_reason: "የዕለት መልስ",
+    authorized_by: "",
+  });
+
+  // Printed Gate Slip & Receiving Sheet Modals
+  const [activeGatePass, setActiveGatePass] = useState<GatePass | null>(null);
+  const [gatePassVehicleName, setGatePassVehicleName] = useState<string | undefined>(undefined);
+  const [showGatePassSlip, setShowGatePassSlip] = useState(false);
+  const [showReceivingSheetPrint, setShowReceivingSheetPrint] = useState(false);
+  const [selectedLotIntakeIds, setSelectedLotIntakeIds] = useState<number[]>([]);
+  const [showBatchGatePassModal, setShowBatchGatePassModal] = useState(false);
+
+  // One-Time Vehicle Handover (የመኪና መረከቢያ ፎርም) States
+  const [activeLotDeskTab, setActiveLotDeskTab] = useState<"daily_intake" | "handover_contracts">("daily_intake");
+  const [handovers, setHandovers] = useState<VehicleHandover[]>([]);
+  const [loadingHandovers, setLoadingHandovers] = useState(false);
+  const [handoverSearchQuery, setHandoverSearchQuery] = useState("");
+  const [showHandoverFormModal, setShowHandoverFormModal] = useState(false);
+  const [activePrintHandover, setActivePrintHandover] = useState<VehicleHandover | null>(null);
+  const [deletingHandoverId, setDeletingHandoverId] = useState<number | null>(null);
+
+  // Car Rental & Driver Dispatch States
+  const [rentals, setRentals] = useState<RentalBooking[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [loadingRentals, setLoadingRentals] = useState(false);
+  const [rentalStatusFilter, setRentalStatusFilter] = useState("all");
+  const [assigningBooking, setAssigningBooking] = useState<RentalBooking | null>(null);
+  const [selectedDriverId, setSelectedDriverId] = useState<number | "">("");
+  const [assigningLoading, setAssigningLoading] = useState(false);
+
+  // Driver modal states
+  const [showDriverModal, setShowDriverModal] = useState(false);
+  const [driverFormData, setDriverFormData] = useState({
+    full_name: "",
+    phone_number: "",
+    license_number: "",
+    is_active: true,
+  });
+  const [savingDriver, setSavingDriver] = useState(false);
 
   // Dealership Settings State
   const [dealershipSettings, setDealershipSettings] = useState({
@@ -223,6 +310,8 @@ export default function AdminDashboard() {
     message: string;
   } | null>(null);
   const [testingTelegram, setTestingTelegram] = useState(false);
+  const [disconnectingTelegram, setDisconnectingTelegram] = useState(false);
+  const [showTelegramToken, setShowTelegramToken] = useState(false);
   const [telegramTestStatus, setTelegramTestStatus] = useState<{
     success: boolean;
     message: string;
@@ -266,6 +355,10 @@ export default function AdminDashboard() {
     bank_name: "",
     plate_status: "Code 2",
     custom_plate_number: "",
+    listing_type: "sale" as "sale" | "rent" | "both",
+    rental_daily_rate: "",
+    rental_available: true,
+    with_driver_only: false,
   });
 
   const resetForm = () => {
@@ -291,6 +384,10 @@ export default function AdminDashboard() {
       bank_name: "",
       plate_status: "Code 2",
       custom_plate_number: "",
+      listing_type: "sale",
+      rental_daily_rate: "",
+      rental_available: true,
+      with_driver_only: false,
     });
     setUploadedImages([]);
     setEditingVehicleId(null);
@@ -660,6 +757,50 @@ export default function AdminDashboard() {
       const aData = await aRes.json();
       setAppointments(Array.isArray(aData) ? aData : []);
 
+      // Fetch Rentals
+      try {
+        const rRes = await fetch(`${baseApi}/api/admin/rentals`, { headers });
+        if (rRes.ok) {
+          const rData = await rRes.json();
+          setRentals(Array.isArray(rData) ? rData : []);
+        }
+      } catch (rErr) {
+        console.error("Failed to fetch rentals", rErr);
+      }
+
+      // Fetch Drivers
+      try {
+        const drRes = await fetch(`${baseApi}/api/admin/drivers`, { headers });
+        if (drRes.ok) {
+          const drData = await drRes.json();
+          setDrivers(Array.isArray(drData) ? drData : []);
+        }
+      } catch (drErr) {
+        console.error("Failed to fetch drivers", drErr);
+      }
+
+      // Fetch Lot Intakes
+      try {
+        const lotRes = await fetch(`${baseApi}/api/admin/lot-intakes`, { headers });
+        if (lotRes.ok) {
+          const lotData = await lotRes.json();
+          setLotIntakes(Array.isArray(lotData) ? lotData : []);
+        }
+      } catch (lotErr) {
+        console.error("Failed to fetch lot intakes", lotErr);
+      }
+
+      // Fetch Vehicle Handover Contracts
+      try {
+        const hRes = await fetch(`${baseApi}/api/admin/handovers`, { headers });
+        if (hRes.ok) {
+          const hData = await hRes.json();
+          setHandovers(Array.isArray(hData) ? hData : []);
+        }
+      } catch (hErr) {
+        console.error("Failed to fetch handovers", hErr);
+      }
+
       const dRes = await fetch(`${baseApi}/api/admin/dealership${dealerQuery}`, {
         headers,
       });
@@ -679,6 +820,344 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       console.error("Failed to fetch admin data", err);
+    }
+  };
+
+  const handleAssignDriver = async (bookingId: number, driverId: number) => {
+    setAssigningLoading(true);
+    const token = getAuthToken();
+    try {
+      const baseApi = getApiBaseUrl();
+      const res = await fetch(`${baseApi}/api/admin/rentals/${bookingId}/assign-driver`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ driver_id: driverId }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to assign driver");
+      }
+
+      const updatedBooking: RentalBooking = await res.json();
+      setRentals((prev) =>
+        prev.map((b) => (b.id === updatedBooking.id ? updatedBooking : b))
+      );
+      setAssigningBooking(null);
+      setSelectedDriverId("");
+      showToast("አሽከርካሪው ተመድቧል! (Driver assigned & SMS dispatch alert sent)");
+    } catch (err: any) {
+      alert(err.message || "Failed to assign driver");
+    } finally {
+      setAssigningLoading(false);
+    }
+  };
+
+  const handleUpdateRentalStatus = async (bookingId: number, newStatus: string) => {
+    const token = getAuthToken();
+    try {
+      const baseApi = getApiBaseUrl();
+      const res = await fetch(`${baseApi}/api/admin/rentals/${bookingId}/status`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to update status");
+      }
+
+      const updatedBooking: RentalBooking = await res.json();
+      setRentals((prev) =>
+        prev.map((b) => (b.id === updatedBooking.id ? updatedBooking : b))
+      );
+      showToast(`ሁኔታው ወደ "${newStatus}" ተቀይሯል!`);
+    } catch (err: any) {
+      alert(err.message || "Failed to update status");
+    }
+  };
+
+  const handleSaveDriver = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!driverFormData.full_name.trim() || !driverFormData.phone_number.trim()) {
+      alert("Please provide driver name and phone number");
+      return;
+    }
+
+    setSavingDriver(true);
+    const token = getAuthToken();
+    try {
+      const baseApi = getApiBaseUrl();
+      const res = await fetch(`${baseApi}/api/admin/drivers`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(driverFormData),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to register driver");
+      }
+
+      const newDriver: Driver = await res.json();
+      setDrivers((prev) => [...prev, newDriver]);
+      setShowDriverModal(false);
+      setDriverFormData({ full_name: "", phone_number: "", license_number: "", is_active: true });
+      showToast(`አሽከርካሪ "${newDriver.full_name}" በተሳካ ሁኔታ ተመዝግቧል!`);
+    } catch (err: any) {
+      alert(err.message || "Failed to save driver");
+    } finally {
+      setSavingDriver(false);
+    }
+  };
+
+  const handleToggleDriverStatus = async (driver: Driver) => {
+    const token = getAuthToken();
+    try {
+      const baseApi = getApiBaseUrl();
+      const res = await fetch(`${baseApi}/api/admin/drivers/${driver.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ is_active: !driver.is_active }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to update driver status");
+      }
+
+      const updated: Driver = await res.json();
+      setDrivers((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+      showToast(`Driver ${driver.full_name} status updated.`);
+    } catch (err: any) {
+      alert(err.message || "Failed to update driver");
+    }
+  };
+
+  // ==========================================
+  // LOT OPERATIONS & GATE PASS HANDLERS
+  // ==========================================
+
+  const fetchLotIntakes = async () => {
+    try {
+      setLoadingLotIntakes(true);
+      const token = getAuthToken();
+      const baseApi = getApiBaseUrl();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${baseApi}/api/admin/lot-intakes`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setLotIntakes(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch lot intakes:", e);
+    } finally {
+      setLoadingLotIntakes(false);
+    }
+  };
+
+  const fetchHandovers = async () => {
+    try {
+      setLoadingHandovers(true);
+      const token = getAuthToken();
+      const baseApi = getApiBaseUrl();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${baseApi}/api/admin/handovers`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setHandovers(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch handovers:", e);
+    } finally {
+      setLoadingHandovers(false);
+    }
+  };
+
+  const handleDeleteHandover = async (id: number, contractNumber: string) => {
+    if (!window.confirm(`እርግጠኛ ነዎት የመኪና መረከቢያ ውል ${contractNumber} መሰረዝ ይፈልጋሉ?`)) return;
+    try {
+      setDeletingHandoverId(id);
+      const token = getAuthToken();
+      const baseApi = getApiBaseUrl();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${baseApi}/api/admin/handovers/${id}`, {
+        method: "DELETE",
+        headers,
+      });
+      if (res.ok) {
+        setHandovers((prev) => prev.filter((h) => h.id !== id));
+        showToast(`የመረከቢያ ውል ${contractNumber} በተሳካ ሁኔታ ተሰርዟል!`);
+      } else {
+        alert("የመረከቢያ ውሉን መሰረዝ አልተቻለም።");
+      }
+    } catch (err) {
+      console.error("Failed to delete handover:", err);
+      alert("ስህተት ተከስቷል። እባክዎ እንደገና ይሞክሩ።");
+    } finally {
+      setDeletingHandoverId(null);
+    }
+  };
+
+  const handleOpenIntakeModal = () => {
+    setIntakeFormData({
+      vehicle_name: "",
+      year_of_production: new Date().getFullYear(),
+      plate_number: "",
+      primary_cash_price: "",
+      primary_bank_price: "",
+      final_cash_price: "",
+      final_bank_price: "",
+      owner_name: "",
+      owner_phone: "",
+      remark: "",
+      received_by_name: currentUser?.full_name || "Admin",
+      publish_to_showroom: false,
+    });
+    setIntakeError(null);
+    setShowIntakeModal(true);
+  };
+
+  const handleCreateIntake = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (
+      !intakeFormData.vehicle_name.trim() ||
+      !intakeFormData.plate_number.trim() ||
+      !intakeFormData.owner_name.trim() ||
+      !intakeFormData.owner_phone.trim()
+    ) {
+      setIntakeError("እባክዎ የመኪናውን ዓይነት፣ የሰሌዳ ቁጥር፣ የባለቤት ስም እና ስልክ ቁጥር ያስገቡ።");
+      return;
+    }
+
+    setIntakeSubmitting(true);
+    setIntakeError(null);
+
+    try {
+      const token = getAuthToken();
+      const baseApi = getApiBaseUrl();
+      const payload = {
+        vehicle_name: intakeFormData.vehicle_name.trim(),
+        year_of_production: intakeFormData.year_of_production ? Number(intakeFormData.year_of_production) : null,
+        plate_number: intakeFormData.plate_number.trim(),
+        primary_cash_price: intakeFormData.primary_cash_price ? Number(intakeFormData.primary_cash_price) : 0,
+        primary_bank_price: intakeFormData.primary_bank_price ? Number(intakeFormData.primary_bank_price) : 0,
+        final_cash_price: intakeFormData.final_cash_price ? Number(intakeFormData.final_cash_price) : 0,
+        final_bank_price: intakeFormData.final_bank_price ? Number(intakeFormData.final_bank_price) : 0,
+        owner_name: intakeFormData.owner_name.trim(),
+        owner_phone: intakeFormData.owner_phone.trim(),
+        remark: intakeFormData.remark.trim() || null,
+        received_by_name: intakeFormData.received_by_name.trim() || currentUser?.full_name || "Admin",
+        publish_to_showroom: intakeFormData.publish_to_showroom,
+      };
+
+      const res = await fetch(`${baseApi}/api/admin/lot-intakes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "ተሽከርካሪውን መረከብ አልተቻለም።");
+      }
+
+      setShowIntakeModal(false);
+      await fetchLotIntakes();
+      showToast(`ተሽከርካሪ ${intakeFormData.vehicle_name} (${intakeFormData.plate_number}) በስኬት ተረክበናል!`);
+      if (intakeFormData.publish_to_showroom) {
+        fetchData();
+      }
+    } catch (err: any) {
+      setIntakeError(err.message || "ስህተት ተከስቷል");
+    } finally {
+      setIntakeSubmitting(false);
+    }
+  };
+
+  const handleOpenReleaseModal = (intake: LotIntake) => {
+    setReleasingIntake(intake);
+    setReleaseFormData({
+      driver_name: "",
+      plate_number: intake.plate_number,
+      release_reason: "የዕለት መልስ",
+      authorized_by: currentUser?.full_name || "Supervisor",
+    });
+    setReleaseError(null);
+    setShowReleaseModal(true);
+  };
+
+  const handleGenerateGatePass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!releasingIntake) return;
+    if (!releaseFormData.driver_name.trim() || !releaseFormData.release_reason.trim()) {
+      setReleaseError("እባክዎ የሹፌሩን ስም እና የመውጫ ምክንያት ያስገቡ።");
+      return;
+    }
+
+    setReleaseSubmitting(true);
+    setReleaseError(null);
+
+    try {
+      const token = getAuthToken();
+      const baseApi = getApiBaseUrl();
+      const res = await fetch(`${baseApi}/api/admin/lot-intakes/${releasingIntake.id}/gate-pass`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          driver_name: releaseFormData.driver_name.trim(),
+          plate_number: releaseFormData.plate_number.trim() || releasingIntake.plate_number,
+          release_reason: releaseFormData.release_reason.trim(),
+          authorized_by: releaseFormData.authorized_by.trim() || currentUser?.full_name || "Supervisor",
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "መኪና መውጫ ማዘጋጀት አልተቻለም።");
+      }
+
+      const gatePassData: GatePass = await res.json();
+      setShowReleaseModal(false);
+      await fetchLotIntakes();
+      showToast(`የመውጫ ደረሰኝ ${gatePassData.slip_number} ተዘጋጅቷል!`);
+
+      // Open printable gate pass modal
+      setActiveGatePass(gatePassData);
+      setGatePassVehicleName(releasingIntake.vehicle_name);
+      setShowGatePassSlip(true);
+    } catch (err: any) {
+      setReleaseError(err.message || "መኪና መውጫ ማመንጨት አልተቻለም።");
+    } finally {
+      setReleaseSubmitting(false);
+    }
+  };
+
+  const handleViewExistingGatePass = (intake: LotIntake) => {
+    if (intake.gate_passes && intake.gate_passes.length > 0) {
+      const latestPass = intake.gate_passes[intake.gate_passes.length - 1];
+      setActiveGatePass(latestPass);
+      setGatePassVehicleName(intake.vehicle_name);
+      setShowGatePassSlip(true);
     }
   };
 
@@ -840,6 +1319,50 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleDisconnectTelegram = async () => {
+    if (
+      !window.confirm(
+        "እርግጠኛ ነዎት የቴሌግራም ቦት ግንኙነትን ማቋረጥ እና መረጃዎችን ማስወገድ ይፈልጋሉ? (Are you sure you want to disconnect Telegram?)"
+      )
+    ) {
+      return;
+    }
+    setDisconnectingTelegram(true);
+    setTelegramTestStatus(null);
+    const token = getAuthToken();
+    try {
+      const baseApi = getApiBaseUrl();
+      const res = await fetch(`${baseApi}/api/admin/dealership/disconnect-telegram`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "ቴሌግራምን ማቋረጥ አልተቻለም።");
+      }
+      const updated = await res.json();
+      setDealershipSettings((prev) => ({
+        ...prev,
+        telegram_bot_token: "",
+        telegram_chat_id: "",
+        telegram_bot_username: "",
+      }));
+      if (currentUser) {
+        setCurrentUser({
+          ...currentUser,
+          dealership: updated,
+        });
+      }
+      showToast("የቴሌግራም ቦት መረጃዎች በተሳካ ሁኔታ ተወግደዋል! (Telegram disconnected)");
+    } catch (err: any) {
+      alert(err.message || "Failed to disconnect Telegram");
+    } finally {
+      setDisconnectingTelegram(false);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     setUploading(true);
@@ -909,6 +1432,10 @@ export default function AdminDashboard() {
       bank_name: (v as any).bank_name || "",
       plate_status: pType === "new_series" ? "new_series" : rawPlate,
       custom_plate_number: customNum,
+      listing_type: (v.listing_type as any) || "sale",
+      rental_daily_rate: v.rental_daily_rate != null ? v.rental_daily_rate.toString() : "",
+      rental_available: v.rental_available ?? true,
+      with_driver_only: v.with_driver_only ?? false,
     });
     setShowAddModal(true);
   };
@@ -919,6 +1446,14 @@ export default function AdminDashboard() {
     if (uploadedImages.length === 0) {
       alert("Please upload at least one vehicle photo before saving.");
       return;
+    }
+
+    if (formData.listing_type === "rent" || formData.listing_type === "both") {
+      const dailyRateVal = parseFloat(formData.rental_daily_rate);
+      if (!formData.rental_daily_rate || isNaN(dailyRateVal) || dailyRateVal <= 0) {
+        alert("እባክዎ የቀን የኪራይ ዋጋ ያስገቡ (Daily rental rate is required for rentals)");
+        return;
+      }
     }
 
     try {
@@ -956,6 +1491,10 @@ export default function AdminDashboard() {
         bank_loan_amount: formData.has_bank_loan && formData.bank_loan_amount ? parseFloat(formData.bank_loan_amount) : null,
         bank_name: formData.has_bank_loan ? formData.bank_name.trim() : null,
         plate_status: finalPlateStatus || "Code 2",
+        listing_type: formData.listing_type || "sale",
+        rental_daily_rate: formData.rental_daily_rate ? parseFloat(formData.rental_daily_rate) : null,
+        rental_available: formData.rental_available,
+        with_driver_only: formData.with_driver_only,
       };
 
       const baseApi = getApiBaseUrl();
@@ -1013,7 +1552,7 @@ export default function AdminDashboard() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this vehicle?")) return;
+    if (!confirm("Are you sure you want to delete this vehicle? / መኪናውን መሰረዝ ይፈልጋሉ?")) return;
     try {
       const baseApi = getApiBaseUrl();
       const res = await fetch(`${baseApi}/api/admin/vehicles/${id}`, {
@@ -1024,9 +1563,18 @@ export default function AdminDashboard() {
         handleUnauthorized();
         return;
       }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        showToast(`መኪናውን መሰረዝ አልተቻለም: ${errData.detail || "Error deleting vehicle"}`);
+        return;
+      }
+      // Immediately filter out the deleted item from state
+      setVehicles((prev) => prev.filter((v) => v.id !== id));
+      showToast("መኪናው በተሳካ ሁኔታ ተሰርዟል! (Vehicle deleted successfully)");
       fetchData();
     } catch (err) {
       console.error("Failed to delete vehicle", err);
+      showToast("ስህተት: መኪናውን መሰረዝ አልተቻለም (Network error deleting vehicle)");
     }
   };
 
@@ -1372,12 +1920,17 @@ export default function AdminDashboard() {
             >
               <ArrowLeft size={18} />
             </Link>
+            <img
+              src="/ac-wale-logo.png"
+              alt="AC WALE"
+              className="h-10 w-10 rounded-lg object-contain bg-black border border-zinc-800 shrink-0"
+            />
             <div>
               <h1 className="text-lg sm:text-xl font-bold truncate">
-                {dealershipSettings.name || currentUser?.dealership?.name || "Dealership Hub"}
+                AC WALE MARKET
               </h1>
-              <p className="text-[11px] sm:text-xs text-zinc-500 truncate">
-                Inventory & Leads Desk
+              <p className="text-[11px] sm:text-xs text-amber-500/90 font-medium truncate">
+                ኤሲ ዋለ የመኪና መሸጫ • Inventory & Leads Desk
               </p>
             </div>
           </div>
@@ -1519,7 +2072,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-3 gap-2 w-full mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full mb-6">
         <button
           onClick={() => setActiveTab("inventory")}
           className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl text-[11px] sm:text-xs font-semibold border transition text-center ${
@@ -1541,6 +2094,39 @@ export default function AdminDashboard() {
         >
           <Calendar size={14} className="shrink-0" />
           <span className="truncate">Appointments ({appointments.length})</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("rentals")}
+          className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl text-[11px] sm:text-xs font-semibold border transition text-center ${
+            activeTab === "rentals"
+              ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+              : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+          }`}
+        >
+          <Key size={14} className="shrink-0" />
+          <span className="truncate">Rentals ({rentals.length})</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("lot_operations")}
+          className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2.5 rounded-xl text-[11px] sm:text-xs font-semibold border transition text-center ${
+            activeTab === "lot_operations"
+              ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+              : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+          }`}
+        >
+          <ClipboardList size={14} className="shrink-0" />
+          <span className="truncate">📋 የግቢ ቁጥጥር ({lotIntakes.filter((i) => i.is_in_lot).length})</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("drivers")}
+          className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl text-[11px] sm:text-xs font-semibold border transition text-center ${
+            activeTab === "drivers"
+              ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+              : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+          }`}
+        >
+          <UserCheck size={14} className="shrink-0" />
+          <span className="truncate">Drivers ({drivers.length})</span>
         </button>
         <button
           onClick={() => setActiveTab("settings")}
@@ -1712,6 +2298,1086 @@ export default function AdminDashboard() {
                 </div>
               );
             })
+          )}
+        </div>
+      )}
+
+      {/* RENTALS & DISPATCH TAB CONTENT */}
+      {activeTab === "rentals" && (
+        <div className="space-y-4">
+          {/* Top Controls: Status Filters & Summary */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-900 border border-zinc-800 p-3 rounded-2xl">
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { key: "all", label: "All (ሁሉንም)" },
+                { key: "pending", label: "Pending (በመጠባበቅ)" },
+                { key: "driver_assigned", label: "Driver Assigned (ስምሪት)" },
+                { key: "delivered", label: "Delivered (የተረከቡ)" },
+                { key: "completed", label: "Completed (የተጠናቀቁ)" },
+              ].map((pill) => (
+                <button
+                  key={pill.key}
+                  onClick={() => setRentalStatusFilter(pill.key)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                    rentalStatusFilter === pill.key
+                      ? "bg-amber-500 text-black font-black shadow-sm"
+                      : "bg-zinc-800 text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="text-xs text-zinc-400 font-medium">
+              Total Rentals: <span className="font-bold text-amber-400">{rentals.length}</span>
+            </div>
+          </div>
+
+          {/* Rentals List */}
+          {rentals
+            .filter((r) => rentalStatusFilter === "all" || r.status === rentalStatusFilter)
+            .length === 0 ? (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center space-y-2">
+              <Key size={28} className="text-zinc-600 mx-auto" />
+              <p className="text-zinc-400 text-xs font-semibold">
+                ምንም የኪራይ ትዕዛዝ አልተገኘም። (No rental bookings found for this filter)
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {rentals
+                .filter((r) => rentalStatusFilter === "all" || r.status === rentalStatusFilter)
+                .map((booking) => {
+                  const carTitle = booking.vehicle
+                    ? `${booking.vehicle.year} ${booking.vehicle.make} ${booking.vehicle.model}`
+                    : `Vehicle #${booking.vehicle_id}`;
+
+                  const startDateDisplay = new Date(booking.start_date).toLocaleDateString();
+                  const endDateDisplay = new Date(booking.end_date).toLocaleDateString();
+
+                  return (
+                    <div
+                      key={booking.id}
+                      className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 space-y-3 shadow-lg"
+                    >
+                      {/* Booking Top Info */}
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-black text-sm text-white">
+                              {booking.customer_name}
+                            </h3>
+                            <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">
+                              Booking #{booking.id}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <a
+                              href={`tel:${booking.customer_phone}`}
+                              className="text-amber-400 font-bold hover:underline"
+                            >
+                              📞 {booking.customer_phone}
+                            </a>
+                            <span className="text-zinc-600">•</span>
+                            <span className="text-zinc-400">
+                              {booking.delivery_type === "doorstep_delivery"
+                                ? `🚚 ያሉበት ድረስ (${booking.delivery_address || "Addis Ababa"})`
+                                : "🏢 ከሾውሩም መረከብ (Showroom Pickup)"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Status Badge */}
+                        <div className="flex items-center gap-2 self-start">
+                          <span
+                            className={`text-[11px] font-black px-2.5 py-1 rounded-xl uppercase tracking-wider border ${
+                              booking.status === "pending"
+                                ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                                : booking.status === "driver_assigned"
+                                ? "bg-sky-500/20 text-sky-400 border-sky-500/40"
+                                : booking.status === "delivered"
+                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                                : booking.status === "completed"
+                                ? "bg-green-500/20 text-green-400 border-green-500/40"
+                                : "bg-red-500/20 text-red-400 border-red-500/40"
+                            }`}
+                          >
+                            {booking.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Vehicle & Price Summary Row */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-zinc-800/80 text-xs">
+                        <div className="bg-zinc-950/80 p-2.5 rounded-xl border border-zinc-800/60">
+                          <span className="text-[10px] text-zinc-500 block">የተከራዩት መኪና</span>
+                          <span className="font-bold text-white flex items-center gap-1.5 mt-0.5">
+                            <Car size={13} className="text-amber-400" />
+                            {carTitle}
+                          </span>
+                        </div>
+
+                        <div className="bg-zinc-950/80 p-2.5 rounded-xl border border-zinc-800/60">
+                          <span className="text-[10px] text-zinc-500 block">የኪራይ ጊዜ</span>
+                          <span className="font-bold text-zinc-200 block mt-0.5">
+                            {startDateDisplay} - {endDateDisplay} ({booking.total_days} ቀን)
+                          </span>
+                        </div>
+
+                        <div className="bg-zinc-950/80 p-2.5 rounded-xl border border-zinc-800/60">
+                          <span className="text-[10px] text-zinc-500 block">ጠቅላላ ክፍያ</span>
+                          <span className="font-black text-emerald-400 text-sm block mt-0.5">
+                            {booking.total_price.toLocaleString()} ETB
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Driver Assignment & Management Section */}
+                      <div className="pt-2 border-t border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-zinc-400 font-medium">የተመደበው አሽከርካሪ:</span>
+                          {booking.assigned_driver ? (
+                            <span className="text-xs font-bold text-sky-400 bg-sky-500/10 border border-sky-500/30 px-2 py-0.5 rounded-lg flex items-center gap-1.5">
+                              <UserCheck size={13} />
+                              {booking.assigned_driver.full_name} ({booking.assigned_driver.phone_number})
+                            </span>
+                          ) : (
+                            <span className="text-xs text-zinc-500 italic">
+                              አሽከርካሪ አልተመደበም (No driver assigned)
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAssigningBooking(booking);
+                              setSelectedDriverId(booking.assigned_driver_id || "");
+                            }}
+                            className="px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 active:scale-95"
+                          >
+                            <Truck size={13} />
+                            <span>{booking.assigned_driver ? "አሽከርካሪ ቀይር" : "አሽከርካሪ መድብ"}</span>
+                          </button>
+
+                          {/* Quick Status Dropdown */}
+                          <select
+                            value={booking.status}
+                            onChange={(e) => handleUpdateRentalStatus(booking.id, e.target.value)}
+                            className="bg-zinc-800 border border-zinc-700 text-xs text-zinc-200 rounded-xl px-2.5 py-1.5 font-semibold focus:outline-none focus:border-amber-500"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="driver_assigned">Driver Assigned</option>
+                            <option value="delivered">Delivered</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* LOT OPERATIONS TAB CONTENT */}
+      {activeTab === "lot_operations" && (
+        <div className="space-y-4">
+          {/* Sub-Navigation Toggle between Daily Intake & Gate Pass and One-Time Handover Contracts */}
+          <div className="flex flex-wrap items-center gap-2 bg-zinc-900 border border-zinc-800 p-1.5 rounded-2xl w-fit">
+            <button
+              type="button"
+              onClick={() => setActiveLotDeskTab("daily_intake")}
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition ${
+                activeLotDeskTab === "daily_intake"
+                  ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
+              }`}
+            >
+              <ClipboardList size={15} />
+              <span>📅 የዕለት ርክክብ እና መውጫ (Daily Intake & Gate Pass)</span>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                  activeLotDeskTab === "daily_intake" ? "bg-black/20 text-black" : "bg-zinc-800 text-zinc-300"
+                }`}
+              >
+                {lotIntakes.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveLotDeskTab("handover_contracts");
+                fetchHandovers();
+              }}
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition ${
+                activeLotDeskTab === "handover_contracts"
+                  ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
+              }`}
+            >
+              <FileText size={15} />
+              <span>📄 የመኪና መረከቢያ ፎርም (One-Time Vehicle Handover Contracts)</span>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                  activeLotDeskTab === "handover_contracts" ? "bg-black/20 text-black" : "bg-zinc-800 text-zinc-300"
+                }`}
+              >
+                {handovers.length}
+              </span>
+            </button>
+          </div>
+
+          {activeLotDeskTab === "daily_intake" ? (
+            <div className="space-y-4">
+              {/* Top Header Card */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-zinc-900 border border-zinc-800 p-4 sm:p-5 rounded-2xl">
+            <div>
+              <h3 className="font-black text-sm sm:text-base text-white flex items-center gap-2">
+                <ClipboardList size={20} className="text-amber-500" />
+                <span>የግቢ ቁጥጥርና መኪና መውጫ ዴስክ (Lot & Gate Desk)</span>
+              </h3>
+              <p className="text-xs text-zinc-400 mt-1">
+                የቀን ተሽከርካሪዎችን መረከብ (Form 1)፣ የዕለቱን ርክክብ ሰነድ ማተም እና የመውጫ ፈቃድ (Form 2 Gate Pass) መስጠት።
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              {selectedLotIntakeIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowBatchGatePassModal(true)}
+                  className="flex-1 sm:flex-none px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 animate-pulse"
+                >
+                  <Printer size={15} />
+                  <span>🖨️ የጅምላ መውጫ ፈቃድ (Batch Release: {selectedLotIntakeIds.length} Selected)</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowReceivingSheetPrint(true)}
+                className="flex-1 sm:flex-none px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
+              >
+                <FileSpreadsheet size={15} className="text-amber-400" />
+                <span>🖨️ የዕለቱ ርክክብ ሰነድ (Print Sheet)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenIntakeModal}
+                className="flex-1 sm:flex-none px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95"
+              >
+                <Plus size={16} />
+                <span>+ አዲስ መኪና ተረከብ (New Intake)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-zinc-900 border border-zinc-800/80 p-3.5 rounded-xl flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold">
+                🚗
+              </div>
+              <div>
+                <p className="text-[11px] text-zinc-400 font-medium">በግቢው ውስጥ ያሉ</p>
+                <p className="text-lg font-black text-white">
+                  {lotIntakes.filter((i) => i.is_in_lot).length}{" "}
+                  <span className="text-[10px] text-emerald-400 font-normal">መኪኖች</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800/80 p-3.5 rounded-xl flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold">
+                📅
+              </div>
+              <div>
+                <p className="text-[11px] text-zinc-400 font-medium">ዛሬ የተረከብናቸው</p>
+                <p className="text-lg font-black text-white">
+                  {
+                    lotIntakes.filter(
+                      (i) =>
+                        i.received_date &&
+                        new Date(i.received_date).toISOString().split("T")[0] ===
+                          new Date().toISOString().split("T")[0]
+                    ).length
+                  }{" "}
+                  <span className="text-[10px] text-blue-400 font-normal">ዛሬ</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800/80 p-3.5 rounded-xl flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold">
+                🚪
+              </div>
+              <div>
+                <p className="text-[11px] text-zinc-400 font-medium">የወጡ መኪኖች</p>
+                <p className="text-lg font-black text-white">
+                  {lotIntakes.filter((i) => !i.is_in_lot).length}{" "}
+                  <span className="text-[10px] text-amber-400 font-normal">ወጥተዋል</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800/80 p-3.5 rounded-xl flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-zinc-800 text-zinc-300 flex items-center justify-center font-bold">
+                📑
+              </div>
+              <div>
+                <p className="text-[11px] text-zinc-400 font-medium">ጠቅላላ መዝገብ</p>
+                <p className="text-lg font-black text-white">
+                  {lotIntakes.length}{" "}
+                  <span className="text-[10px] text-zinc-400 font-normal">በመዝገብ</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Bar & Search */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-900/60 border border-zinc-800/80 p-3 rounded-xl">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setLotStatusFilter("in_lot")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  lotStatusFilter === "in_lot"
+                    ? "bg-amber-500 text-black shadow-sm"
+                    : "bg-zinc-800 text-zinc-400 hover:text-white"
+                }`}
+              >
+                በግቢው ውስጥ ያሉ ብቻ ({lotIntakes.filter((i) => i.is_in_lot).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setLotStatusFilter("all")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  lotStatusFilter === "all"
+                    ? "bg-amber-500 text-black shadow-sm"
+                    : "bg-zinc-800 text-zinc-400 hover:text-white"
+                }`}
+              >
+                ሁሉም ርክክቦች ({lotIntakes.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setLotStatusFilter("released")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  lotStatusFilter === "released"
+                    ? "bg-amber-500 text-black shadow-sm"
+                    : "bg-zinc-800 text-zinc-400 hover:text-white"
+                }`}
+              >
+                የወጡ ብቻ ({lotIntakes.filter((i) => !i.is_in_lot).length})
+              </button>
+
+              {lotIntakes.some((i) => i.is_in_lot) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const inLotCars = lotIntakes.filter((i) => i.is_in_lot).slice(0, 4);
+                    if (selectedLotIntakeIds.length > 0) {
+                      setSelectedLotIntakeIds([]);
+                    } else {
+                      setSelectedLotIntakeIds(inLotCars.map((c) => c.id));
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-amber-400 hover:text-white border border-zinc-700 transition flex items-center gap-1"
+                  title="Select up to 4 in-lot cars for batch release printing"
+                >
+                  <Printer size={12} />
+                  <span>
+                    {selectedLotIntakeIds.length > 0
+                      ? `ምርጫ አፅዳ (${selectedLotIntakeIds.length})`
+                      : "4 ምረጥ (Select 4)"}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 sm:w-64">
+                <Search
+                  size={14}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500"
+                />
+                <input
+                  type="text"
+                  placeholder="ሰሌዳ፣ መኪና፣ ባለቤት ፈልግ..."
+                  value={lotSearchQuery}
+                  onChange={(e) => setLotSearchQuery(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={fetchLotIntakes}
+                disabled={loadingLotIntakes}
+                className="p-2 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition disabled:opacity-50"
+                title="Refresh lot intakes"
+              >
+                <RefreshCw size={14} className={loadingLotIntakes ? "animate-spin" : ""} />
+              </button>
+            </div>
+          </div>
+
+          {/* Lot Cars Table / Cards */}
+          {loadingLotIntakes && lotIntakes.length === 0 ? (
+            <div className="p-12 text-center text-zinc-500 text-xs flex flex-col items-center gap-2">
+              <Loader2 size={24} className="animate-spin text-amber-500" />
+              <span>የግቢ መረጃዎችን በማምጣት ላይ...</span>
+            </div>
+          ) : (
+            (() => {
+              const displayed = lotIntakes.filter((item) => {
+                if (lotStatusFilter === "in_lot" && !item.is_in_lot) return false;
+                if (lotStatusFilter === "released" && item.is_in_lot) return false;
+                if (lotSearchQuery.trim()) {
+                  const q = lotSearchQuery.toLowerCase();
+                  const matchVehicle = item.vehicle_name.toLowerCase().includes(q);
+                  const matchPlate = item.plate_number.toLowerCase().includes(q);
+                  const matchOwner = item.owner_name.toLowerCase().includes(q);
+                  const matchPhone = item.owner_phone.toLowerCase().includes(q);
+                  const matchReceiver = (item.received_by_name || "").toLowerCase().includes(q);
+                  return matchVehicle || matchPlate || matchOwner || matchPhone || matchReceiver;
+                }
+                return true;
+              });
+
+              if (displayed.length === 0) {
+                return (
+                  <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-10 text-center">
+                    <div className="w-12 h-12 rounded-xl bg-zinc-800 text-zinc-400 flex items-center justify-center mx-auto mb-3 text-xl font-bold">
+                      📋
+                    </div>
+                    <h4 className="text-white font-bold text-sm">ምንም የተሽከርካሪ ርክክብ አልተገኘም</h4>
+                    <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
+                      {lotSearchQuery.trim()
+                        ? `"${lotSearchQuery}" በሚል ፍለጋ የተገኘ መረጃ የለም።`
+                        : "በአሁኑ ሰዓት በዚህ ሁኔታ ውስጥ የተመዘገበ መኪና የለም። አዲስ መኪና ለመረከብ ከላይ ያለውን አዝራር ይጫኑ።"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleOpenIntakeModal}
+                      className="mt-4 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs transition inline-flex items-center gap-1.5"
+                    >
+                      <Plus size={14} />
+                      <span>+ አዲስ መኪና ተረከብ (New Intake)</span>
+                    </button>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3">
+                  {displayed.map((item) => {
+                    const latestPass =
+                      item.gate_passes && item.gate_passes.length > 0
+                        ? item.gate_passes[item.gate_passes.length - 1]
+                        : null;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`bg-zinc-900 border rounded-2xl p-4 transition-all hover:border-zinc-700 ${
+                          item.is_in_lot
+                            ? selectedLotIntakeIds.includes(item.id)
+                              ? "border-amber-500 bg-zinc-900/95 ring-1 ring-amber-500/50 shadow-lg shadow-amber-500/5"
+                              : "border-zinc-800"
+                            : "border-zinc-800/50 opacity-90"
+                        }`}
+                      >
+                        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                          {/* Left: Vehicle Title, Plate, and Status */}
+                          <div className="flex items-start gap-3.5 min-w-[260px]">
+                            {item.is_in_lot && (
+                              <div className="pt-3 flex items-center shrink-0">
+                                <input
+                                  type="checkbox"
+                                  title="ይምረጡ (Select for batch release - up to 4)"
+                                  checked={selectedLotIntakeIds.includes(item.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      if (selectedLotIntakeIds.length >= 4) {
+                                        showToast(
+                                          "በአንድ A4 ወረቀት ላይ ከፍተኛው 4 መኪኖች ብቻ መምረጥ ይቻላል (Max 4 per sheet)"
+                                        );
+                                        return;
+                                      }
+                                      setSelectedLotIntakeIds([...selectedLotIntakeIds, item.id]);
+                                    } else {
+                                      setSelectedLotIntakeIds(
+                                        selectedLotIntakeIds.filter((id) => id !== item.id)
+                                      );
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-400 focus:ring-offset-zinc-900 cursor-pointer"
+                                />
+                              </div>
+                            )}
+
+                            <div
+                              className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-lg font-bold border ${
+                                item.is_in_lot
+                                  ? selectedLotIntakeIds.includes(item.id)
+                                    ? "bg-amber-500 text-black border-amber-400"
+                                    : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                                  : "bg-zinc-800/80 border-zinc-700 text-zinc-400"
+                              }`}
+                            >
+                              🚗
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-extrabold text-white text-sm sm:text-base">
+                                  {item.vehicle_name}
+                                </h4>
+                                {item.year_of_production && (
+                                  <span className="text-xs font-mono font-bold text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded">
+                                    {item.year_of_production}
+                                  </span>
+                                )}
+                                {item.published_vehicle_id && (
+                                  <span className="text-[10px] bg-blue-950/80 text-blue-400 border border-blue-800 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                                    🌐 በሾውሩም ተለጥፏል
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-wrap text-xs">
+                                <span className="font-mono font-black px-2 py-0.5 bg-zinc-950 border border-zinc-700 rounded text-amber-300">
+                                  {item.plate_number}
+                                </span>
+
+                                {item.is_in_lot ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2.5 py-0.5 rounded-full">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    በግቢው ውስጥ (In Lot)
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-400 bg-zinc-800 px-2.5 py-0.5 rounded-full border border-zinc-700">
+                                    ወጥቷል ({latestPass?.slip_number || "Released"})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Middle: Prices and Owner Details */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full lg:w-auto text-xs flex-1 px-0 lg:px-4">
+                            {/* Price Ledger Card */}
+                            <div className="bg-zinc-950/60 border border-zinc-800/80 p-2.5 rounded-xl space-y-1">
+                              <p className="text-[10px] text-zinc-400 uppercase font-semibold">
+                                የዋጋ ሁኔታ (Price Details)
+                              </p>
+                              <div className="flex justify-between items-center text-zinc-300">
+                                <span>መነሻ (Primary):</span>
+                                <span className="font-mono font-bold text-zinc-200">
+                                  {(item.primary_cash_price || 0).toLocaleString()} በእጅ{" "}
+                                  {item.primary_bank_price
+                                    ? `+ ${item.primary_bank_price.toLocaleString()} ባንክ`
+                                    : ""}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-zinc-300">
+                                <span className="text-amber-400 font-semibold">የመጨረሻ (Final):</span>
+                                <span className="font-mono font-black text-amber-400">
+                                  {(item.final_cash_price || 0).toLocaleString()} በእጅ{" "}
+                                  {item.final_bank_price
+                                    ? `+ ${item.final_bank_price.toLocaleString()} ባንክ`
+                                    : ""}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Owner & Remark Card */}
+                            <div className="bg-zinc-950/60 border border-zinc-800/80 p-2.5 rounded-xl space-y-1">
+                              <p className="text-[10px] text-zinc-400 uppercase font-semibold">
+                                የባለቤት መረጃ (Owner & Remark)
+                              </p>
+                              <div className="flex justify-between items-center text-zinc-300">
+                                <span className="font-medium text-white">{item.owner_name}</span>
+                                <a
+                                  href={`tel:${item.owner_phone}`}
+                                  className="font-mono text-amber-400 hover:underline flex items-center gap-1"
+                                >
+                                  <Phone size={11} />
+                                  <span>{item.owner_phone}</span>
+                                </a>
+                              </div>
+                              <p className="text-[11px] text-zinc-400 truncate">
+                                {item.remark || "ማስታወሻ የለም"}
+                              </p>
+                              <p className="text-[10px] text-zinc-500">
+                                ተረካቢ: {item.received_by_name || "Admin"} •{" "}
+                                {item.received_date
+                                  ? new Date(item.received_date).toLocaleDateString("en-GB")
+                                  : ""}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Right: Actions */}
+                          <div className="flex items-center gap-2 w-full lg:w-auto shrink-0 justify-end pt-2 lg:pt-0 border-t lg:border-t-0 border-zinc-800">
+                            {item.is_in_lot ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenReleaseModal(item)}
+                                className="w-full sm:w-auto px-4 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 active:scale-95"
+                              >
+                                <DoorOpen size={16} />
+                                <span>🚪 መኪና መውጫ (Release Pass)</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleViewExistingGatePass(item)}
+                                className="w-full sm:w-auto px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                              >
+                                <FileText size={14} className="text-amber-400" />
+                                <span>📄 ደረሰኝ እይ (View Slip)</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()
+          )}
+        </div>
+      ) : (
+        /* ONE-TIME VEHICLE HANDOVER CONTRACTS (የመኪና መረከቢያ ፎርሞች) */
+        <div className="space-y-4">
+          {/* Header Card */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-zinc-900 border border-zinc-800 p-4 sm:p-5 rounded-2xl">
+            <div>
+              <h3 className="font-black text-sm sm:text-base text-white flex items-center gap-2">
+                <FileText size={20} className="text-amber-500" />
+                <span>የመኪና መረከቢያ ውል ፎርሞች (Vehicle Handover Contracts)</span>
+              </h3>
+              <p className="text-xs text-zinc-400 mt-1">
+                የተረከቧቸውን ተሽከርካሪዎች የንብረትና የዋጋ ውል ይመዝግቡ፣ ያደራጁ እና ኦፊሴላዊ A4 ውል ያትሙ።
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => fetchHandovers()}
+                className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                title="Refresh contracts"
+              >
+                <RefreshCw size={14} className={loadingHandovers ? "animate-spin text-amber-400" : "text-amber-400"} />
+                <span>አድስ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowHandoverFormModal(true)}
+                className="flex-1 sm:flex-none px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95"
+              >
+                <Plus size={16} />
+                <span>+ አዲስ የመኪና መረከቢያ ፎርም (New Contract)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-zinc-900 border border-zinc-800/80 p-3.5 rounded-xl flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold">
+                📄
+              </div>
+              <div>
+                <p className="text-[11px] text-zinc-400 font-medium">ጠቅላላ የተረከብናቸው ውሎች</p>
+                <p className="text-lg font-black text-white">
+                  {handovers.length}{" "}
+                  <span className="text-[10px] text-amber-400 font-normal">ውሎች (Contracts)</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800/80 p-3.5 rounded-xl flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold">
+                💰
+              </div>
+              <div>
+                <p className="text-[11px] text-zinc-400 font-medium">አጠቃላይ የተስማሙበት ዋጋ</p>
+                <p className="text-lg font-black text-white">
+                  {handovers
+                    .reduce((acc, h) => acc + (Number(h.agreed_selling_price) || 0), 0)
+                    .toLocaleString()}{" "}
+                  <span className="text-[10px] text-emerald-400 font-normal">ETB</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800/80 p-3.5 rounded-xl flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold">
+                🕒
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-zinc-400 font-medium">የቅርብ ጊዜ ውል</p>
+                <p className="text-sm font-black text-white truncate">
+                  {handovers.length > 0 ? (
+                    <>
+                      <span className="text-amber-400 font-mono">{handovers[0].contract_number}</span>
+                      <span className="text-zinc-400 font-normal text-xs ml-1.5 truncate">
+                        • {handovers[0].owner_full_name}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-zinc-500 text-xs font-normal">ምንም የለም</span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Search Bar */}
+          <div className="flex items-center gap-2 bg-zinc-900/60 border border-zinc-800/80 p-3 rounded-xl">
+            <div className="relative flex-1">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+              />
+              <input
+                type="text"
+                value={handoverSearchQuery}
+                onChange={(e) => setHandoverSearchQuery(e.target.value)}
+                placeholder="በሰሌዳ፣ በባለቤት ስም፣ በስልክ ቁጥር፣ በሞዴል ወይም በውል ቁጥር (AC-rec-...) ፈልግ..."
+                className="w-full pl-8 pr-8 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition"
+              />
+              {handoverSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setHandoverSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Contracts List / Empty State / Loader */}
+          {loadingHandovers ? (
+            <div className="p-12 text-center bg-zinc-900/40 border border-zinc-800 rounded-2xl space-y-3">
+              <Loader2 size={32} className="text-amber-500 animate-spin mx-auto" />
+              <p className="text-xs text-zinc-400 font-medium">የመረከቢያ ውሎችን በመጫን ላይ...</p>
+            </div>
+          ) : (() => {
+            const filtered = handovers.filter((h) => {
+              if (!handoverSearchQuery.trim()) return true;
+              const q = handoverSearchQuery.toLowerCase().trim();
+              return (
+                (h.contract_number && h.contract_number.toLowerCase().includes(q)) ||
+                (h.plate_number && h.plate_number.toLowerCase().includes(q)) ||
+                (h.owner_full_name && h.owner_full_name.toLowerCase().includes(q)) ||
+                (h.vehicle_type && h.vehicle_type.toLowerCase().includes(q)) ||
+                (h.owner_phone && h.owner_phone.includes(q)) ||
+                (h.color && h.color.toLowerCase().includes(q)) ||
+                (h.chassis_number && h.chassis_number.toLowerCase().includes(q))
+              );
+            });
+
+            if (filtered.length === 0) {
+              return (
+                <div className="p-12 text-center bg-zinc-900 border border-zinc-800 rounded-2xl space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-zinc-800/80 text-zinc-500 flex items-center justify-center mx-auto">
+                    <FileText size={28} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      {handoverSearchQuery
+                        ? "ምንም የተገኘ የመረከቢያ ውል የለም"
+                        : "እስካሁን የተመዘገበ የመረከቢያ ውል የለም"}
+                    </h4>
+                    <p className="text-xs text-zinc-400 mt-1 max-w-md mx-auto">
+                      {handoverSearchQuery
+                        ? "እባክዎ የፍለጋ ቃሉን ቀይረው እንደገና ይሞክሩ።"
+                        : "ተሽከርካሪ ከደንበኛ ወይም ከሻጭ ሲረከቡ የዕቃዎችን እና የዋጋ ውል ለመመዝገብ ከታች ያለውን ቁልፍ ይጫኑ።"}
+                    </p>
+                  </div>
+                  {!handoverSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setShowHandoverFormModal(true)}
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl inline-flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20 active:scale-95"
+                    >
+                      <Plus size={15} />
+                      <span>አዲስ ውል መዝግብ</span>
+                    </button>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-3">
+                {filtered.map((item) => {
+                  let belongings: { item_name: string; quantity: string }[] = [];
+                  try {
+                    if (item.belongings_json) {
+                      belongings = JSON.parse(item.belongings_json);
+                    }
+                  } catch (e) {
+                    belongings = [];
+                  }
+
+                  const formattedDate = item.date
+                    ? new Date(item.date).toLocaleDateString("en-GB")
+                    : item.created_at
+                    ? new Date(item.created_at).toLocaleDateString("en-GB")
+                    : "";
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-zinc-900 border border-zinc-800/80 hover:border-amber-500/40 rounded-2xl p-4 transition-all duration-200 space-y-3"
+                    >
+                      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                        {/* Left: Contract Number, Plate & Vehicle Details */}
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
+                            <FileText size={20} />
+                          </div>
+
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono font-black text-xs px-2 py-0.5 bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-md">
+                                {item.contract_number}
+                              </span>
+                              <h4 className="font-bold text-sm text-white truncate">
+                                {item.vehicle_type}{" "}
+                                {item.manufacture_year ? `(${item.manufacture_year})` : ""}
+                              </h4>
+                              {formattedDate && (
+                                <span className="text-[11px] text-zinc-400 flex items-center gap-1">
+                                  <Calendar size={11} className="text-zinc-500" />
+                                  {formattedDate}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap text-xs">
+                              <span className="font-mono font-black px-2 py-0.5 bg-zinc-950 border border-zinc-700 rounded text-amber-300">
+                                {item.plate_number}
+                              </span>
+                              {item.color && (
+                                <span className="text-[11px] text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded border border-zinc-700">
+                                  ቀለም: {item.color}
+                                </span>
+                              )}
+                              {item.chassis_number && (
+                                <span className="text-[11px] font-mono text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 truncate max-w-[170px]" title={item.chassis_number}>
+                                  ቻንሲ: {item.chassis_number}
+                                </span>
+                              )}
+                              {item.engine_number && (
+                                <span className="text-[11px] font-mono text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 truncate max-w-[140px]" title={item.engine_number}>
+                                  ሞተር: {item.engine_number}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Middle: Owner Details and Agreed Price */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full lg:w-auto text-xs flex-1 px-0 lg:px-4">
+                          {/* Price Card */}
+                          <div className="bg-zinc-950/60 border border-zinc-800/80 p-2.5 rounded-xl space-y-1">
+                            <p className="text-[10px] text-zinc-400 uppercase font-semibold">
+                              የዋጋና ኮሚሽን ውል (Agreed Price)
+                            </p>
+                            <div className="flex justify-between items-center text-zinc-300">
+                              <span>የተስማሙበት ዋጋ:</span>
+                              <span className="font-mono font-black text-amber-400">
+                                {(item.agreed_selling_price || 0).toLocaleString()} ብር
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-zinc-300">
+                              <span className="text-zinc-400 text-[11px]">ኮሚሽን / ክፍያ:</span>
+                              <span className="font-medium text-emerald-400 text-[11px] truncate max-w-[150px]">
+                                {item.commission_or_net_payout || "አልተጠቀሰም"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Owner Card */}
+                          <div className="bg-zinc-950/60 border border-zinc-800/80 p-2.5 rounded-xl space-y-1">
+                            <p className="text-[10px] text-zinc-400 uppercase font-semibold">
+                              የአስረካቢ (ባለቤት) መረጃ
+                            </p>
+                            <div className="flex justify-between items-center text-zinc-300">
+                              <span className="font-medium text-white truncate max-w-[130px]">{item.owner_full_name}</span>
+                              <a
+                                href={`tel:${item.owner_phone}`}
+                                className="font-mono text-amber-400 hover:underline flex items-center gap-1 shrink-0"
+                              >
+                                <Phone size={11} />
+                                <span>{item.owner_phone}</span>
+                              </a>
+                            </div>
+                            <p className="text-[10px] text-zinc-400 truncate">
+                              አድራሻ: {item.owner_subcity ? `ክ/ከ ${item.owner_subcity}` : ""}{item.owner_woreda ? `፣ ወረዳ ${item.owner_woreda}` : ""}{item.owner_house_no ? `፣ የቤት ቁ. ${item.owner_house_no}` : ""}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Right: Actions */}
+                        <div className="flex items-center gap-2 w-full lg:w-auto shrink-0 justify-end pt-2 lg:pt-0 border-t lg:border-t-0 border-zinc-800">
+                          <button
+                            type="button"
+                            onClick={() => setActivePrintHandover(item)}
+                            className="flex-1 sm:flex-none px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95"
+                          >
+                            <Printer size={15} />
+                            <span>🖨️ ውል አትም (Print)</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deletingHandoverId === item.id}
+                            onClick={() => handleDeleteHandover(item.id, item.contract_number)}
+                            className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition border border-transparent hover:border-red-500/20"
+                            title="ውሉን ሰርዝ (Delete contract)"
+                          >
+                            {deletingHandoverId === item.id ? (
+                              <Loader2 size={16} className="animate-spin text-red-400" />
+                            ) : (
+                              <Trash2 size={16} />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Belongings Chips Preview */}
+                      {belongings.length > 0 && (
+                        <div className="pt-2 border-t border-zinc-800/80 flex items-center gap-2 flex-wrap text-[11px]">
+                          <span className="text-zinc-500 font-semibold">
+                            ተረካቢ ንብረቶች ({belongings.length}):
+                          </span>
+                          {belongings.slice(0, 5).map((b, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-0.5 rounded-full bg-zinc-950 border border-zinc-800 text-zinc-300 font-medium"
+                            >
+                              {b.item_name} <strong className="text-amber-400 font-mono font-bold">x{b.quantity}</strong>
+                            </span>
+                          ))}
+                          {belongings.length > 5 && (
+                            <span className="text-zinc-500 text-[10px]">
+                              +{belongings.length - 5} ተጨማሪ...
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  )}
+
+      {/* DRIVERS ROSTER TAB CONTENT */}
+      {activeTab === "drivers" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 p-4 rounded-2xl">
+            <div>
+              <h3 className="font-black text-sm text-white flex items-center gap-2">
+                <UserCheck size={18} className="text-amber-400" />
+                <span>የ AC Wale Cars አሽከርካሪዎች ስምሪት (Driver Roster)</span>
+              </h3>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                የተመዘገቡ አሽከርካሪዎችን ዝርዝር እና የስምሪት ሁኔታ ይቆጣጠሩ።
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowDriverModal(true)}
+              className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition"
+            >
+              <Plus size={15} />
+              <span>አዲስ አሽከርካሪ መዝግብ</span>
+            </button>
+          </div>
+
+          {drivers.length === 0 ? (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center space-y-3">
+              <UserCheck size={32} className="text-zinc-600 mx-auto" />
+              <p className="text-xs text-zinc-400 font-semibold">
+                ምንም የተመዘገበ አሽከርካሪ የለም። (No drivers registered yet)
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowDriverModal(true)}
+                className="py-2 px-4 bg-amber-500 text-black font-bold text-xs rounded-xl inline-flex items-center gap-1.5"
+              >
+                <Plus size={14} /> አሽከርካሪ አክል
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {drivers.map((d) => (
+                <div
+                  key={d.id}
+                  className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3 shadow-md flex flex-col justify-between"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-bold text-sm text-white">{d.full_name}</h4>
+                      <div className="flex items-center gap-2 text-xs text-amber-400 mt-1 font-mono">
+                        <Phone size={12} />
+                        <a href={`tel:${d.phone_number}`} className="hover:underline">
+                          {d.phone_number}
+                        </a>
+                      </div>
+                      {d.license_number && (
+                        <p className="text-[11px] text-zinc-500 mt-0.5">
+                          መንጃ ፍቃድ: {d.license_number}
+                        </p>
+                      )}
+                    </div>
+
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        d.is_active
+                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                          : "bg-zinc-800 text-zinc-500 border-zinc-700"
+                      }`}
+                    >
+                      {d.is_active ? "ንቁ (Active)" : "እረፍት (Inactive)"}
+                    </span>
+                  </div>
+
+                  <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between">
+                    <span className="text-[10px] text-zinc-500 font-mono">ID: #{d.id}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleDriverStatus(d)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                        d.is_active
+                          ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700"
+                          : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border-emerald-500/30 font-bold"
+                      }`}
+                    >
+                      {d.is_active ? "አቦዝን (Deactivate)" : "አንቃ (Activate)"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -1899,138 +3565,247 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* 1-Click Telegram Notification Status Card */}
+            {/* Telegram Notification & Bot Configuration Section */}
             {(() => {
-              const platformBotUsername = (
-                dealershipSettings.telegram_bot_username ||
-                currentUser?.dealership?.telegram_bot_username ||
-                process.env.NEXT_PUBLIC_TELEGRAM_PLATFORM_BOT_USERNAME ||
-                "WagaDealershipBot"
-              ).replace(/^@/, "");
-
-              const dealerIdForConnect =
-                dealershipSettings.id ||
-                currentUser?.dealership?.id ||
-                currentUser?.dealership_id ||
-                dealershipSettings.slug ||
-                "1";
-
-              const telegramConnectUrl = `https://t.me/${platformBotUsername}?start=connect_${dealerIdForConnect}`;
-              const isConnected = Boolean(dealershipSettings.telegram_chat_id && dealershipSettings.telegram_chat_id.trim());
+              const hasChatId = Boolean(
+                dealershipSettings.telegram_chat_id && dealershipSettings.telegram_chat_id.trim()
+              );
+              const hasBotToken = Boolean(
+                dealershipSettings.telegram_bot_token && dealershipSettings.telegram_bot_token.trim()
+              );
+              const isFullyConnected = hasChatId && hasBotToken;
 
               return (
                 <div className="pt-4 border-t border-zinc-800 space-y-4">
-                  <div>
-                    <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Send size={14} /> የቴሌግራም ማሳወቂያ ሁኔታ (Telegram Notification Status)
-                    </h3>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                      የደንበኞች አዲስ ቀጠሮ እና ጥያቄዎች ወዲያውኑ ወደ ቴሌግራምዎ እንዲደርሱ ያገናኙ። (Receive instant booking leads directly in Telegram).
-                    </p>
-                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Send size={14} /> የቴሌግራም ቦት ማስተካከያ (Telegram Bot Lead Notifications)
+                      </h3>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        የደንበኞች አዲስ የቀጠሮ ጥያቄዎች (Appointments) እና መልእክቶች በቀጥታ ወደ ቴሌግራምዎ እንዲደርሱ የራስዎን ቦት ያገናኙ።
+                      </p>
+                    </div>
 
-                  {isConnected ? (
-                    <div className="bg-zinc-950 border border-emerald-500/30 rounded-2xl p-4 sm:p-5 space-y-4 shadow-lg shadow-emerald-500/5">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
-                            <CheckCircle2 size={20} />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-white">✓ ቴሌግራም ተገናኝቷል (Telegram Connected)</span>
-                              <span className="px-2 py-0.5 text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-bold">
-                                Active
-                              </span>
-                            </div>
-                            <span className="text-[11px] text-zinc-400 block mt-0.5 font-mono">
-                              Chat ID: {dealershipSettings.telegram_chat_id}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                          <button
-                            type="button"
-                            onClick={handleTestTelegram}
-                            disabled={testingTelegram}
-                            className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50"
-                          >
-                            {testingTelegram ? (
-                              <Loader2 size={13} className="animate-spin" />
-                            ) : (
-                              <Send size={13} />
-                            )}
-                            <span>{testingTelegram ? "በመላክ ላይ..." : "የማሳወቂያ ሙከራ (Test Alert)"}</span>
-                          </button>
-
-                          <a
-                            href={telegramConnectUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 rounded-xl text-xs font-medium transition"
-                          >
-                            እንደገና አገናኝ (Reconnect)
-                          </a>
-                        </div>
-                      </div>
-
-                      {telegramTestStatus && (
-                        <div
-                          className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
-                            telegramTestStatus.success
-                              ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-                              : "bg-red-500/10 border border-red-500/20 text-red-400"
-                          }`}
-                        >
-                          {telegramTestStatus.success ? (
-                            <CheckCircle2 size={15} className="flex-shrink-0 mt-0.5" />
-                          ) : (
-                            <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-                          )}
-                          <span className="break-all">{telegramTestStatus.message}</span>
-                        </div>
+                    <div className="shrink-0">
+                      {isFullyConnected ? (
+                        <span className="px-2.5 py-1 text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full font-bold flex items-center gap-1.5 shadow-sm">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span>Active (ቦት ተገናኝቷል)</span>
+                        </span>
+                      ) : hasChatId ? (
+                        <span className="px-2.5 py-1 text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-full font-bold">
+                          Chat ID ተመዝግቧል
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 text-[10px] font-mono bg-zinc-800 text-zinc-400 border border-zinc-700 rounded-full font-bold">
+                          ያልተገናኘ (Not Configured)
+                        </span>
                       )}
                     </div>
-                  ) : (
-                    <div className="bg-zinc-950 border border-amber-500/30 rounded-2xl p-4 sm:p-5 space-y-4">
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div className="space-y-1">
-                          <span className="text-xs font-bold text-white block">
-                            ቴሌግራም ገና አልተገናኘም (Telegram Not Connected)
-                          </span>
-                          <p className="text-[11px] text-zinc-400">
-                            የደንበኞች አዲስ ቀጠሮ ወይም ጥያቄ ሲመጣ ወዲያውኑ በቴሌግራምዎ ማሳወቂያ ለማግኘት ከታች ያለውን ቁልፍ ይጫኑ።
-                          </p>
-                          <p className="text-[11px] text-amber-400 font-medium">
-                            💡 ይህንን ሲጫኑ ቴሌግራም ይከፈታል፤ በመቀጠል &quot;START&quot; የሚለውን ብቻ ይጫኑ።
-                          </p>
-                        </div>
+                  </div>
 
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                          <a
-                            href={telegramConnectUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-4 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 text-center"
-                          >
-                            <Send size={14} />
-                            <span>📲 ቴሌግራምን በአንድ ጠቅታ ያገናኙ (Connect Telegram)</span>
-                          </a>
-
+                  {/* Bot Credentials Input Form */}
+                  <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 sm:p-5 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Telegram Bot Token Field */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-bold text-zinc-300">
+                            የቴሌግራም ቦት ቶከን (Bot Token)
+                          </label>
                           <button
                             type="button"
-                            onClick={() => fetchData()}
-                            className="px-3 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5"
-                            title="Check if Telegram was connected"
+                            onClick={() => setShowTelegramToken((prev) => !prev)}
+                            className="text-[10px] text-zinc-400 hover:text-white"
                           >
-                            <RefreshCw size={12} />
-                            <span>ሁኔታውን አድስ (Refresh)</span>
+                            {showTelegramToken ? "ደብቅ (Hide)" : "አሳይ (Show)"}
                           </button>
                         </div>
+                        <input
+                          type={showTelegramToken ? "text" : "password"}
+                          autoComplete="off"
+                          value={dealershipSettings.telegram_bot_token || ""}
+                          onChange={(e) =>
+                            setDealershipSettings({
+                              ...dealershipSettings,
+                              telegram_bot_token: e.target.value.trim(),
+                            })
+                          }
+                          placeholder="e.g. 7123456789:AAHpgX-bHSYbshS0k2ncUoDYyrxYR2evpjM"
+                          className="w-full bg-zinc-900 border border-zinc-800 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none font-mono"
+                        />
+                        <span className="text-[10px] text-zinc-500 mt-1 block">
+                          ከ @BotFather የሚሰጥዎ የቦት HTTP API Token (Bot API Token from @BotFather).
+                        </span>
+                      </div>
+
+                      {/* Telegram Chat ID Field */}
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-300 mb-1">
+                          የቴሌግራም ቻት መለያ ቁጥር (Telegram Chat ID)
+                        </label>
+                        <input
+                          type="text"
+                          value={dealershipSettings.telegram_chat_id || ""}
+                          onChange={(e) =>
+                            setDealershipSettings({
+                              ...dealershipSettings,
+                              telegram_chat_id: e.target.value.trim(),
+                            })
+                          }
+                          placeholder="e.g. 371550151 ወይም @yourchannel"
+                          className="w-full bg-zinc-900 border border-zinc-800 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none font-mono"
+                        />
+                        <span className="text-[10px] text-zinc-500 mt-1 block">
+                          መልእክቱ እንዲደርስበት የሚፈልጉት የግል Chat ID ወይም የቻናል/ግሩፕ መለያ።
+                        </span>
                       </div>
                     </div>
-                  )}
+
+                    {/* Bot Username (Optional) */}
+                    <div>
+                      <label className="block text-xs font-bold text-zinc-300 mb-1">
+                        የቦት ዩዘርኔም (Bot Username - Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={dealershipSettings.telegram_bot_username || ""}
+                        onChange={(e) =>
+                          setDealershipSettings({
+                            ...dealershipSettings,
+                            telegram_bot_username: e.target.value.trim(),
+                          })
+                        }
+                        placeholder="e.g. @ACWaleCarsBot"
+                        className="w-full bg-zinc-900 border border-zinc-800 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none font-mono"
+                      />
+                      <span className="text-[10px] text-zinc-500 mt-1 block">
+                        ደንበኞች ወይም አስተዳዳሪዎች ቦቱን በቀላሉ እንዲያገኙት (Optional).
+                      </span>
+                    </div>
+
+                    {/* Actions: Test Alert & Disconnect */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-800/80">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleTestTelegram}
+                          disabled={
+                            testingTelegram ||
+                            (!dealershipSettings.telegram_bot_token && !dealershipSettings.telegram_chat_id)
+                          }
+                          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 disabled:opacity-50"
+                        >
+                          {testingTelegram ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <Send size={13} />
+                          )}
+                          <span>{testingTelegram ? "በመላክ ላይ..." : "የማሳወቂያ ሙከራ (Test Alert)"}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => fetchData()}
+                          className="px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                          title="ሁኔታውን አድስ"
+                        >
+                          <RefreshCw size={12} />
+                          <span>አድስ</span>
+                        </button>
+                      </div>
+
+                      {(dealershipSettings.telegram_bot_token || dealershipSettings.telegram_chat_id) && (
+                        <button
+                          type="button"
+                          disabled={disconnectingTelegram}
+                          onClick={handleDisconnectTelegram}
+                          className="px-3.5 py-2 bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800/80 rounded-xl text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50"
+                          title="የቴሌግራም ቦት መረጃዎችን አቋርጥ እና አስወግድ"
+                        >
+                          {disconnectingTelegram ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={13} />
+                          )}
+                          <span>ቴሌግራም አቋርጥ / አፅዳ (Disconnect & Clear)</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Test Result Message Banner */}
+                    {telegramTestStatus && (
+                      <div
+                        className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 ${
+                          telegramTestStatus.success
+                            ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+                            : "bg-red-500/10 border border-red-500/30 text-red-400"
+                        }`}
+                      >
+                        {telegramTestStatus.success ? (
+                          <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5 text-emerald-400" />
+                        ) : (
+                          <AlertCircle size={16} className="flex-shrink-0 mt-0.5 text-red-400" />
+                        )}
+                        <div className="space-y-0.5">
+                          <span className="font-bold block">
+                            {telegramTestStatus.success
+                              ? "የሙከራ መልእክት ተልኳል (Test Succeeded)"
+                              : "ስህተት ተከስቷል (Test Failed)"}
+                          </span>
+                          <span className="break-all">{telegramTestStatus.message}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Step-by-Step Instructions Card for Client */}
+                  <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 space-y-3">
+                    <div className="flex items-center gap-2 font-bold text-amber-400 text-xs">
+                      <Sparkles size={15} />
+                      <span>የራስዎን የቴሌግራም ቦት በ2 ደቂቃ ውስጥ እንዴት ያዘጋጃሉ? (Step-by-Step Setup Guide)</span>
+                    </div>
+                    <ol className="list-decimal list-inside space-y-2 text-zinc-300 text-[11px] leading-relaxed pl-1">
+                      <li>
+                        በቴሌግራም መተግበሪያ ላይ ወደ{" "}
+                        <a
+                          href="https://t.me/BotFather"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber-400 hover:underline font-bold inline-flex items-center gap-0.5"
+                        >
+                          @BotFather <ExternalLink size={10} />
+                        </a>{" "}
+                        ይሂዱ እና <code className="bg-zinc-900 px-1.5 py-0.5 rounded text-amber-300 font-mono">/start</code> ከዚያም{" "}
+                        <code className="bg-zinc-900 px-1.5 py-0.5 rounded text-amber-300 font-mono">/newbot</code> ብለው ይላኩ።
+                      </li>
+                      <li>
+                        ለቦትዎ ስም እና ዩዘርኔም (ለምሳሌ፡ <code className="text-zinc-200 font-mono">ACWaleCarsBot</code>) ይስጡት።
+                      </li>
+                      <li>
+                        BotFather የሚሰጥዎትን ረጅም <strong>HTTP API Token</strong> ኮፒ አድርገው ከላይ ባለው <strong>Bot Token</strong> ሳጥን ውስጥ ያስገቡ።
+                      </li>
+                      <li>
+                        ወደ አዲሱ ቦትዎ ሊንክ ገብተው <strong>START</strong> የሚለውን ይጫኑ (ቦቱ መልእክት እንዲልክልዎ የግድ መጀመሪያ start መደረግ አለበት)።
+                      </li>
+                      <li>
+                        የራስዎን Chat ID ለማወቅ ወደ{" "}
+                        <a
+                          href="https://t.me/userinfobot"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber-400 hover:underline font-bold inline-flex items-center gap-0.5"
+                        >
+                          @userinfobot <ExternalLink size={10} />
+                        </a>{" "}
+                        ይሂዱ፤ የሚሰጥዎትን የቁጥር <strong>Id</strong> ኮፒ አድርገው ከላይ ባለው <strong>Chat ID</strong> ሳጥን ውስጥ ያስገቡ።
+                      </li>
+                      <li>
+                        ከታች <strong>&quot;ለውጦችን መዝግብ (Save Settings)&quot;</strong> የሚለውን ይጫኑ፤ በመቀጠል <strong>&quot;የማሳወቂያ ሙከራ (Test Alert)&quot;</strong> በመጫን ያረጋግጡ!
+                      </li>
+                    </ol>
+                  </div>
                 </div>
               );
             })()}
@@ -2239,6 +4014,89 @@ export default function AdminDashboard() {
                 )}
               </div>
 
+              {/* CAR RENTAL ENGINE SETTINGS */}
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                    <Key size={14} /> የመኪና ኪራይ አገልግሎት (Rental Configuration)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="text-[11px] text-zinc-400 block mb-1">
+                      የዝርዝር አይነት (Listing Type)
+                    </label>
+                    <select
+                      value={formData.listing_type}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          listing_type: e.target.value as "sale" | "rent" | "both",
+                        })
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-2 text-white text-xs"
+                    >
+                      <option value="sale">🚗 ለሽያጭ ብቻ (Sale Only)</option>
+                      <option value="rent">🔑 ለኪራይ ብቻ (Rent Only)</option>
+                      <option value="both">✨ ለሽያጭ እና ለኪራይ (Both Sale & Rent)</option>
+                    </select>
+                  </div>
+
+                  {(formData.listing_type === "rent" || formData.listing_type === "both") && (
+                    <div>
+                      <label className="text-[11px] text-zinc-400 block mb-1 font-semibold">
+                        Daily Rental Rate (የቀን የኪራይ ዋጋ በብር) <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 3500"
+                        min="1"
+                        step="any"
+                        required={true}
+                        value={formData.rental_daily_rate}
+                        onChange={(e) =>
+                          setFormData({ ...formData, rental_daily_rate: e.target.value })
+                        }
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-2 text-white text-xs focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {(formData.listing_type === "rent" || formData.listing_type === "both") && (
+                  <div className="flex flex-wrap gap-4 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={formData.with_driver_only}
+                        onChange={(e) =>
+                          setFormData({ ...formData, with_driver_only: e.target.checked })
+                        }
+                        className="w-4 h-4 rounded accent-amber-500 bg-zinc-900 border-zinc-700 cursor-pointer"
+                      />
+                      <span className="text-xs text-zinc-300">
+                        👨‍✈️ ከአሽከርካሪ ጋር ብቻ (With Driver Only)
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={formData.rental_available}
+                        onChange={(e) =>
+                          setFormData({ ...formData, rental_available: e.target.checked })
+                        }
+                        className="w-4 h-4 rounded accent-amber-500 bg-zinc-900 border-zinc-700 cursor-pointer"
+                      />
+                      <span className="text-xs text-zinc-300">
+                        ለኪራይ ዝግጁ ነው (Rental Available)
+                      </span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
               {/* Body Type Selection with Custom Input */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -2304,12 +4162,10 @@ export default function AdminDashboard() {
                     }
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white"
                   >
-                    <option value="Brand New">Brand New</option>
-                    <option value="Slightly Used">Slightly Used</option>
-                    <option value="Excellent Condition">
-                      Excellent Condition
-                    </option>
-                    <option value="Good Condition">Good Condition</option>
+                    <option value="Brand New">አዲስ / ዜሮ ኪ.ሜ (Brand New)</option>
+                    <option value="Slightly Used">በጥቂቱ ያገለገለ (Slightly Used)</option>
+                    <option value="Excellent Condition">በጣም ጥሩ ይዞታ (Excellent Condition)</option>
+                    <option value="Good Condition">ጥሩ ይዞታ (Good Condition)</option>
                   </select>
                 </div>
                 <div>
@@ -2493,6 +4349,757 @@ export default function AdminDashboard() {
         logoUrl={currentUser?.dealership?.logo_url || dealershipSettings.logo_url}
         showroomUrl={showroomUrl}
       />
+
+      {/* ASSIGN DRIVER MODAL */}
+      {assigningBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <h3 className="font-bold text-base text-white flex items-center gap-2">
+                <Truck size={18} className="text-amber-400" />
+                <span>አሽከርካሪ መድብ (Assign Driver)</span>
+              </h3>
+              <button
+                onClick={() => setAssigningBooking(null)}
+                className="text-zinc-500 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/80 text-xs space-y-1">
+              <div className="text-zinc-400">
+                ደንበኛ: <span className="font-bold text-white">{assigningBooking.customer_name}</span> ({assigningBooking.customer_phone})
+              </div>
+              <div className="text-zinc-400">
+                መኪና: <span className="font-bold text-amber-400">{assigningBooking.vehicle ? `${assigningBooking.vehicle.year} ${assigningBooking.vehicle.make} ${assigningBooking.vehicle.model}` : `Vehicle #${assigningBooking.vehicle_id}`}</span>
+              </div>
+              <div className="text-zinc-400">
+                ማድረሻ: <span className="text-zinc-300">{assigningBooking.delivery_type === "doorstep_delivery" ? `Doorstep (${assigningBooking.delivery_address || ""})` : "Showroom Pickup"}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-zinc-300 block mb-2">
+                የሚመደቡትን አሽከርካሪ ይምረጡ (Select Driver) *
+              </label>
+              <select
+                value={selectedDriverId}
+                onChange={(e) => setSelectedDriverId(e.target.value ? Number(e.target.value) : "")}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
+              >
+                <option value="">-- አሽከርካሪ ይምረጡ --</option>
+                {drivers
+                  .filter((d) => d.is_active)
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.full_name} ({d.phone_number})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setAssigningBooking(null)}
+                className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+              >
+                ይቅር (Cancel)
+              </button>
+              <button
+                type="button"
+                disabled={!selectedDriverId || assigningLoading}
+                onClick={() => {
+                  if (selectedDriverId) {
+                    handleAssignDriver(assigningBooking.id, Number(selectedDriverId));
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black text-xs shadow-md shadow-amber-500/20"
+              >
+                {assigningLoading ? "ስምሪት እየተከናወነ ነው..." : "ስምሪት አረጋግጥ (Dispatch)"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD DRIVER MODAL */}
+      {showDriverModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <h3 className="font-bold text-base text-white flex items-center gap-2">
+                <UserCheck size={18} className="text-amber-400" />
+                <span>አዲስ አሽከርካሪ መዝግብ (Register Driver)</span>
+              </h3>
+              <button
+                onClick={() => setShowDriverModal(false)}
+                className="text-zinc-500 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDriver} className="space-y-3">
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">ሙሉ ስም (Full Name) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Abebe Bikila"
+                  value={driverFormData.full_name}
+                  onChange={(e) => setDriverFormData({ ...driverFormData, full_name: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">ስልክ ቁጥር (Phone Number) *</label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="0911 223 344"
+                  value={driverFormData.phone_number}
+                  onChange={(e) => setDriverFormData({ ...driverFormData, phone_number: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1">መንጃ ፍቃድ ቁጥር (License Number)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. AA-ET-89123"
+                  value={driverFormData.license_number}
+                  onChange={(e) => setDriverFormData({ ...driverFormData, license_number: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDriverModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                >
+                  ይቅር (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingDriver}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black text-xs shadow-md shadow-amber-500/20"
+                >
+                  {savingDriver ? "በመመዝገብ ላይ..." : "መዝግብ (Save Driver)"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* NEW VEHICLE INTAKE MODAL (FORM 1) */}
+      {showIntakeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-500 flex items-center justify-center font-bold">
+                  📋
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-white text-sm sm:text-base">
+                    + አዲስ ተሽከርካሪ ተረከብ (Vehicle Intake Form)
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    የተሽከርካሪ ርክክብ ሰነድ (Form 1) መረጃዎችን ይሙሉ
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowIntakeModal(false)}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-800 hover:bg-zinc-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Form Body */}
+            <form onSubmit={handleCreateIntake} className="p-4 sm:p-6 overflow-y-auto space-y-4">
+              {intakeError && (
+                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle size={15} className="shrink-0 text-rose-400" />
+                  <span>{intakeError}</span>
+                </div>
+              )}
+
+              {/* Section 1: Vehicle Specs */}
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2.5">
+                  1. የተሽከርካሪ መለያ (Vehicle Details)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                      የመኪናው ዓይነት (Vehicle Model) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Suzuki Dzire / Toyota Rav4"
+                      value={intakeFormData.vehicle_name}
+                      onChange={(e) =>
+                        setIntakeFormData({ ...intakeFormData, vehicle_name: e.target.value })
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                      የሞዴል ዓ.ም (Year)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="2022"
+                      value={intakeFormData.year_of_production}
+                      onChange={(e) =>
+                        setIntakeFormData({
+                          ...intakeFormData,
+                          year_of_production: e.target.value ? Number(e.target.value) : "",
+                        })
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                      የሰሌዳ ቁጥር (Plate Number) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 2-B12345 AA / ኮድ 2 - 12345 አ.አ"
+                      value={intakeFormData.plate_number}
+                      onChange={(e) =>
+                        setIntakeFormData({ ...intakeFormData, plate_number: e.target.value })
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono uppercase focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Pricing (Form 1 Columns: Primary vs Final) */}
+              <div className="pt-2 border-t border-zinc-800/80">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2.5">
+                  2. የዋጋ መረጃ (Primary & Final Pricing in ETB)
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                      መነሻ በእጅ (Primary Cash)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={intakeFormData.primary_cash_price}
+                      onChange={(e) =>
+                        setIntakeFormData({
+                          ...intakeFormData,
+                          primary_cash_price: e.target.value ? Number(e.target.value) : "",
+                        })
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                      መነሻ ባንክ (Primary Bank)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={intakeFormData.primary_bank_price}
+                      onChange={(e) =>
+                        setIntakeFormData({
+                          ...intakeFormData,
+                          primary_bank_price: e.target.value ? Number(e.target.value) : "",
+                        })
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-amber-300 block mb-1">
+                      የመጨረሻ በእጅ (Final Cash)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={intakeFormData.final_cash_price}
+                      onChange={(e) =>
+                        setIntakeFormData({
+                          ...intakeFormData,
+                          final_cash_price: e.target.value ? Number(e.target.value) : "",
+                        })
+                      }
+                      className="w-full bg-zinc-900 border border-amber-500/40 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-amber-300 block mb-1">
+                      የመጨረሻ ባንክ (Final Bank)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={intakeFormData.final_bank_price}
+                      onChange={(e) =>
+                        setIntakeFormData({
+                          ...intakeFormData,
+                          final_bank_price: e.target.value ? Number(e.target.value) : "",
+                        })
+                      }
+                      className="w-full bg-zinc-900 border border-amber-500/40 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Owner Details & Staff */}
+              <div className="pt-2 border-t border-zinc-800/80">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2.5">
+                  3. የባለቤት እና የተረካቢ መረጃ (Owner & Staff)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                      የባለቤት ስም (Owner Full Name) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. አቶ አበበ ከበደ"
+                      value={intakeFormData.owner_name}
+                      onChange={(e) =>
+                        setIntakeFormData({ ...intakeFormData, owner_name: e.target.value })
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                      የባለቤት ስልክ ቁጥር (Owner Phone) *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="e.g. 0911223344"
+                      value={intakeFormData.owner_phone}
+                      onChange={(e) =>
+                        setIntakeFormData({ ...intakeFormData, owner_phone: e.target.value })
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                      የተረካቢው ስም (Staff Receiver Name)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. ኪዱስ / Kidus"
+                      value={intakeFormData.received_by_name}
+                      onChange={(e) =>
+                        setIntakeFormData({ ...intakeFormData, received_by_name: e.target.value })
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                      ማስታወሻ / የተረከብናቸው ዕቃዎች (Remark)
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="e.g. ቁልፍ እና ሊብሬ ተረክበናል፣ መለዋወጫ ጎማ አለው..."
+                      value={intakeFormData.remark}
+                      onChange={(e) =>
+                        setIntakeFormData({ ...intakeFormData, remark: e.target.value })
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 4: Optional Showroom Publishing */}
+              <div className="pt-2 border-t border-zinc-800/80">
+                <label className="flex items-center gap-2.5 p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 cursor-pointer select-none hover:border-amber-500/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={intakeFormData.publish_to_showroom}
+                    onChange={(e) =>
+                      setIntakeFormData({
+                        ...intakeFormData,
+                        publish_to_showroom: e.target.checked,
+                      })
+                    }
+                    className="w-4 h-4 rounded accent-amber-500 bg-zinc-900 border-zinc-700 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      🌐 ለሽያጭ በሾውሩም ይለጠፍ? (Publish directly to Digital Showroom)
+                    </span>
+                    <span className="text-[11px] text-zinc-400 block">
+                      ምልክት ካደረጉ ተሽከርካሪው በሾውሩም ላይ ወዲያውኑ ለገዢዎች ክፍት ሆኖ ይለጠፋል።
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex gap-2 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setShowIntakeModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition"
+                >
+                  ይቅር (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  disabled={intakeSubmitting}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-extrabold text-xs shadow-lg shadow-amber-500/20 active:scale-95 transition flex items-center justify-center gap-2"
+                >
+                  {intakeSubmitting ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>በመመዝገብ ላይ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={15} />
+                      <span>መረከብ አረጋግጥ (Confirm Intake)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* GATE PASS RELEASE MODAL (FORM 2) */}
+      {showReleaseModal && releasingIntake && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-lg w-full shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-orange-600/20 text-orange-400 flex items-center justify-center font-bold">
+                  🚪
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-white text-sm sm:text-base">
+                    መኪና መውጫ ፈቃድ (Generate Gate Pass)
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    ህጋዊ የመውጫ ደረሰኝ (Form 2) አዘጋጅተው ያትሙ
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReleaseModal(false)}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-800 hover:bg-zinc-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form Body */}
+            <form onSubmit={handleGenerateGatePass} className="p-4 sm:p-6 overflow-y-auto space-y-4">
+              {releaseError && (
+                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle size={15} className="shrink-0 text-rose-400" />
+                  <span>{releaseError}</span>
+                </div>
+              )}
+
+              {/* Target Vehicle Preview Banner */}
+              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-white text-sm">{releasingIntake.vehicle_name}</p>
+                  <p className="text-zinc-400 text-[11px]">
+                    ባለቤት: {releasingIntake.owner_name} ({releasingIntake.owner_phone})
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono font-black text-xs text-amber-400 bg-black px-2 py-1 rounded border border-zinc-700">
+                    {releasingIntake.plate_number}
+                  </span>
+                </div>
+              </div>
+
+              {/* Field 1: Driver Name */}
+              <div>
+                <label className="text-xs font-bold text-zinc-300 block mb-1">
+                  የሹፌሩ ስም (Driver Full Name) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="የሹፌሩን ሙሉ ስም ያስገቡ..."
+                  value={releaseFormData.driver_name}
+                  onChange={(e) =>
+                    setReleaseFormData({ ...releaseFormData, driver_name: e.target.value })
+                  }
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+
+                {/* Quick Driver Selection from registered fleet roster */}
+                {drivers.filter((d) => d.is_active).length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-[10px] text-zinc-500 mb-1">ወይም ከተመዘገቡ አሽከርካሪዎች ይምረጡ:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {drivers
+                        .filter((d) => d.is_active)
+                        .map((d) => (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() =>
+                              setReleaseFormData({ ...releaseFormData, driver_name: d.full_name })
+                            }
+                            className={`px-2 py-0.5 rounded text-[10px] font-medium transition ${
+                              releaseFormData.driver_name === d.full_name
+                                ? "bg-amber-500 text-black font-bold"
+                                : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                            }`}
+                          >
+                            {d.full_name}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Field 2: Plate Number */}
+              <div>
+                <label className="text-xs font-bold text-zinc-300 block mb-1">
+                  የሰሌዳ ቁጥር (Plate Number) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={releaseFormData.plate_number}
+                  onChange={(e) =>
+                    setReleaseFormData({ ...releaseFormData, plate_number: e.target.value })
+                  }
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Field 3: Release Reason */}
+              <div>
+                <label className="text-xs font-bold text-zinc-300 block mb-1">
+                  የመውጣት ምክንያት (Release Reason) *
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[
+                    "የዕለት መልስ",
+                    "ለገዢ ሙከራ",
+                    "የተሸጠ",
+                    "ለጥገና/እጥበት",
+                    "የባለቤት ጥያቄ",
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() =>
+                        setReleaseFormData({ ...releaseFormData, release_reason: preset })
+                      }
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                        releaseFormData.release_reason === preset
+                          ? "bg-amber-500 text-black font-bold shadow-sm"
+                          : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. የዕለት መልስ / ለገዢ ሙከራ..."
+                  value={releaseFormData.release_reason}
+                  onChange={(e) =>
+                    setReleaseFormData({ ...releaseFormData, release_reason: e.target.value })
+                  }
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Field 4: Authorized By */}
+              <div>
+                <label className="text-xs font-bold text-zinc-300 block mb-1">
+                  እንዲወጣ የፈቀደው ኃላፊ (Authorized By) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="የፈቃጅ ስም..."
+                  value={releaseFormData.authorized_by}
+                  onChange={(e) =>
+                    setReleaseFormData({ ...releaseFormData, authorized_by: e.target.value })
+                  }
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setShowReleaseModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition"
+                >
+                  ይቅር (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  disabled={releaseSubmitting}
+                  className="flex-1 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-extrabold text-xs shadow-lg shadow-orange-600/25 active:scale-95 transition flex items-center justify-center gap-2"
+                >
+                  {releaseSubmitting ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>በማዘጋጀት ላይ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <DoorOpen size={16} />
+                      <span>ይፍቀዱ እና ደረሰኝ አትሙ (Authorize & Print)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* PRINTABLE GATE PASS SLIP (FORM 2 MODAL) */}
+      {showGatePassSlip && activeGatePass && (
+        <GatePassModal
+          pass={activeGatePass}
+          vehicleName={gatePassVehicleName}
+          onClose={() => {
+            setShowGatePassSlip(false);
+            setActiveGatePass(null);
+          }}
+        />
+      )}
+
+      {/* BATCH GATE PASS MODAL (2x2 A4 GRID) */}
+      {showBatchGatePassModal && (
+        <BatchGatePassModal
+          selectedIntakes={lotIntakes.filter((i) => selectedLotIntakeIds.includes(i.id))}
+          currentUser={currentUser}
+          onClose={() => setShowBatchGatePassModal(false)}
+          onSuccess={async () => {
+            await fetchLotIntakes();
+            setSelectedLotIntakeIds([]);
+            showToast("የጅምላ መኪና መውጫ ፈቃዶች በተሳካ ሁኔታ ተዘጋጅተዋል!");
+          }}
+        />
+      )}
+
+      {/* PRINTABLE VEHICLE RECEIVING SHEET (FORM 1 MODAL) */}
+      {showReceivingSheetPrint && (
+        <ReceivingSheetPrint
+          intakes={lotIntakes}
+          onClose={() => setShowReceivingSheetPrint(false)}
+          dealershipName={dealershipSettings.name || "AC WALE MARKET"}
+        />
+      )}
+
+      {/* HANDOVER AGREEMENT FORM MODAL */}
+      {showHandoverFormModal && (
+        <HandoverFormModal
+          isOpen={showHandoverFormModal}
+          onClose={() => setShowHandoverFormModal(false)}
+          onSuccess={(newHandover) => {
+            setHandovers((prev) => [newHandover, ...prev]);
+            showToast(`የመረከቢያ ውል ${newHandover.contract_number} በተሳካ ሁኔታ ተመዝግቧል!`);
+            setActivePrintHandover(newHandover);
+          }}
+          existingVehicles={vehicles}
+          existingIntakes={lotIntakes}
+        />
+      )}
+
+      {/* PRINTABLE HANDOVER AGREEMENT CONTRACT MODAL */}
+      {activePrintHandover && (
+        <HandoverPrintModal
+          handover={activePrintHandover}
+          onClose={() => setActivePrintHandover(null)}
+        />
+      )}
+
+      {/* FLOATING BATCH RELEASE ACTION BAR */}
+      {selectedLotIntakeIds.length > 0 && activeTab === "lot_operations" && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 bg-zinc-900/95 border-2 border-amber-500 text-white px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-4 animate-in fade-in slide-in-from-bottom-3">
+          <div className="text-xs">
+            <span className="font-bold text-amber-400 block">
+              {selectedLotIntakeIds.length} መኪኖች ተመርጠዋል (Max 4 per A4 sheet)
+            </span>
+            <span className="text-zinc-400 text-[11px]">በአንድ A4 ወረቀት ላይ 2x2 ተደርድረው ይታተማሉ</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedLotIntakeIds([])}
+              className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white rounded-lg bg-zinc-800 transition"
+            >
+              አፅዳ (Clear)
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowBatchGatePassModal(true)}
+              className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold rounded-lg text-xs transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95"
+            >
+              <Printer size={14} />
+              <span>🖨️ የጅምላ መውጫ ፈቃድ (Batch Release: {selectedLotIntakeIds.length} Selected)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* OFFICIAL AC WALE MARKET FOOTER */}
+      <footer className="mt-16 border-t border-zinc-900 py-6 text-center text-xs text-zinc-500">
+        <p>© 2026 AC WALE MARKET. All rights reserved. 22 አዋራሪስ ሆቴል ጀርባ፣ Addis Ababa, Ethiopia</p>
+        <div className="flex justify-center items-center gap-3 mt-2 font-mono text-[11px] text-zinc-400">
+          <a href="tel:+251911646628" className="hover:text-amber-400 transition">📞 +251 911 646 628</a>
+          <span>•</span>
+          <a href="tel:+251900061300" className="hover:text-amber-400 transition">📞 +251 900 061 300</a>
+          <span>•</span>
+          <a href="mailto:acwalecarmarket@gmail.com" className="hover:text-amber-400 transition">acwalecarmarket@gmail.com</a>
+        </div>
+      </footer>
 
       {/* FLOATING CONFIRMATION TOAST */}
       {(toastMessage || showSaveToast) && (

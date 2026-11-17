@@ -19,7 +19,7 @@ export const translations = {
     catToyota: "Toyota",
     catByd: "BYD",
     catElectric: "Electric",
-    catBrandNew: "Brand New",
+    catBrandNew: "አዲስ / ዜሮ ኪ.ሜ (Brand New)",
     catSuv: "SUV",
     catHatchback: "Hatchback",
 
@@ -33,10 +33,10 @@ export const translations = {
     photos: "Photos",
 
     // Conditions
-    conditionBrandNew: "Brand New",
-    conditionSlightlyUsed: "Slightly Used",
-    conditionExcellent: "Excellent Condition",
-    conditionGood: "Good Condition",
+    conditionBrandNew: "አዲስ / ዜሮ ኪ.ሜ (Brand New)",
+    conditionSlightlyUsed: "በጥቂቱ ያገለገለ (Slightly Used)",
+    conditionExcellent: "በጣም ጥሩ ይዞታ (Excellent Condition)",
+    conditionGood: "ጥሩ ይዞታ (Good Condition)",
 
     // Plate Status
     plate: "Plate",
@@ -223,7 +223,7 @@ export const translations = {
     catToyota: "ቶዮታ",
     catByd: "ቢ.ዋይ.ዲ (BYD)",
     catElectric: "ኤሌክትሪክ",
-    catBrandNew: "አዲስ (ዜሮ ኪ.ሜ)",
+    catBrandNew: "አዲስ / ዜሮ ኪ.ሜ (Brand New)",
     catSuv: "ኤስ.ዩ.ቪ (SUV)",
     catHatchback: "ሀችባክ",
 
@@ -237,10 +237,10 @@ export const translations = {
     photos: "ፎቶዎች",
 
     // Conditions
-    conditionBrandNew: "አዲስ (Brand New)",
-    conditionSlightlyUsed: "ትንሽ የተነዳ",
-    conditionExcellent: "በጣም ምርጥ ይዞታ",
-    conditionGood: "ጥሩ ይዞታ",
+    conditionBrandNew: "አዲስ / ዜሮ ኪ.ሜ (Brand New)",
+    conditionSlightlyUsed: "በጥቂቱ ያገለገለ (Slightly Used)",
+    conditionExcellent: "በጣም ጥሩ ይዞታ (Excellent Condition)",
+    conditionGood: "ጥሩ ይዞታ (Good Condition)",
 
     // Plate Status
     plate: "ሰሌዳ",

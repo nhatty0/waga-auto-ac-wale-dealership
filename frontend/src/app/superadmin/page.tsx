@@ -4,75 +4,72 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ShieldAlert,
   ShieldCheck,
   Building2,
   Car,
-  TrendingUp,
+  Key,
   Users,
-  Search,
-  ExternalLink,
-  Power,
+  TrendingUp,
+  UserCheck,
+  Send,
+  Phone,
   RotateCw,
   ArrowLeft,
-  Sliders,
+  Calendar,
   CheckCircle2,
-  XCircle,
-  Phone,
-  Sparkles,
-  CarFront,
-  Edit3,
+  Clock,
+  Truck,
+  Plus,
+  Trash2,
   X,
   AlertTriangle,
-  Trash2,
-  LogIn,
+  UserPlus,
+  ExternalLink,
+  ChevronRight,
+  Sparkles,
 } from "lucide-react";
-import { User, SuperAdminStats, SuperAdminDealership } from "@/types";
+import { User, ExecutiveStats, StaffUser, RentalBooking } from "@/types";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
 
-export default function SuperAdminDashboard() {
+export default function ExecutiveOwnerDashboard() {
   const router = useRouter();
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
 
-  const [stats, setStats] = useState<SuperAdminStats | null>(null);
-  const [dealerships, setDealerships] = useState<SuperAdminDealership[]>([]);
+  // Executive Data State
+  const [stats, setStats] = useState<ExecutiveStats | null>(null);
+  const [rentals, setRentals] = useState<RentalBooking[]>([]);
+  const [staffList, setStaffList] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [planFilter, setPlanFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  // Invite/Add Staff Modal
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [staffPhone, setStaffPhone] = useState("");
+  const [staffName, setStaffName] = useState("");
+  const [staffRole, setStaffRole] = useState("sales_agent");
+  const [isSavingStaff, setIsSavingStaff] = useState(false);
 
+  // Action Loading & Toasts
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
-
-  // Edit Plan & Capacity Modal state
-  const [editingDealer, setEditingDealer] = useState<SuperAdminDealership | null>(null);
-  const [editPlan, setEditPlan] = useState<string>("starter");
-  const [editMaxVehicles, setEditMaxVehicles] = useState<number>(50);
-  const [isSavingPlan, setIsSavingPlan] = useState(false);
-
-  // Cascade Delete Dealership Modal state
-  const [dealerToDelete, setDealerToDelete] = useState<SuperAdminDealership | null>(null);
-  const [isDeletingDealer, setIsDeletingDealer] = useState(false);
 
   const showToast = (text: string, type: "success" | "error" = "success") => {
     setToast({ text, type });
     setTimeout(() => {
       setToast(null);
-    }, 3500);
+    }, 4000);
   };
 
   const getAuthToken = () => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("dealer_token");
+      return localStorage.getItem("dealer_token") || localStorage.getItem("token");
     }
     return null;
   };
 
-  // 1. RBAC Guard: Verify SuperAdmin Role
+  // 1. RBAC Guard: Verify SuperAdmin / Executive Role
   useEffect(() => {
     const checkRole = async () => {
       const token = getAuthToken();
@@ -94,7 +91,17 @@ export default function SuperAdminDashboard() {
         }
 
         const user: User = await res.json();
-        if (user.role !== "superadmin") {
+        const superadminPhone1 = "251918032065";
+        const superadminPhone2 = "251911646628";
+        const normalizedUserPhone = (user.phone_number || "").replace(/\D/g, "");
+
+        const isSuperadminUser =
+          user.role === "superadmin" ||
+          Boolean((user as any).is_superadmin) ||
+          normalizedUserPhone.includes(superadminPhone1) ||
+          normalizedUserPhone.includes(superadminPhone2);
+
+        if (!isSuperadminUser) {
           router.push("/admin");
           return;
         }
@@ -110,8 +117,8 @@ export default function SuperAdminDashboard() {
     checkRole();
   }, [router]);
 
-  // 2. Fetch SuperAdmin Data
-  const fetchSuperAdminData = async () => {
+  // 2. Load Executive Owner Dashboard Data
+  const fetchDashboardData = async () => {
     const token = getAuthToken();
     if (!token) return;
 
@@ -119,9 +126,12 @@ export default function SuperAdminDashboard() {
       setLoading(true);
       const headers = { Authorization: `Bearer ${token}` };
 
-      const [statsRes, dealersRes] = await Promise.all([
-        fetch(`${getApiBaseUrl()}/api/superadmin/stats`, { headers }),
-        fetch(`${getApiBaseUrl()}/api/superadmin/dealerships`, { headers }),
+      const [statsRes, rentalsRes, staffRes] = await Promise.all([
+        fetch(`${getApiBaseUrl()}/api/admin/stats`, { headers })
+          .then((r) => (r.ok ? r : fetch(`${getApiBaseUrl()}/api/superadmin/stats`, { headers })))
+          .then((r) => (r.ok ? r : fetch(`${getApiBaseUrl()}/api/superadmin/executive-stats`, { headers }))),
+        fetch(`${getApiBaseUrl()}/api/admin/rentals`, { headers }),
+        fetch(`${getApiBaseUrl()}/api/superadmin/staff`, { headers }),
       ]);
 
       if (statsRes.ok) {
@@ -129,34 +139,85 @@ export default function SuperAdminDashboard() {
         setStats(statsData);
       }
 
-      if (dealersRes.ok) {
-        const dealersData = await dealersRes.json();
-        setDealerships(Array.isArray(dealersData) ? dealersData : []);
+      if (rentalsRes.ok) {
+        const rentalsData = await rentalsRes.json();
+        setRentals(Array.isArray(rentalsData) ? rentalsData : []);
+      }
+
+      if (staffRes.ok) {
+        const staffData = await staffRes.json();
+        setStaffList(Array.isArray(staffData) ? staffData : []);
       }
     } catch (err) {
-      console.error("Failed to load SuperAdmin metrics", err);
-      showToast("Error loading SuperAdmin data", "error");
+      console.error("Failed to load Executive Dashboard data", err);
+      showToast("Error loading executive metrics", "error");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (!authChecking && currentUser?.role === "superadmin") {
-      fetchSuperAdminData();
+    if (!authChecking && currentUser) {
+      fetchDashboardData();
     }
   }, [authChecking, currentUser]);
 
-  // 3. Toggle Dealership Active / Inactive Status
-  const handleToggleStatus = async (dealer: SuperAdminDealership) => {
+  // 3. Add or Invite Staff Member
+  const handleAddStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
     const token = getAuthToken();
     if (!token) return;
 
-    const newStatus = !dealer.is_active;
-    setActionLoadingId(dealer.id);
+    if (!staffPhone.trim()) {
+      showToast("Please enter a valid phone number", "error");
+      return;
+    }
+
+    setIsSavingStaff(true);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/superadmin/staff`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone_number: staffPhone.trim(),
+          full_name: staffName.trim() || null,
+          role: staffRole,
+        }),
+      });
+
+      if (res.ok) {
+        const createdUser: StaffUser = await res.json();
+        setStaffList((prev) => [createdUser, ...prev.filter((u) => u.id !== createdUser.id)]);
+        showToast(`✓ Staff member ${createdUser.full_name || createdUser.phone_number} successfully registered!`);
+        setIsStaffModalOpen(false);
+        setStaffPhone("");
+        setStaffName("");
+        setStaffRole("sales_agent");
+      } else {
+        const err = await res.json();
+        showToast(err.detail || "Failed to invite staff member", "error");
+      }
+    } catch (err) {
+      console.error("Error inviting staff", err);
+      showToast("Network error inviting staff member", "error");
+    } finally {
+      setIsSavingStaff(false);
+    }
+  };
+
+  // 4. Toggle Staff Active / Inactive Status
+  const handleToggleStaffStatus = async (staff: StaffUser) => {
+    const token = getAuthToken();
+    if (!token) return;
+
+    setActionLoadingId(staff.id);
+    const newStatus = !staff.is_active;
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/superadmin/dealerships/${dealer.id}/status`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/superadmin/staff/${staff.id}/status`, {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -166,713 +227,619 @@ export default function SuperAdminDashboard() {
       });
 
       if (res.ok) {
-        const updated: SuperAdminDealership = await res.json();
-        setDealerships((prev) =>
-          prev.map((d) => (d.id === dealer.id ? { ...d, is_active: updated.is_active } : d))
-        );
+        const updated: StaffUser = await res.json();
+        setStaffList((prev) => prev.map((s) => (s.id === staff.id ? updated : s)));
         showToast(
           newStatus
-            ? `✓ Showroom '${dealer.name}' is now ACTIVE and visible to public.`
-            : `⚠️ Showroom '${dealer.name}' is now SUSPENDED. All public access paused.`,
+            ? `✓ Staff member ${staff.full_name || staff.phone_number} activated.`
+            : `⚠️ Staff member ${staff.full_name || staff.phone_number} deactivated.`,
           newStatus ? "success" : "error"
         );
       } else {
         const err = await res.json();
-        showToast(err.detail || "Failed to update dealership status", "error");
+        showToast(err.detail || "Failed to update staff status", "error");
       }
     } catch (err) {
-      console.error("Status toggle error", err);
-      showToast("Network error updating status", "error");
+      console.error("Staff status error", err);
+      showToast("Network error updating staff", "error");
     } finally {
       setActionLoadingId(null);
     }
   };
 
-  // 4. Open Edit Plan Modal
-  const openEditPlanModal = (dealer: SuperAdminDealership) => {
-    setEditingDealer(dealer);
-    setEditPlan(dealer.subscription_plan || "starter");
-    setEditMaxVehicles(dealer.max_vehicles || 50);
-  };
-
-  // 5. Save Subscription Plan & Capacity
-  const handleSavePlan = async () => {
-    if (!editingDealer) return;
+  // 5. Delete Staff Member
+  const handleDeleteStaff = async (staffId: number, staffName: string) => {
+    if (!confirm(`Are you sure you want to remove staff member '${staffName}'?`)) return;
     const token = getAuthToken();
     if (!token) return;
 
-    setIsSavingPlan(true);
+    setActionLoadingId(staffId);
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/superadmin/dealerships/${editingDealer.id}/status`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          subscription_plan: editPlan,
-          max_vehicles: editMaxVehicles,
-        }),
+      const res = await fetch(`${getApiBaseUrl()}/api/superadmin/staff/${staffId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (res.ok) {
-        const updated: SuperAdminDealership = await res.json();
-        setDealerships((prev) =>
-          prev.map((d) => (d.id === editingDealer.id ? { ...d, ...updated } : d))
-        );
-        showToast(`✓ Updated plan for '${editingDealer.name}' to ${editPlan.toUpperCase()} (${editMaxVehicles} cars).`);
-        setEditingDealer(null);
+        setStaffList((prev) => prev.filter((s) => s.id !== staffId));
+        showToast("✓ Staff member deleted successfully");
       } else {
         const err = await res.json();
-        showToast(err.detail || "Failed to update plan", "error");
+        showToast(err.detail || "Failed to delete staff member", "error");
       }
     } catch (err) {
-      console.error("Plan save error", err);
-      showToast("Network error updating subscription plan", "error");
+      console.error("Delete staff error", err);
+      showToast("Network error deleting staff member", "error");
     } finally {
-      setIsSavingPlan(false);
+      setActionLoadingId(null);
     }
   };
-
-  const handleConfirmDeleteDealer = async (dealerId: number) => {
-    setIsDeletingDealer(true);
-    try {
-      const token = getAuthToken();
-      const res = await fetch(`${getApiBaseUrl()}/api/admin/dealerships/${dealerId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to delete dealership");
-      }
-
-      showToast("ሾውሩሙ በተሳካ ሁኔታ ተሰርዟል (Dealership deleted)", "success");
-      setDealerToDelete(null);
-
-      // Refresh list & stats
-      setDealerships((prev) => prev.filter((d) => d.id !== dealerId));
-      fetchSuperAdminData();
-    } catch (err: any) {
-      showToast(err.message || "Failed to delete dealership", "error");
-    } finally {
-      setIsDeletingDealer(false);
-    }
-  };
-
-  const [isSwitchingDealer, setIsSwitchingDealer] = useState<number | null>(null);
-
-  const handleImpersonateDealership = async (dealer: SuperAdminDealership) => {
-    setIsSwitchingDealer(dealer.id);
-    try {
-      const token = getAuthToken();
-      const res = await fetch(`${getApiBaseUrl()}/api/admin/switch-dealership`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ dealership_id: dealer.id }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.access_token) {
-          localStorage.setItem("token", data.access_token);
-          localStorage.setItem("dealer_token", data.access_token);
-        }
-        localStorage.setItem("dealership", JSON.stringify(data.dealership || dealer));
-        showToast(`✓ ወደ '${dealer.name}' ተቀይሯል (Managing ${dealer.name})`, "success");
-        router.push("/admin");
-      } else {
-        const err = await res.json();
-        showToast(err.detail || "Failed to switch dealership", "error");
-      }
-    } catch (err: any) {
-      showToast("Network error switching dealership", "error");
-    } finally {
-      setIsSwitchingDealer(null);
-    }
-  };
-
-  // Filtered Dealerships List
-  const filteredDealerships = useMemo(() => {
-    return dealerships.filter((d) => {
-      const q = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        d.name.toLowerCase().includes(q) ||
-        d.slug.toLowerCase().includes(q) ||
-        (d.phone_number && d.phone_number.includes(q)) ||
-        (d.user_phone_number && d.user_phone_number.includes(q));
-
-      const matchesPlan = planFilter === "all" || d.subscription_plan === planFilter;
-      const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "active" && d.is_active) ||
-        (statusFilter === "suspended" && !d.is_active);
-
-      return matchesSearch && matchesPlan && matchesStatus;
-    });
-  }, [dealerships, searchQuery, planFilter, statusFilter]);
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white space-y-4">
-        <div className="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs font-mono text-zinc-400">Verifying SuperAdmin Credentials...</p>
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
+        <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-zinc-400 font-medium">Verifying AC Wale Cars Executive Credentials...</p>
       </div>
     );
   }
 
+  const telegramConnectUrl = "https://t.me/WagaCarsAlert_bot?start=connect_1";
+
   return (
-    <div className="min-h-screen bg-black text-white pb-24 selection:bg-purple-600 selection:text-white">
-      {/* Top SuperAdmin Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-purple-900/40 px-4 py-3 shadow-lg shadow-purple-950/20">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-amber-500 selection:text-black">
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl border text-sm font-semibold transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 ${
+            toast.type === "success"
+              ? "bg-zinc-900 text-emerald-400 border-emerald-500/30"
+              : "bg-zinc-900 text-rose-400 border-rose-500/30"
+          }`}
+        >
+          {toast.type === "success" ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+          <span>{toast.text}</span>
+        </div>
+      )}
+
+      {/* Top Executive Header */}
+      <header className="border-b border-zinc-800/80 bg-zinc-900/60 backdrop-blur-md sticky top-0 z-40 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
             <Link
               href="/admin"
-              className="p-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 rounded-xl transition"
-              title="Return to Dealer Dashboard"
+              className="p-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-400 hover:text-white transition"
+              title="Return to Dealer Showroom Admin"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={18} />
             </Link>
-
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-indigo-700 flex items-center justify-center shadow-md shadow-purple-500/20">
-                <ShieldCheck size={18} className="text-white" />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                  <ShieldCheck size={12} /> AC WALE MARKET • EXECUTIVE HUB
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                  ac_wale_cars.db (Isolated)
+                </span>
               </div>
-              <div>
-                <h1 className="text-sm font-black tracking-wide text-white uppercase flex items-center gap-2">
-                  <span>AutoShowroom SuperAdmin</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                    Master Oversight
-                  </span>
-                </h1>
-                <p className="text-[11px] text-zinc-400">
-                  Platform-wide Oversight, Monetization & Tenant Controls
-                </p>
-              </div>
+              <h1 className="text-xl md:text-2xl font-black text-white tracking-tight mt-1 flex items-center gap-2">
+                AC WALE MARKET <span className="text-amber-500">Master Business Hub</span>
+              </h1>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={fetchSuperAdminData}
-              disabled={loading}
-              className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs font-semibold text-zinc-300 transition flex items-center gap-1.5"
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 1-Click Connect Telegram Shortcut */}
+            <a
+              href={telegramConnectUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 font-semibold text-xs flex items-center gap-1.5 transition"
+              title="Connect Official Notification Bot"
             >
-              <RotateCw size={14} className={loading ? "animate-spin text-purple-400" : ""} />
-              <span className="hidden sm:inline">Refresh</span>
+              <Send size={14} /> ቴሌግራም አገናኝ (Connect Bot)
+            </a>
+
+            {/* Refresh Data */}
+            <button
+              onClick={fetchDashboardData}
+              disabled={loading}
+              className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition disabled:opacity-50"
+              title="Refresh Business Metrics"
+            >
+              <RotateCw size={16} className={loading ? "animate-spin text-amber-400" : ""} />
             </button>
 
-            <div className="flex items-center gap-2 px-3 py-1 bg-purple-950/40 border border-purple-800/60 rounded-xl">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs font-mono font-bold text-purple-200">
-                {currentUser?.phone_number}
-              </span>
-            </div>
+            {/* Public Showroom Link */}
+            <Link
+              href="/"
+              target="_blank"
+              className="px-3.5 py-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-medium text-xs flex items-center gap-1.5 transition"
+            >
+              <span>ሾውሩም ጎብኝ (Showroom)</span>
+              <ExternalLink size={12} />
+            </Link>
+
+            {/* Admin Operations */}
+            <Link
+              href="/admin"
+              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition"
+            >
+              <span>የስራ አስተዳደር (Operations)</span>
+              <ChevronRight size={14} />
+            </Link>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 pt-6 space-y-6">
-        {/* Top Metrics Cards (4 columns) */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Total Showrooms */}
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-zinc-800 hover:border-purple-500/50 transition shadow-md">
-            <div className="flex items-center justify-between text-zinc-400 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Total Showrooms</span>
-              <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                <Building2 size={16} />
-              </div>
-            </div>
-            <div className="text-2xl font-black text-white">
-              {stats ? stats.total_dealerships : "..."}
-            </div>
-            <p className="text-[11px] text-zinc-500 mt-1">Multi-tenant dealer showrooms registered</p>
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto w-full px-6 py-8 flex-1 space-y-8">
+        {/* 4 KEY EXECUTIVE METRIC CARDS */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+              <Sparkles size={16} className="text-amber-400" /> ዋና ዋና የንግድ አመልካቾች (Executive Key Metrics)
+            </h2>
+            <span className="text-xs text-zinc-500">Live Single-Tenant Metrics</span>
           </div>
 
-          {/* Active Listings */}
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-zinc-800 hover:border-emerald-500/50 transition shadow-md">
-            <div className="flex items-center justify-between text-zinc-400 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Active Inventory</span>
-              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <Car size={16} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Card 1: Total Sales Inventory */}
+            <div className="p-5 rounded-2xl bg-zinc-900/90 border border-zinc-800 hover:border-amber-500/40 transition shadow-xl group">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  Total Sales Inventory
+                </span>
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 group-hover:scale-110 transition">
+                  <Car size={20} />
+                </div>
+              </div>
+              <div className="text-3xl font-black text-white tracking-tight">
+                {loading ? "..." : (stats?.sales_count ?? stats?.sales_inventory ?? stats?.total_sales_inventory ?? 0)}
+              </div>
+              <div className="text-xs text-zinc-400 mt-1 font-medium">
+                የሚሸጡ መኪኖች (Cars for Sale)
               </div>
             </div>
-            <div className="text-2xl font-black text-emerald-400">
-              {stats ? stats.total_active_listings : "..."}
-            </div>
-            <p className="text-[11px] text-zinc-500 mt-1">Cars available for sale across Addis</p>
-          </div>
 
-          {/* Platform Inventory Value */}
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-zinc-800 hover:border-amber-500/50 transition shadow-md">
-            <div className="flex items-center justify-between text-zinc-400 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Platform Value (ETB)</span>
-              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                <TrendingUp size={16} />
+            {/* Card 2: Active Rental Fleet */}
+            <div className="p-5 rounded-2xl bg-zinc-900/90 border border-zinc-800 hover:border-sky-500/40 transition shadow-xl group">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  Active Rental Fleet
+                </span>
+                <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 group-hover:scale-110 transition">
+                  <Key size={20} />
+                </div>
+              </div>
+              <div className="text-3xl font-black text-white tracking-tight">
+                {loading ? "..." : (stats?.rental_count ?? stats?.rental_fleet ?? stats?.active_rental_fleet ?? 0)}
+              </div>
+              <div className="text-xs text-zinc-400 mt-1 font-medium">
+                የኪራይ መኪኖች (Ready for Dispatch)
               </div>
             </div>
-            <div className="text-xl sm:text-2xl font-black text-amber-400 tracking-tight truncate">
-              {stats ? `${stats.total_inventory_value.toLocaleString()} ETB` : "..."}
-            </div>
-            <p className="text-[11px] text-zinc-500 mt-1">Aggregate gross value of showroom stock</p>
-          </div>
 
-          {/* Total Leads Generated */}
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-zinc-800 hover:border-sky-500/50 transition shadow-md">
-            <div className="flex items-center justify-between text-zinc-400 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Customer Leads</span>
-              <div className="p-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                <Users size={16} />
+            {/* Card 3: Registered Drivers */}
+            <div className="p-5 rounded-2xl bg-zinc-900/90 border border-zinc-800 hover:border-emerald-500/40 transition shadow-xl group">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  Registered Drivers
+                </span>
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 group-hover:scale-110 transition">
+                  <Truck size={20} />
+                </div>
+              </div>
+              <div className="text-3xl font-black text-white tracking-tight">
+                {loading ? "..." : (stats?.drivers_count ?? stats?.active_drivers ?? stats?.registered_drivers ?? 0)}
+              </div>
+              <div className="text-xs text-zinc-400 mt-1 font-medium">
+                ተረካቢ አሽከርካሪዎች (Active Personnel)
               </div>
             </div>
-            <div className="text-2xl font-black text-sky-400">
-              {stats ? stats.total_leads_generated : "..."}
+
+            {/* Card 4: Total Customer Inquiries & Rental Bookings */}
+            <div className="p-5 rounded-2xl bg-zinc-900/90 border border-zinc-800 hover:border-purple-500/40 transition shadow-xl group">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  Total Leads & Bookings
+                </span>
+                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 group-hover:scale-110 transition">
+                  <TrendingUp size={20} />
+                </div>
+              </div>
+              <div className="text-3xl font-black text-white tracking-tight">
+                {loading ? "..." : (stats?.leads_count ?? stats?.total_inquiries_and_bookings ?? stats?.total_leads_bookings ?? 0)}
+              </div>
+              <div className="text-xs text-zinc-400 mt-1 font-medium">
+                {stats?.total_sales_inquiries != null
+                  ? `${stats.total_sales_inquiries} ቀጠሮዎች • ${stats?.total_rental_bookings ?? 0} ኪራዮች`
+                  : `${stats?.leads_count ?? 0} ጠቅላላ ጥያቄዎች እና ኪራዮች`}
+              </div>
             </div>
-            <p className="text-[11px] text-zinc-500 mt-1">Total buyer test-drive & viewing inquiries</p>
           </div>
         </section>
 
-        {/* Filter & Search Bar */}
-        <section className="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-          {/* Search Input */}
-          <div className="relative w-full md:w-80">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-            <input
-              type="text"
-              placeholder="Search by name, slug, or phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 focus:border-purple-500 pl-9 pr-3 py-2 rounded-xl text-xs text-white placeholder-zinc-500 outline-none transition"
-            />
-          </div>
-
-          {/* Filters Row */}
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            {/* Status Filter */}
-            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs">
-              <button
-                onClick={() => setStatusFilter("all")}
-                className={`px-3 py-1 rounded-lg transition font-medium ${
-                  statusFilter === "all" ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-400 hover:text-white"
-                }`}
-              >
-                All Status
-              </button>
-              <button
-                onClick={() => setStatusFilter("active")}
-                className={`px-3 py-1 rounded-lg transition font-medium ${
-                  statusFilter === "active" ? "bg-emerald-500/20 text-emerald-400" : "text-zinc-400 hover:text-white"
-                }`}
-              >
-                Active
-              </button>
-              <button
-                onClick={() => setStatusFilter("suspended")}
-                className={`px-3 py-1 rounded-lg transition font-medium ${
-                  statusFilter === "suspended" ? "bg-red-500/20 text-red-400" : "text-zinc-400 hover:text-white"
-                }`}
-              >
-                Suspended
-              </button>
+        {/* OPERATIONAL TABLE 1: RECENT RENTAL DELIVERIES & DRIVER ASSIGNMENTS */}
+        <section className="bg-zinc-900/80 border border-zinc-800/90 rounded-2xl overflow-hidden shadow-2xl">
+          <div className="p-6 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                  <Key size={16} />
+                </span>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  የቅርብ የመኪና ኪራይ እና የአሽከርካሪ ስምሪት (Recent Rental Deliveries & Dispatch)
+                </h3>
+              </div>
+              <p className="text-xs text-zinc-400 mt-1">
+                Active customer bookings, delivery locations across Addis Ababa, and assigned drivers.
+              </p>
             </div>
-
-            {/* Plan Filter */}
-            <select
-              value={planFilter}
-              onChange={(e) => setPlanFilter(e.target.value)}
-              className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-2 outline-none focus:border-purple-500 transition"
+            <Link
+              href="/admin"
+              className="text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 transition self-start sm:self-auto"
             >
-              <option value="all">All Plans</option>
-              <option value="starter">Starter Plan</option>
-              <option value="pro">Pro Plan</option>
-              <option value="enterprise">Enterprise Plan</option>
-            </select>
-          </div>
-        </section>
-
-        {/* Dealerships Master Table */}
-        <section className="bg-zinc-950 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl">
-          <div className="px-5 py-4 border-b border-zinc-800/80 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Building2 size={16} className="text-purple-400" />
-              <span>Registered Dealerships & Showrooms ({filteredDealerships.length})</span>
-            </h3>
+              <span>ሁሉንም ኪራዮች አስተዳድር (Manage Rentals)</span>
+              <ChevronRight size={14} />
+            </Link>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-zinc-900/60 text-zinc-400 border-b border-zinc-800 uppercase font-semibold text-[11px] tracking-wider">
-                <tr>
-                  <th className="py-3 px-4">Showroom</th>
-                  <th className="py-3 px-4">Contact & Account</th>
-                  <th className="py-3 px-4 text-center">Cars / Limit</th>
-                  <th className="py-3 px-4 text-center">Subscription</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/60">
-                {filteredDealerships.length === 0 ? (
+            {loading ? (
+              <div className="p-12 text-center text-zinc-500">
+                <RotateCw size={24} className="animate-spin mx-auto mb-2 text-zinc-400" />
+                Loading rental pipeline...
+              </div>
+            ) : rentals.length === 0 ? (
+              <div className="p-12 text-center">
+                <Key size={36} className="mx-auto text-zinc-600 mb-3" />
+                <h4 className="text-sm font-bold text-white">ምንም የኪራይ ትዕዛዝ የለም (No Active Rentals)</h4>
+                <p className="text-xs text-zinc-400 mt-1 max-w-sm mx-auto">
+                  ደንበኞች በሾውሩም በኩል መኪና ሲከራዩ ትዕዛዞች እዚህ በቅጽበት ይዘረዘራሉ::
+                </p>
+              </div>
+            ) : (
+              <table className="w-full text-left text-sm text-zinc-300">
+                <thead className="bg-zinc-950/60 border-b border-zinc-800 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-zinc-500">
-                      No dealerships found matching the current search & filters.
-                    </td>
+                    <th className="px-6 py-3.5">መኪና (Vehicle)</th>
+                    <th className="px-6 py-3.5">ደንበኛ (Customer)</th>
+                    <th className="px-6 py-3.5">የኪራይ ጊዜ (Period)</th>
+                    <th className="px-6 py-3.5">ማድረሻ (Delivery)</th>
+                    <th className="px-6 py-3.5">የተመደበ አሽከርካሪ (Driver)</th>
+                    <th className="px-6 py-3.5">ሁኔታ (Status)</th>
+                    <th className="px-6 py-3.5 text-right">ዋጋ (Total)</th>
                   </tr>
-                ) : (
-                  filteredDealerships.map((dealer) => {
-                    const isSuspended = !dealer.is_active;
-                    const isActionLoading = actionLoadingId === dealer.id;
+                </thead>
+                <tbody className="divide-y divide-zinc-800/60">
+                  {rentals.slice(0, 8).map((booking) => {
+                    const statusColors: Record<string, string> = {
+                      pending: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+                      confirmed: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+                      driver_assigned: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+                      delivered: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+                      completed: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+                      cancelled: "bg-zinc-800 text-zinc-400 border-zinc-700",
+                    };
 
                     return (
-                      <tr
-                        key={dealer.id}
-                        className={`hover:bg-zinc-900/40 transition ${
-                          isSuspended ? "opacity-75 bg-red-950/10" : ""
-                        }`}
-                      >
-                        {/* Showroom Logo & Name */}
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-3">
-                            {dealer.logo_url ? (
-                              <img
-                                src={resolveImageUrl(dealer.logo_url)}
-                                alt={dealer.name}
-                                className="w-9 h-9 rounded-xl object-cover border border-zinc-700 flex-shrink-0"
-                              />
-                            ) : (
-                              <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-amber-400 flex-shrink-0">
-                                <CarFront size={18} />
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <span className="font-bold text-white block truncate max-w-[180px]">
-                                {dealer.name}
-                              </span>
-                              <span className="font-mono text-[11px] text-zinc-500 block truncate max-w-[180px]">
-                                /{dealer.slug}
-                              </span>
-                            </div>
+                      <tr key={booking.id} className="hover:bg-zinc-800/40 transition">
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-white">
+                            {booking.vehicle ? `${booking.vehicle.year} ${booking.vehicle.make} ${booking.vehicle.model}` : `Vehicle #${booking.vehicle_id}`}
+                          </div>
+                          <div className="text-[11px] text-zinc-400">
+                            Booking #{booking.id}
                           </div>
                         </td>
-
-                        {/* Contact & Phone */}
-                        <td className="py-3.5 px-4">
-                          <div className="space-y-0.5">
-                            <span className="font-medium text-zinc-200 flex items-center gap-1.5">
-                              <Phone size={12} className="text-zinc-500" />
-                              {dealer.phone_number || "No contact phone"}
-                            </span>
-                            {dealer.user_phone_number && (
-                              <span className="text-[10px] text-zinc-500 block font-mono">
-                                Login: {dealer.user_phone_number}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Inventory Count vs Max Vehicles */}
-                        <td className="py-3.5 px-4 text-center">
-                          <span className="font-bold text-white">
-                            {dealer.vehicle_count}
-                          </span>
-                          <span className="text-zinc-500 text-[11px]">
-                            {" "}/ {dealer.max_vehicles}
-                          </span>
-                        </td>
-
-                        {/* Subscription Plan */}
-                        <td className="py-3.5 px-4 text-center">
-                          <button
-                            onClick={() => openEditPlanModal(dealer)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border transition hover:scale-105 active:scale-95 shadow-sm"
-                            style={{
-                              backgroundColor:
-                                dealer.subscription_plan === "enterprise"
-                                  ? "rgba(168, 85, 247, 0.15)"
-                                  : dealer.subscription_plan === "pro"
-                                  ? "rgba(59, 130, 246, 0.15)"
-                                  : "rgba(113, 113, 122, 0.15)",
-                              borderColor:
-                                dealer.subscription_plan === "enterprise"
-                                  ? "rgba(168, 85, 247, 0.4)"
-                                  : dealer.subscription_plan === "pro"
-                                  ? "rgba(59, 130, 246, 0.4)"
-                                  : "rgba(113, 113, 122, 0.4)",
-                              color:
-                                dealer.subscription_plan === "enterprise"
-                                  ? "#c084fc"
-                                  : dealer.subscription_plan === "pro"
-                                  ? "#60a5fa"
-                                  : "#a1a1aa",
-                            }}
-                            title="Click to upgrade or edit subscription plan"
+                        <td className="px-6 py-4">
+                          <div className="font-semibold text-zinc-200">{booking.customer_name}</div>
+                          <a
+                            href={`tel:${booking.customer_phone}`}
+                            className="text-xs text-amber-400 hover:underline flex items-center gap-1 mt-0.5"
                           >
-                            <span>{dealer.subscription_plan || "starter"}</span>
-                            <Edit3 size={10} />
-                          </button>
+                            <Phone size={11} /> {booking.customer_phone}
+                          </a>
                         </td>
-
-                        {/* Status Badge */}
-                        <td className="py-3.5 px-4 text-center">
-                          {dealer.is_active ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                              <CheckCircle2 size={11} />
-                              <span>Active</span>
-                            </span>
+                        <td className="px-6 py-4">
+                          <div className="text-xs text-zinc-300 font-medium">
+                            {booking.total_days} ቀን (Days)
+                          </div>
+                          <div className="text-[11px] text-zinc-400">
+                            {new Date(booking.start_date).toLocaleDateString()}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                              booking.delivery_type === "doorstep_delivery"
+                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                : "bg-zinc-800 text-zinc-300"
+                            }`}
+                          >
+                            {booking.delivery_type === "doorstep_delivery" ? "🚚 ያሉበት ድረስ" : "🏢 ከሾውሩም"}
+                          </span>
+                          {booking.delivery_address && (
+                            <div className="text-[11px] text-zinc-400 mt-1 truncate max-w-[150px]">
+                              📍 {booking.delivery_address}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          {booking.assigned_driver ? (
+                            <div>
+                              <div className="font-bold text-white text-xs flex items-center gap-1.5">
+                                <UserCheck size={13} className="text-emerald-400" />
+                                {booking.assigned_driver.full_name}
+                              </div>
+                              <div className="text-[11px] text-zinc-400">
+                                {booking.assigned_driver.phone_number}
+                              </div>
+                            </div>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-400 border border-red-500/30">
-                              <XCircle size={11} />
-                              <span>Suspended</span>
+                            <span className="text-xs text-amber-400/80 italic flex items-center gap-1">
+                              <Clock size={12} /> አልተመደበም (Unassigned)
                             </span>
                           )}
                         </td>
-
-                        {/* Actions */}
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {/* Dealer Impersonation / Jump In */}
-                            <button
-                              onClick={() => handleImpersonateDealership(dealer)}
-                              disabled={isSwitchingDealer === dealer.id}
-                              className="px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500 text-purple-300 hover:text-white border border-purple-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95"
-                              title={`Jump into and manage '${dealer.name}' inventory`}
-                            >
-                              <LogIn size={13} className={isSwitchingDealer === dealer.id ? "animate-spin" : ""} />
-                              <span>{isSwitchingDealer === dealer.id ? "Switching..." : "Manage"}</span>
-                            </button>
-
-                            {/* Direct Showroom Preview Link */}
-                            <a
-                              href={`/?dealer=${dealer.slug}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white rounded-xl transition"
-                              title="Inspect Public Showroom in new tab"
-                            >
-                              <ExternalLink size={14} />
-                            </a>
-
-                            {/* One-click Deactivate / Activate Button */}
-                            <button
-                              onClick={() => handleToggleStatus(dealer)}
-                              disabled={isActionLoading}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 active:scale-95 ${
-                                dealer.is_active
-                                  ? "bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 shadow-sm"
-                                  : "bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-black border border-emerald-500/30 shadow-sm"
-                              }`}
-                              title={dealer.is_active ? "Suspend showroom access" : "Activate showroom access"}
-                            >
-                              <Power size={13} className={isActionLoading ? "animate-spin" : ""} />
-                              <span>
-                                {isActionLoading
-                                  ? "Processing..."
-                                  : dealer.is_active
-                                  ? "Suspend"
-                                  : "Activate"}
-                              </span>
-                            </button>
-
-                            {/* Discreet Red Trash Button */}
-                            <button
-                              onClick={() => setDealerToDelete(dealer)}
-                              className="p-2 bg-zinc-900 hover:bg-red-500/10 border border-zinc-800 hover:border-red-500/30 text-zinc-400 hover:text-red-400 rounded-xl transition"
-                              title="አጥፋ / Delete Dealership"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold border uppercase tracking-wider ${
+                              statusColors[booking.status] || "bg-zinc-800 text-zinc-300 border-zinc-700"
+                            }`}
+                          >
+                            {booking.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right font-mono font-bold text-white">
+                          {booking.total_price.toLocaleString()} ETB
                         </td>
                       </tr>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+
+        {/* OPERATIONAL TABLE 2: STAFF MANAGEMENT */}
+        <section className="bg-zinc-900/80 border border-zinc-800/90 rounded-2xl overflow-hidden shadow-2xl">
+          <div className="p-6 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <Users size={16} />
+                </span>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  የሰራተኞች አስተዳደር (Staff Management & Authorized Access)
+                </h3>
+              </div>
+              <p className="text-xs text-zinc-400 mt-1">
+                Executive Owner, Sub-Admins, and Sales Representatives authorized to manage AC Wale Cars.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setIsStaffModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition self-start sm:self-auto"
+            >
+              <UserPlus size={15} />
+              <span>+ ሰራተኛ ጨምር (Invite Staff)</span>
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            {loading ? (
+              <div className="p-12 text-center text-zinc-500">
+                <RotateCw size={24} className="animate-spin mx-auto mb-2 text-zinc-400" />
+                Loading staff roster...
+              </div>
+            ) : staffList.length === 0 ? (
+              <div className="p-12 text-center text-zinc-500">
+                No staff members recorded.
+              </div>
+            ) : (
+              <table className="w-full text-left text-sm text-zinc-300">
+                <thead className="bg-zinc-950/60 border-b border-zinc-800 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-3.5">ሰራተኛ (Staff Member)</th>
+                    <th className="px-6 py-3.5">ስልክ ቁጥር (Phone)</th>
+                    <th className="px-6 py-3.5">ሚና (Role)</th>
+                    <th className="px-6 py-3.5">ሁኔታ (Status)</th>
+                    <th className="px-6 py-3.5">የተመዘገበበት ቀን (Joined)</th>
+                    <th className="px-6 py-3.5 text-right">እርምጃዎች (Actions)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/60">
+                  {staffList.map((staff) => {
+                    const isSuperAdmin = staff.role === "superadmin" || staff.phone_number.includes("251918032065");
+
+                    return (
+                      <tr key={staff.id} className="hover:bg-zinc-800/40 transition">
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-white flex items-center gap-2">
+                            {isSuperAdmin && <ShieldCheck size={14} className="text-amber-400" />}
+                            {staff.full_name || "AC Wale Staff Member"}
+                          </div>
+                          <div className="text-[11px] text-zinc-500 font-mono">
+                            ID #{staff.id}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-mono text-zinc-300 text-xs">
+                            +{staff.phone_number.replace(/^\+/, "")}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {isSuperAdmin ? (
+                            <span className="px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                              👑 Executive Owner
+                            </span>
+                          ) : staff.role === "subadmin" ? (
+                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                              🛡️ Sub-Admin
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              👤 Sales Agent
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                              staff.is_active
+                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                            }`}
+                          >
+                            {staff.is_active ? "✓ Active" : "✕ Suspended"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-xs text-zinc-400">
+                          {new Date(staff.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          {isSuperAdmin ? (
+                            <span className="text-[11px] text-zinc-500 italic">Protected Master Account</span>
+                          ) : (
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleToggleStaffStatus(staff)}
+                                disabled={actionLoadingId === staff.id}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                                  staff.is_active
+                                    ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20"
+                                    : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20"
+                                }`}
+                              >
+                                {staff.is_active ? "አግድ (Suspend)" : "አንቃ (Activate)"}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteStaff(staff.id, staff.full_name || staff.phone_number)}
+                                disabled={actionLoadingId === staff.id}
+                                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 transition"
+                                title="Delete Staff Member"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
       </main>
 
-      {/* Edit Subscription Plan Modal */}
-      {editingDealer && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setEditingDealer(null)}
-        >
-          <div
-            className="bg-zinc-950 border border-zinc-800 w-full max-w-md rounded-2xl p-6 space-y-5 shadow-2xl relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-              <div className="flex items-center gap-2">
-                <Sliders size={18} className="text-purple-400" />
-                <h3 className="text-sm font-bold text-white">
-                  Manage Plan: {editingDealer.name}
-                </h3>
+      {/* INVITE / ADD STAFF MODAL */}
+      {isStaffModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <button
+              onClick={() => setIsStaffModalOpen(false)}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <UserPlus size={20} />
               </div>
-              <button
-                onClick={() => setEditingDealer(null)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition"
-              >
-                <X size={16} />
-              </button>
+              <div>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  አዲስ ሰራተኛ ጨምር (Invite Staff Member)
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Grant authorized administrative access to AC Wale Cars.
+                </p>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              {/* Plan Selector */}
+            <form onSubmit={handleAddStaff} className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1.5">
-                  Subscription Tier
+                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
+                  የስልክ ቁጥር (Ethiopian Mobile Number) *
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["starter", "pro", "enterprise"] as const).map((plan) => (
-                    <button
-                      key={plan}
-                      type="button"
-                      onClick={() => setEditPlan(plan)}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold uppercase border transition ${
-                        editPlan === plan
-                          ? "bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-600/30"
-                          : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
-                      }`}
-                    >
-                      {plan}
-                    </button>
-                  ))}
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-zinc-500 font-mono text-xs">+251</span>
+                  <input
+                    type="tel"
+                    required
+                    value={staffPhone}
+                    onChange={(e) => setStaffPhone(e.target.value)}
+                    placeholder="911 234 567"
+                    className="w-full pl-14 pr-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-amber-500 transition"
+                  />
                 </div>
+                <p className="text-[11px] text-zinc-500 mt-1">
+                  The staff member will login using OTP verification to this phone number.
+                </p>
               </div>
 
-              {/* Max Vehicles Capacity */}
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1.5">
-                  Max Allowed Vehicles (Car Cap)
+                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
+                  ሙሉ ስም (Full Name)
                 </label>
                 <input
-                  type="number"
-                  min={5}
-                  max={1000}
-                  value={editMaxVehicles}
-                  onChange={(e) => setEditMaxVehicles(parseInt(e.target.value) || 10)}
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-purple-500 px-3.5 py-2.5 rounded-xl text-xs text-white outline-none transition"
+                  type="text"
+                  value={staffName}
+                  onChange={(e) => setStaffName(e.target.value)}
+                  placeholder="e.g. Dawit Tadesse"
+                  className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500 transition"
                 />
-                <span className="text-[11px] text-zinc-500 mt-1 block">
-                  Current active vehicles: {editingDealer.vehicle_count} cars
-                </span>
               </div>
-            </div>
 
-            <div className="pt-2 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setEditingDealer(null)}
-                className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 rounded-xl text-xs font-semibold transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSavePlan}
-                disabled={isSavingPlan}
-                className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-purple-600/30"
-              >
-                {isSavingPlan ? "Saving..." : "Save Plan Changes"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Safety Confirmation Dialog Modal for Dealership Deletion */}
-      {dealerToDelete && (
-        <div
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in"
-          onClick={() => !isDeletingDealer && setDealerToDelete(null)}
-        >
-          <div
-            className="bg-zinc-950 border border-red-500/40 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl shadow-red-500/10"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
-                <Trash2 size={20} />
-              </div>
               <div>
-                <h4 className="text-sm font-bold text-white">ይህንን ሾውሩም ማጥፋት ይፈልጋሉ?</h4>
-                <p className="text-xs text-red-400/90 font-medium">Permanent Dealership Cascade Deletion</p>
+                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
+                  የስራ ሚና (System Role)
+                </label>
+                <select
+                  value={staffRole}
+                  onChange={(e) => setStaffRole(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500 transition"
+                >
+                  <option value="sales_agent">Sales Representative (የሽያጭ ተወካይ)</option>
+                  <option value="subadmin">Sub-Admin / Manager (ረዳት አስተዳዳሪ)</option>
+                  <option value="dealer_admin">Showroom Admin (የሾውሩም አስተዳዳሪ)</option>
+                </select>
               </div>
-            </div>
 
-            <div className="bg-red-950/20 border border-red-500/20 rounded-xl p-3.5 space-y-2 text-xs text-zinc-300">
-              <p className="font-semibold text-white">
-                እርግጠኛ ነዎት ይህ ሾውሩም እና በውስጡ ያሉ ሁሉም መኪኖች እስከመጨረሻው እንዲሰረዙ ይፈልጋሉ?
-              </p>
-              <p className="text-zinc-400 text-[11px]">
-                (Are you sure you want to permanently erase this dealership and all its vehicles?)
-              </p>
-              <div className="pt-2 border-t border-red-500/20 font-mono text-[11px] text-zinc-400 space-y-1">
-                <div>🏢 ሾውሩም: <strong className="text-white">{dealerToDelete.name}</strong></div>
-                <div>🚗 የተያያዙ መኪኖች: <strong className="text-white">{dealerToDelete.vehicle_count ?? 0} vehicles</strong></div>
-                <div className="text-red-400 text-[11px] font-sans font-semibold pt-1">
-                  ⚠️ ማሳሰቢያ: ሁሉም ፎቶዎች፣ መኪኖች እና የቀጠሮ መረጃዎች ከሰርቨሩ እስከመጨረሻው ይሰረዛሉ (ይህ እርምጃ ወደ ኋላ አይመለስም)!
-                </div>
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsStaffModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs transition"
+                >
+                  Cancel (ይቅር)
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingStaff}
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition disabled:opacity-50"
+                >
+                  {isSavingStaff ? (
+                    <>
+                      <RotateCw size={14} className="animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={14} />
+                      <span>ፈቃድ ስጥ (Grant Access)</span>
+                    </>
+                  )}
+                </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                disabled={isDeletingDealer}
-                onClick={() => setDealerToDelete(null)}
-                className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-xl text-xs font-semibold transition disabled:opacity-50"
-              >
-                ተመለስ (Cancel)
-              </button>
-              <button
-                type="button"
-                disabled={isDeletingDealer}
-                onClick={() => handleConfirmDeleteDealer(dealerToDelete.id)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-red-600/30 disabled:opacity-50"
-              >
-                {isDeletingDealer ? (
-                  <>
-                    <RotateCw size={13} className="animate-spin" />
-                    <span>በማጥፋት ላይ...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 size={13} />
-                    <span>አዎ፣ እስከመጨረሻው አጥፋ (Permanently Erase)</span>
-                  </>
-                )}
-              </button>
-            </div>
+            </form>
           </div>
-        </div>
-      )}
-
-      {/* Floating Feedback Toast */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl border shadow-2xl backdrop-blur-md flex items-center gap-2.5 text-xs font-bold animate-in fade-in slide-in-from-bottom-4 duration-300 ${
-            toast.type === "success"
-              ? "bg-emerald-950/90 border-emerald-500/50 text-emerald-300"
-              : "bg-red-950/90 border-red-500/50 text-red-300"
-          }`}
-        >
-          {toast.type === "success" ? (
-            <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
-          ) : (
-            <AlertTriangle size={16} className="text-red-400 flex-shrink-0" />
-          )}
-          <span>{toast.text}</span>
         </div>
       )}
     </div>

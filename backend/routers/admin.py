@@ -11,6 +11,53 @@ from auth import get_current_admin, create_access_token
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
+@router.get("/stats", response_model=schemas.AdminStatsOut)
+def get_admin_stats(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin)
+):
+    """
+    Directly query local ac_wale_cars.db without requiring tenant slug filters:
+    - total_sales_inventory: Count vehicles where listing_type in ('sale', 'both')
+    - active_rental_fleet: Count vehicles where listing_type in ('rent', 'both')
+    - registered_drivers: Count records in drivers where is_active == True
+    - total_leads_bookings: Count total appointments + total rental bookings
+    Returns cleanly as JSON: { sales_count, rental_count, drivers_count, leads_count }
+    """
+    sales_count = db.query(models.Vehicle).filter(
+        models.Vehicle.listing_type.in_(["sale", "both"])
+    ).count()
+
+    rental_count = db.query(models.Vehicle).filter(
+        models.Vehicle.listing_type.in_(["rent", "both"])
+    ).count()
+
+    drivers_count = db.query(models.Driver).filter(
+        models.Driver.is_active == True
+    ).count()
+
+    appointments_count = db.query(models.Appointment).count()
+    rentals_count = db.query(models.RentalBooking).count()
+    leads_count = appointments_count + rentals_count
+
+    return schemas.AdminStatsOut(
+        sales_count=sales_count,
+        rental_count=rental_count,
+        drivers_count=drivers_count,
+        leads_count=leads_count,
+        total_sales_inventory=sales_count,
+        active_rental_fleet=rental_count,
+        registered_drivers=drivers_count,
+        total_leads_bookings=leads_count,
+        sales_inventory=sales_count,
+        rental_fleet=rental_count,
+        active_drivers=drivers_count,
+        total_inquiries_and_bookings=leads_count,
+        total_sales_inquiries=appointments_count,
+        total_rental_bookings=rentals_count,
+    )
+
+
 @router.post("/switch-dealership")
 def switch_dealership_router(
     payload: Optional[schemas.SwitchDealershipRequest] = None,

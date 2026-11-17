@@ -1,18 +1,43 @@
-# Python / FastAPI
+# Environment secrets & credentials
+.env
+.env.*
+*.env
 backend/.env
+frontend/.env
+frontend/.env.local
+!.env.example
+!backend/.env.example
+
+# Local databases & SQLite storage
+*.db
+*.sqlite
+*.sqlite3
+
+# Python virtual environment & cache
+__pycache__/
 backend/__pycache__/
 backend/venv/
 backend/.venv/
-backend/uploads/
-uploads/
+venv/
+.venv/
+*.py[cod]
+*.class
+*.pytest_cache/
 
+# Uploads
+backend/uploads/
+backend/static/uploads/
+uploads/
+static/uploads/
 
 # Node / Next.js
 frontend/node_modules/
 frontend/.next/
-frontend/.env.local
-frontend/.env
+node_modules/
+.next/
 
-# System
+# IDE / OS junk
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/

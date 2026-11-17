@@ -68,6 +68,14 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
   const [copied, setCopied] = useState(false);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
+  const getConditionLabel = (cond?: string) => {
+    const lower = (cond || "").toLowerCase().trim();
+    if (lower === "brand new") return "አዲስ / ዜሮ ኪ.ሜ (Brand New)";
+    if (lower === "slightly used") return "በጥቂቱ ያገለገለ (Slightly Used)";
+    if (lower === "excellent condition") return "በጣም ጥሩ ይዞታ (Excellent Condition)";
+    return "ጥሩ ይዞታ (Good Condition)";
+  };
+
   const has3D = Boolean(vehicle.model_url);
   const hasSpin = Boolean(vehicle.spin_images && vehicle.spin_images.length >= 12);
 
@@ -298,10 +306,12 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
                           ? "bg-amber-500 text-black border-amber-400"
                           : vehicle.condition === "Slightly Used"
                           ? "bg-emerald-500 text-black border-emerald-400"
+                          : vehicle.condition === "Excellent Condition"
+                          ? "bg-sky-500 text-black border-sky-400"
                           : "bg-black/80 text-zinc-200 border-zinc-700"
                       }`}
                     >
-                      ★ {vehicle.condition}
+                      ★ {getConditionLabel(vehicle.condition)}
                     </span>
 
                     <span className="bg-black/80 backdrop-blur-md text-amber-400 border border-amber-500/30 text-[11px] font-bold px-3 py-1 rounded-full shadow-lg">

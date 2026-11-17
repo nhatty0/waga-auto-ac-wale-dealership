@@ -13,14 +13,22 @@ import {
   SlidersHorizontal,
   Phone,
   CarFront,
+  Key,
+  Car,
+  MapPin,
+  Clock,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Vehicle, Dealership } from "@/types";
 import VehicleModal from "@/components/VehicleModal";
 import BookingModal from "@/components/BookingModal";
+import RentalBookingModal from "@/components/RentalBookingModal";
 import CompareModal from "@/components/CompareModal";
 import CompareDock from "@/components/CompareDock";
 import FilterDrawer, { FilterState } from "@/components/FilterDrawer";
+import AboutSection from "@/components/AboutSection";
+import LocationSection from "@/components/LocationSection";
+import AboutModal from "@/components/AboutModal";
 import TelegramIcon from "@/components/TelegramIcon";
 import AnimatedPrice from "@/components/showroom3d/AnimatedPrice";
 import { openTelegramShare } from "@/lib/share";
@@ -33,6 +41,62 @@ import { getPlateLabel, getPlateBadgeClasses, isNewSeriesPlate, getPlateType } f
 interface DealerShowroomViewProps {
   dealerSlug: string;
 }
+
+export const matchesConditionFilter = (
+  vehicleCondition: string | undefined | null,
+  targetCondition: string
+): boolean => {
+  if (!targetCondition || targetCondition === "All" || targetCondition === "all") {
+    return true;
+  }
+
+  const vCond = (vehicleCondition || "").toLowerCase().trim();
+  const tCond = targetCondition.toLowerCase().trim();
+
+  // 1. BRAND NEW
+  if (
+    tCond === "brand new" ||
+    tCond === "brand_new" ||
+    tCond.includes("አዲስ")
+  ) {
+    return vCond === "brand new" || vCond.includes("አዲስ");
+  }
+
+  // 2. SLIGHTLY USED or EXCELLENT CONDITION (OR overlap across both categories)
+  if (
+    tCond === "slightly used" ||
+    tCond === "slightly_used" ||
+    tCond === "excellent condition" ||
+    tCond === "excellent_condition" ||
+    tCond.includes("በጥቂቱ") ||
+    tCond.includes("በጣም ጥሩ")
+  ) {
+    return (
+      vCond === "slightly used" ||
+      vCond === "excellent condition" ||
+      vCond.includes("በጥቂቱ") ||
+      vCond.includes("በጣም ጥሩ")
+    );
+  }
+
+  // 3. GOOD CONDITION (includes Slightly Used, Excellent Condition, and Good Condition)
+  if (
+    tCond === "good condition" ||
+    tCond === "good_condition" ||
+    tCond.includes("ጥሩ ይዞታ")
+  ) {
+    return (
+      vCond === "slightly used" ||
+      vCond === "excellent condition" ||
+      vCond === "good condition" ||
+      vCond.includes("በጥቂቱ") ||
+      vCond.includes("በጣም ጥሩ") ||
+      vCond.includes("ጥሩ")
+    );
+  }
+
+  return vCond === tCond;
+};
 
 export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewProps) {
   const { lang, toggleLang, t } = useLanguage();
@@ -54,10 +118,13 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
   const [searchQuery, setSearchQuery] = useState("");
   const [hideSold, setHideSold] = useState(true);
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<
-    "all" | "toyota" | "byd" | "electric" | "brand_new" | "new_series"
+    "all" | "toyota" | "byd" | "electric" | "brand_new" | "slightly_used" | "excellent_condition" | "good_condition" | "new_series"
   >("all");
   const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
   const [bookingVehicle, setBookingVehicle] = useState<Vehicle | null>(null);
+  const [rentalVehicle, setRentalVehicle] = useState<Vehicle | null>(null);
+  const [catalogMode, setCatalogMode] = useState<"buy" | "rent">("buy");
+  const [aboutModalTab, setAboutModalTab] = useState<"about" | "location" | null>(null);
 
   const defaultFilters: FilterState = {
     minPrice: "",
@@ -66,6 +133,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
     plateStatus: "All",
     bankLoanOnly: false,
     fuelType: "All",
+    condition: "All",
   };
 
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
@@ -108,6 +176,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
     if (filters.plateStatus !== "All") count++;
     if (filters.bankLoanOnly) count++;
     if (filters.fuelType !== "All") count++;
+    if (filters.condition !== "All") count++;
     return count;
   }, [filters]);
 
@@ -127,8 +196,8 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
           const dData = await dRes.json();
           setDealership(dData);
           setLogoImgError(false);
-        } else if (slug !== "elite-motors") {
-          const fallbackRes = await fetch(`${baseApi}/api/public/dealerships/elite-motors`);
+        } else if (slug !== "ac-wale-cars") {
+          const fallbackRes = await fetch(`${baseApi}/api/public/dealerships/ac-wale-cars`);
           if (fallbackRes.ok) {
             setDealership(await fallbackRes.json());
           }
@@ -177,18 +246,30 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
   };
 
   const categories: {
-    key: "all" | "toyota" | "byd" | "electric" | "brand_new" | "new_series";
+    key: "all" | "toyota" | "byd" | "electric" | "brand_new" | "slightly_used" | "excellent_condition" | "good_condition" | "new_series";
     label: string;
   }[] = [
     { key: "all", label: t.catAll },
     { key: "new_series", label: lang === "am" ? "አዲስ ሰሌዳ (AAA)" : "New Series (AAA)" },
+    { key: "brand_new", label: t.conditionBrandNew },
+    { key: "slightly_used", label: t.conditionSlightlyUsed },
+    { key: "excellent_condition", label: t.conditionExcellent },
+    { key: "good_condition", label: t.conditionGood },
     { key: "toyota", label: t.catToyota },
     { key: "byd", label: t.catByd },
     { key: "electric", label: t.catElectric },
-    { key: "brand_new", label: t.catBrandNew },
   ];
 
   const filteredVehicles = vehicles.filter((v) => {
+    // Catalog mode filter (Buy vs Rent)
+    if (catalogMode === "rent") {
+      const isRental = v.listing_type === "rent" || v.listing_type === "both";
+      if (!isRental) return false;
+      if (v.rental_available === false) return false;
+    } else {
+      if (v.listing_type === "rent") return false;
+    }
+
     if (hideSold && v.status === "Sold") return false;
 
     const searchableText =
@@ -199,13 +280,21 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
     if (selectedCategoryKey !== "all") {
       const make = (v.make || "").toLowerCase();
       const fuel = (v.fuel_type || "").toLowerCase();
-      const condition = (v.condition || "").toLowerCase();
 
       if (selectedCategoryKey === "new_series" && !isNewSeriesPlate(v.plate_status)) return false;
       if (selectedCategoryKey === "toyota" && !make.includes("toyota")) return false;
       if (selectedCategoryKey === "byd" && !make.includes("byd")) return false;
       if (selectedCategoryKey === "electric" && fuel !== "electric") return false;
-      if (selectedCategoryKey === "brand_new" && condition !== "brand new") return false;
+
+      // Condition filters in category pills (with OR overlap for Slightly Used & Excellent Condition)
+      if (
+        selectedCategoryKey === "brand_new" ||
+        selectedCategoryKey === "slightly_used" ||
+        selectedCategoryKey === "excellent_condition" ||
+        selectedCategoryKey === "good_condition"
+      ) {
+        if (!matchesConditionFilter(v.condition, selectedCategoryKey)) return false;
+      }
     }
 
     if (filters.minPrice !== "") {
@@ -246,6 +335,12 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
       }
     }
 
+    if (filters.condition !== "All") {
+      if (!matchesConditionFilter(v.condition, filters.condition)) {
+        return false;
+      }
+    }
+
     return true;
   });
 
@@ -261,38 +356,73 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
     <main className="min-h-screen bg-black text-white pb-32">
       {/* Dealership-Specific Mobile-First Header */}
       <header className="sticky top-0 z-40 bg-black/85 backdrop-blur-md border-b border-zinc-800/80 px-4 py-3.5">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
           <div
             onClick={handleSecretLogoTap}
-            className="flex items-center gap-2 cursor-pointer select-none active:scale-95 transition"
-            title={dealership ? dealership.name : "Elite Motors"}
+            className="flex items-center gap-2.5 cursor-pointer select-none active:scale-95 transition flex-shrink-0 min-w-0"
+            title="AC WALE MARKET (ኤሲ ዋለ የመኪና መሸጫ)"
           >
-            {dealership?.logo_url && !logoImgError ? (
-              <img
-                src={resolveImageUrl(dealership.logo_url)}
-                alt={dealership.name}
-                onError={() => setLogoImgError(true)}
-                className="w-8 h-8 rounded-xl object-cover shadow-md shadow-amber-500/20 border border-amber-500/20"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center shadow-md shadow-amber-500/10 flex-shrink-0">
-                <CarFront size={17} />
-              </div>
-            )}
-            <div>
-              <h1 className="font-black text-sm tracking-tight text-white leading-none uppercase">
-                {dealership?.name || "ELITE MOTORS"}
+            <img
+              src="/ac-wale-logo.png"
+              alt="AC WALE"
+              className="h-10 w-10 rounded-lg object-contain flex-shrink-0 bg-black border border-zinc-800/80"
+            />
+            <div className="flex flex-col justify-center min-w-0">
+              <h1 className="font-bold text-sm sm:text-base md:text-lg tracking-tight text-white leading-tight uppercase whitespace-nowrap truncate">
+                AC WALE MARKET
               </h1>
-              <span className="text-[10px] text-zinc-500 font-medium">
-                {t.showroomSubtitle}
+              <span className="text-xs text-amber-400 font-bold block leading-none mt-0.5 whitespace-nowrap">
+                ኤሲ ዋለ የመኪና መሸጫ
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Desktop Navigation Links: About Us & Location */}
+            <div className="hidden lg:flex items-center gap-1 bg-zinc-900 border border-zinc-800 p-1 rounded-full text-xs font-bold text-zinc-300">
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById("about-us");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                  else setAboutModalTab("about");
+                }}
+                className="py-1 px-3 rounded-full hover:bg-zinc-800 hover:text-amber-400 transition"
+              >
+                {lang === "am" ? "ስለ እኛ" : "About Us"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById("showroom-location");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                  else setAboutModalTab("location");
+                }}
+                className="py-1 px-3 rounded-full hover:bg-zinc-800 hover:text-amber-400 transition flex items-center gap-1"
+              >
+                <MapPin size={12} className="text-amber-400" />
+                <span>{lang === "am" ? "አድራሻ" : "Location"}</span>
+              </button>
+            </div>
+
+            {/* Mobile About / Location trigger pill */}
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById("showroom-location");
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+                else setAboutModalTab("location");
+              }}
+              className="lg:hidden py-1 px-2 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] font-bold text-amber-400 flex items-center gap-1 active:scale-95 transition"
+              title="Showroom Location & Trust / አድራሻ"
+            >
+              <MapPin size={12} />
+              <span>{lang === "am" ? "አድራሻ" : "Lot"}</span>
+            </button>
+
             {/* Language Switcher Pill */}
             <button
               onClick={toggleLang}
-              className="px-2.5 py-1.5 rounded-full bg-zinc-900 border border-zinc-700/80 hover:border-amber-500 text-xs font-bold text-zinc-200 hover:text-amber-400 transition flex items-center gap-1.5"
+              className="px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-full bg-zinc-900 border border-zinc-700/80 hover:border-amber-500 text-xs font-bold text-zinc-200 hover:text-amber-400 transition flex items-center gap-1"
               title="Switch Language / ቋንቋ ቀይር"
             >
               <span
@@ -316,12 +446,24 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
               </span>
             </button>
 
+            {/* Direct Contact CTAs */}
             <a
-              href={`tel:${dealership?.phone_number || "+251905445544"}`}
-              className="text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-full hover:bg-amber-500/20 transition flex items-center gap-1.5"
+              href="tel:+251911646628"
+              className="text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 px-2.5 sm:px-3 py-1.5 rounded-full transition flex items-center gap-1 shadow-sm shrink-0"
+              title="Call Sales Desk (+251 911 646 628)"
             >
-              <Phone size={13} />
-              <span>{t.contactSales}</span>
+              <Phone size={12} />
+              <span className="hidden sm:inline">+251 911 646 628</span>
+              <span className="sm:hidden font-black">{lang === "am" ? "ደውል" : "Call"}</span>
+            </a>
+
+            <a
+              href="tel:+251900061300"
+              className="hidden md:flex text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-full hover:bg-amber-500/20 transition items-center gap-1.5 shadow-sm shrink-0"
+              title="Call Sales Desk (+251 900 061 300)"
+            >
+              <Phone size={12} className="text-amber-400" />
+              <span>+251 900 061 300</span>
             </a>
           </div>
         </div>
@@ -334,9 +476,42 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
             <Sparkles size={12} /> {t.verifiedBadge}
           </span>
           <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-            {dealership ? dealership.name : t.heroHeadline}
+            AC WALE MARKET
           </h2>
-          <p className="text-zinc-400 text-xs mt-1">{t.heroSubheadline}</p>
+          <p className="text-zinc-400 text-xs mt-1">
+            {lang === "am"
+              ? "ኤሲ ዋለ የመኪና መሸጫ እና ኪራይ - ቅንጡ እና ዘመናዊ መኪኖች መሸጫ እና ማከራያ"
+              : "AC WALE MARKET - Premier Automotive Sales & Car Rental Center Addis Ababa"}
+          </p>
+        </div>
+
+        {/* PRIMARY CATALOG TOGGLE: BUY A CAR vs RENT A CAR */}
+        <div className="mb-5 flex justify-center">
+          <div className="bg-zinc-900 border border-zinc-800 p-1.5 rounded-2xl flex items-center gap-1.5 shadow-xl w-full max-w-md">
+            <button
+              type="button"
+              onClick={() => setCatalogMode("buy")}
+              className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 ${
+                catalogMode === "buy"
+                  ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
+              }`}
+            >
+              <span>🚗 {lang === "am" ? "መኪና ይግዙ" : "Buy a Car"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCatalogMode("rent")}
+              className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 ${
+                catalogMode === "rent"
+                  ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
+              }`}
+            >
+              <span>🔑 {lang === "am" ? "መኪና ይከራዩ" : "Rent a Car"}</span>
+            </button>
+          </div>
         </div>
 
         {/* Search Input & Advanced Filter Trigger */}
@@ -464,7 +639,9 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                           ? "bg-amber-500/90 text-black border-amber-400"
                           : car.condition === "Slightly Used"
                             ? "bg-emerald-500/80 text-black border-emerald-400"
-                            : "bg-black/75 text-zinc-200 border-zinc-700"
+                            : car.condition === "Excellent Condition"
+                              ? "bg-sky-500/80 text-black border-sky-400"
+                              : "bg-black/75 text-zinc-200 border-zinc-700"
                       }`}
                     >
                       ★ {getConditionLabel(car.condition)}
@@ -516,15 +693,36 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                     </div>
 
                     <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2">
-                      <AnimatedPrice
-                        price={car.price}
-                        cashPrice={car.cash_price ?? car.down_payment}
-                        bankLoanAmount={car.bank_loan_amount ?? car.bank_loan}
-                        bankName={car.bank_name}
-                        hasBankLoan={car.has_bank_loan}
-                        lang={lang}
-                        size="md"
-                      />
+                      {catalogMode === "rent" || (car.listing_type === "rent" && !car.price) ? (
+                        <div>
+                          <span className="text-[10px] text-zinc-500 uppercase font-semibold block">
+                            {lang === "am" ? "የቀን ኪራይ" : "Daily Rental Rate"}
+                          </span>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-amber-400 font-black text-base sm:text-lg">
+                              {((car.rental_daily_rate ?? (car as any).daily_rental_rate ?? (car as any).daily_rate) || 3500).toLocaleString()} ETB
+                            </span>
+                            <span className="text-zinc-400 text-[10px] font-semibold">
+                              / {lang === "am" ? "ቀን" : "day"}
+                            </span>
+                          </div>
+                          {car.with_driver_only && (
+                            <span className="text-[10px] text-sky-400 font-bold block mt-0.5">
+                              👨‍✈️ {lang === "am" ? "ከአሽከርካሪ ጋር" : "Driver included"}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <AnimatedPrice
+                          price={car.price}
+                          cashPrice={car.cash_price ?? car.down_payment}
+                          bankLoanAmount={car.bank_loan_amount ?? car.bank_loan}
+                          bankName={car.bank_name}
+                          hasBankLoan={car.has_bank_loan}
+                          lang={lang}
+                          size="md"
+                        />
+                      )}
 
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {/* Telegram Instant Share */}
@@ -532,7 +730,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            openTelegramShare(car, dealership?.name);
+                            openTelegramShare(car, dealership?.name || "AC Wale Cars");
                           }}
                           className="py-1.5 px-2 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-[#45B6ED] hover:text-white border border-[#229ED9]/30 rounded-xl text-xs font-semibold transition flex items-center gap-1 shadow-sm active:scale-95"
                           title={lang === "am" ? "በቴሌግራም አጋራ" : "Share on Telegram"}
@@ -568,11 +766,23 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                           )}
                         </button>
 
-                        {/* If Sold -> Telegram Link; Otherwise -> Book Visit modal */}
-                        {car.status === "Sold" ? (
+                        {/* Action Button: Rent Mode -> Book Rental; Buy Mode -> Book Visit */}
+                        {catalogMode === "rent" ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRentalVehicle(car);
+                            }}
+                            className="py-1.5 px-3 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl text-xs transition flex items-center gap-1 shadow-md shadow-amber-500/20 active:scale-95"
+                          >
+                            <Key size={13} />
+                            <span>{lang === "am" ? "መኪና ይከራዩ" : "Rent"}</span>
+                            <ArrowRight size={13} />
+                          </button>
+                        ) : car.status === "Sold" ? (
                           <a
-                            href={`https://t.me/EliteMotorsAlert_bot?text=${encodeURIComponent(
-                              `ሰላም! የ${car.year} ${car.make} ${car.model} ተሽጧል የሚል አየሁ። እባካችሁ ተመሳሳይ መኪና ፈልጉልኝ።`
+                            href={`https://t.me/WagaDealershipBot?text=${encodeURIComponent(
+                              `ሰላም AC Wale Cars! የ${car.year} ${car.make} ${car.model} ተሽጧል የሚል አየሁ። እባካችሁ ተመሳሳይ መኪና ፈልጉልኝ።`
                             )}`}
                             target="_blank"
                             rel="noreferrer"
@@ -603,6 +813,12 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
         )}
       </section>
 
+      {/* ABOUT US & TRUST ENGINE */}
+      <AboutSection lang={lang} />
+
+      {/* SHOWROOM LOCATION & VISIT LOT */}
+      <LocationSection lang={lang} />
+
       {/* Modals */}
       {activeVehicle && (
         <VehicleModal
@@ -618,6 +834,15 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
           vehicle={bookingVehicle}
           dealership={dealership}
           onClose={() => setBookingVehicle(null)}
+          onSuccess={() => {}}
+        />
+      )}
+
+      {rentalVehicle && (
+        <RentalBookingModal
+          vehicle={rentalVehicle}
+          dealership={dealership}
+          onClose={() => setRentalVehicle(null)}
           onSuccess={() => {}}
         />
       )}
@@ -647,6 +872,99 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
         onReset={handleResetFilters}
         resultCount={filteredVehicles.length}
       />
+
+      {/* OFFICIAL AC WALE MARKET FOOTER */}
+      <footer className="mt-20 border-t border-zinc-800/80 bg-zinc-950 py-12 px-4 text-center">
+        <div className="max-w-4xl mx-auto flex flex-col items-center gap-6">
+          <div className="flex items-center gap-3">
+            <img
+              src="/ac-wale-logo.png"
+              alt="AC WALE MARKET"
+              className="h-10 w-10 rounded-lg object-contain bg-black border border-zinc-800"
+            />
+            <div className="text-left">
+              <span className="font-black text-sm tracking-wider text-amber-400 block uppercase">
+                AC WALE MARKET
+              </span>
+              <span className="text-xs text-zinc-400 block font-medium">
+                ኤሲ ዋለ የመኪና መሸጫ እና ኪራይ
+              </span>
+            </div>
+          </div>
+
+          {/* Showroom Address & Hours in Footer */}
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 sm:p-5 w-full max-w-2xl text-left grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-1.5">
+              <span className="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5 text-amber-400">
+                <MapPin size={13} /> {lang === "am" ? "የሾውሩም አድራሻ" : "Showroom Address"}
+              </span>
+              <p className="text-zinc-200 leading-relaxed font-semibold">
+                {lang === "am" 
+                  ? "22 (ሃያ ሁለት) አዋራሪስ ሆቴል ጀርባ፣ አዲስ አበባ" 
+                  : "Hayahulet, Behind Awraris Hotel, Addis Ababa, Ethiopia"}
+              </p>
+              <a
+                href="https://maps.app.goo.gl/v5NbRBzRNaNNZWzQA?g_st=atm"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 hover:underline pt-1"
+              >
+                <span>{lang === "am" ? "📍 በ Google Maps ይመልከቱ (Awraris Hotel Pin)" : "📍 View on Google Maps (Behind Awraris Hotel)"}</span>
+              </a>
+            </div>
+
+            <div className="space-y-1.5 border-t sm:border-t-0 sm:border-l border-zinc-800 pt-3 sm:pt-0 sm:pl-4">
+              <span className="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5 text-amber-400">
+                <Clock size={13} /> {lang === "am" ? "የስራ ሰዓታት" : "Working Hours"}
+              </span>
+              <p className="text-zinc-300 font-mono text-[11px]">
+                {lang === "am" ? "ሰኞ - ቅዳሜ:" : "Mon - Sat:"} 2:30 ጠዋት - 12:30 ማታ (8:30 AM - 6:30 PM)
+              </p>
+              <p className="text-zinc-400 text-[11px]">
+                {lang === "am" ? "እሁድ: በከፊል ክፍት / በቀጠሮ" : "Sun: Half Day / By Appointment"}
+              </p>
+            </div>
+          </div>
+
+          {/* Contact Direct Hotlines */}
+          <div className="flex flex-wrap justify-center items-center gap-3 text-xs font-semibold">
+            <a
+              href="tel:+251911646628"
+              className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition bg-amber-500/10 border border-amber-500/20 px-3.5 py-1.5 rounded-full"
+            >
+              <Phone size={13} />
+              <span>+251 911 646 628</span>
+            </a>
+            <a
+              href="tel:+251900061300"
+              className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition bg-amber-500/10 border border-amber-500/20 px-3.5 py-1.5 rounded-full"
+            >
+              <Phone size={13} />
+              <span>+251 900 061 300</span>
+            </a>
+            <a
+              href="mailto:acwalecarmarket@gmail.com"
+              className="text-zinc-400 hover:text-zinc-200 transition py-1 px-2"
+            >
+              acwalecarmarket@gmail.com
+            </a>
+          </div>
+
+          <p className="text-xs text-zinc-500 font-medium pt-2">
+            © 2026 AC WALE MARKET. All rights reserved. Addis Ababa, Ethiopia
+          </p>
+        </div>
+      </footer>
+
+      {/* Standalone About & Location Modal */}
+      {aboutModalTab && (
+        <AboutModal
+          isOpen={true}
+          initialTab={aboutModalTab}
+          lang={lang}
+          onClose={() => setAboutModalTab(null)}
+        />
+      )}
 
       {/* FLOATING ADMIN QUICK-SWITCH (Only visible if dealer has unlocked the session) */}
       {isAdminSession && (

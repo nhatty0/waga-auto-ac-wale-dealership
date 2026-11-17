@@ -146,7 +146,7 @@ export default function InstallAppBanner() {
             <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-zinc-900 border border-amber-500/30 flex-shrink-0 shadow-md">
               <Image
                 src="/icons/icon-192x192.png"
-                alt="Waga Cars Logo"
+                alt="AC WALE MARKET Logo"
                 width={48}
                 height={48}
                 className="object-cover w-full h-full"
@@ -156,14 +156,14 @@ export default function InstallAppBanner() {
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-black text-white text-sm sm:text-base tracking-tight">
-                  Waga Cars
+                  AC WALE MARKET
                 </span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30">
                   App
                 </span>
               </div>
               <p className="text-xs text-zinc-400 font-medium">
-                የመኪና መገበያያ እና የሾውሩም መድረክ
+                ኤሲ ዋለ የመኪና መሸጫ እና ኪራይ
               </p>
             </div>
           </div>

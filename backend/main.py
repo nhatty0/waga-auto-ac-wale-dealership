@@ -44,6 +44,7 @@ from auth import (
     handle_telegram_start_command,
     TELEGRAM_LINKED_CHATS
 )
+from routers import rentals, drivers, admin, lot_operations
 
 # JWT & Auth Configuration from settings
 JWT_SECRET_KEY = settings.JWT_SECRET_KEY
@@ -130,10 +131,16 @@ from migrate import run_migrations
 run_migrations()
 
 app = FastAPI(
-    title="Elite Motors API",
-    description="Backend API for vehicle inventory, appointments, and dealer management",
-    version="1.0.0"
+    title=f"{settings.PLATFORM_NAME} API",
+    description="Dedicated single-tenant automotive sales, car rental, and driver dispatch engine for AC WALE MARKET",
+    version="2.0.0"
 )
+
+# Include Car Rental and Driver Dispatch Routers
+app.include_router(rentals.router)
+app.include_router(drivers.router)
+app.include_router(admin.router)
+app.include_router(lot_operations.router)
 
 # CORS configuration to allow requests from the Next.js frontend
 app.add_middleware(
@@ -175,17 +182,36 @@ def sanitize_image_url(url: str) -> str:
     return clean
 
 
+def get_primary_dealership(db: Session) -> Optional[models.Dealership]:
+    dealer = db.query(models.Dealership).filter(
+        (models.Dealership.slug == settings.PRIMARY_DEALERSHIP_SLUG) |
+        (models.Dealership.name == settings.PLATFORM_NAME)
+    ).first()
+    if not dealer:
+        dealer = db.query(models.Dealership).filter(models.Dealership.id == 1).first()
+    if not dealer:
+        dealer = db.query(models.Dealership).filter(models.Dealership.is_active == True).order_by(models.Dealership.id.asc()).first()
+    return dealer
+
+
 # ==========================================
 # PUBLIC INVENTORY & DEALERSHIP ENDPOINTS
 # ==========================================
 
 @app.get("/api/public/dealerships", response_model=List[schemas.DealershipPublicOut])
 def get_public_dealerships(db: Session = Depends(get_db)):
+    if settings.SINGLE_TENANT_MODE:
+        primary = get_primary_dealership(db)
+        return [primary] if primary else []
     return db.query(models.Dealership).filter(models.Dealership.is_active == True).all()
 
 
 @app.get("/api/public/dealerships/{slug}", response_model=schemas.DealershipPublicOut)
 def get_public_dealership_by_slug(slug: str, db: Session = Depends(get_db)):
+    if settings.SINGLE_TENANT_MODE:
+        primary = get_primary_dealership(db)
+        if primary:
+            return primary
     dealer = db.query(models.Dealership).filter(models.Dealership.slug == slug).first()
     if not dealer:
         raise HTTPException(
@@ -210,49 +236,64 @@ def get_vehicles(
     body_type: Optional[str] = None,
     status: Optional[str] = "Available",
     max_price: Optional[float] = None,
+    listing_type: Optional[str] = None,
     dealership_slug: Optional[str] = None,
     dealership_id: Optional[int] = None,
+    condition: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(models.Vehicle)
 
-    # Determine target dealership
-    target_dealer_id = dealership_id
-    if not target_dealer_id:
-        if dealership_slug:
-            dealer = db.query(models.Dealership).filter(models.Dealership.slug == dealership_slug).first()
-            if dealer:
-                if dealer.is_active is False:
-                    return JSONResponse(
-                        status_code=403,
-                        content={
-                            "error": "dealership_inactive",
-                            "message": "ይህ ሾውሩም ለጊዜው አገልግሎት አይሰጥም።"
-                        }
-                    )
-                target_dealer_id = dealer.id
-            else:
-                # If slug does not match any dealership, return empty list
-                return []
-        else:
-            default_dealer = db.query(models.Dealership).filter(models.Dealership.is_active == True).order_by(models.Dealership.id.asc()).first()
-            if default_dealer:
-                target_dealer_id = default_dealer.id
-            else:
-                return []
+    if settings.SINGLE_TENANT_MODE:
+        primary = get_primary_dealership(db)
+        target_dealer_id = primary.id if primary else 1
     else:
-        dealer = db.query(models.Dealership).filter(models.Dealership.id == target_dealer_id).first()
-        if dealer and dealer.is_active is False:
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "error": "dealership_inactive",
-                    "message": "ይህ ሾውሩም ለጊዜው አገልግሎት አይሰጥም።"
-                }
-            )
+        # Determine target dealership
+        target_dealer_id = dealership_id
+        if not target_dealer_id:
+            if dealership_slug:
+                dealer = db.query(models.Dealership).filter(models.Dealership.slug == dealership_slug).first()
+                if dealer:
+                    if dealer.is_active is False:
+                        return JSONResponse(
+                            status_code=403,
+                            content={
+                                "error": "dealership_inactive",
+                                "message": "ይህ ሾውሩም ለጊዜው አገልግሎት አይሰጥም።"
+                            }
+                        )
+                    target_dealer_id = dealer.id
+                else:
+                    # If slug does not match any dealership, return empty list
+                    return []
+            else:
+                default_dealer = db.query(models.Dealership).filter(models.Dealership.is_active == True).order_by(models.Dealership.id.asc()).first()
+                if default_dealer:
+                    target_dealer_id = default_dealer.id
+                else:
+                    return []
+        else:
+            dealer = db.query(models.Dealership).filter(models.Dealership.id == target_dealer_id).first()
+            if dealer and dealer.is_active is False:
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": "dealership_inactive",
+                        "message": "ይህ ሾውሩም ለጊዜው አገልግሎት አይሰጥም።"
+                    }
+                )
 
     if target_dealer_id:
         query = query.filter(models.Vehicle.dealership_id == target_dealer_id)
+
+    if listing_type:
+        if listing_type.lower() == "rent":
+            query = query.filter(
+                models.Vehicle.listing_type.in_(["rent", "both"]),
+                models.Vehicle.rental_available == True
+            )
+        elif listing_type.lower() == "sale":
+            query = query.filter(models.Vehicle.listing_type.in_(["sale", "both"]))
 
     if status and status.lower() != "all":
         query = query.filter(models.Vehicle.status == status)
@@ -264,6 +305,24 @@ def get_vehicles(
         query = query.filter(models.Vehicle.body_type == body_type)
     if max_price:
         query = query.filter(models.Vehicle.price <= max_price)
+    if condition:
+        cond_clean = condition.strip()
+        cond_lower = cond_clean.lower()
+        if cond_lower in [
+            "slightly used",
+            "excellent condition",
+            "በጥቂቱ ያገለገለ",
+            "በጣም ጥሩ ይዞታ",
+            "በጥቂቱ ያገለገለ (slightly used)",
+            "በጣም ጥሩ ይዞታ (excellent condition)",
+        ]:
+            query = query.filter(models.Vehicle.condition.in_(["Slightly Used", "Excellent Condition"]))
+        elif cond_lower in ["good condition", "ጥሩ ይዞታ", "ጥሩ ይዞታ (good condition)"]:
+            query = query.filter(models.Vehicle.condition.in_(["Slightly Used", "Excellent Condition", "Good Condition"]))
+        elif cond_lower in ["brand new", "አዲስ", "አዲስ / ዜሮ ኪ.ሜ (brand new)"]:
+            query = query.filter(models.Vehicle.condition == "Brand New")
+        else:
+            query = query.filter(models.Vehicle.condition.ilike(f"%{cond_clean}%"))
     return query.order_by(models.Vehicle.created_at.desc()).all()
 
 
@@ -554,6 +613,19 @@ def create_vehicle(
     resolved_cash = car_data.cash_price if car_data.cash_price is not None else car_data.down_payment
     resolved_loan = car_data.bank_loan_amount if car_data.bank_loan_amount is not None else car_data.bank_loan
 
+    resolved_listing_type = car_data.listing_type or "sale"
+    resolved_daily_rate = (
+        car_data.rental_daily_rate
+        if car_data.rental_daily_rate is not None
+        else (car_data.daily_rental_rate or car_data.daily_rate)
+    )
+    if resolved_listing_type in ("rent", "both"):
+        if not resolved_daily_rate or resolved_daily_rate <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="እባክዎ የቀን የኪራይ ዋጋ ያስገቡ (Daily rental rate is required for rentals)"
+            )
+
     vehicle = models.Vehicle(
         make=car_data.make,
         model=car_data.model,
@@ -577,6 +649,10 @@ def create_vehicle(
         bank_name=car_data.bank_name,
         plate_status=car_data.plate_status,
         dealership_id=assigned_dealership_id,
+        listing_type=resolved_listing_type,
+        rental_daily_rate=resolved_daily_rate,
+        rental_available=car_data.rental_available if car_data.rental_available is not None else True,
+        with_driver_only=car_data.with_driver_only if car_data.with_driver_only is not None else False,
     )
     db.add(vehicle)
     db.commit()
@@ -634,6 +710,31 @@ def update_vehicle(
     vehicle.bank_loan_amount = car_data.bank_loan_amount if car_data.bank_loan_amount is not None else car_data.bank_loan
     vehicle.bank_name = car_data.bank_name
     vehicle.plate_status = car_data.plate_status
+    target_listing_type = car_data.listing_type if car_data.listing_type is not None else vehicle.listing_type
+    target_daily_rate = (
+        car_data.rental_daily_rate
+        if car_data.rental_daily_rate is not None
+        else (car_data.daily_rental_rate or car_data.daily_rate or vehicle.rental_daily_rate)
+    )
+    if target_listing_type in ("rent", "both"):
+        if not target_daily_rate or target_daily_rate <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="እባክዎ የቀን የኪራይ ዋጋ ያስገቡ (Daily rental rate is required for rentals)"
+            )
+
+    if car_data.listing_type is not None:
+        vehicle.listing_type = car_data.listing_type
+    if car_data.rental_daily_rate is not None:
+        vehicle.rental_daily_rate = car_data.rental_daily_rate
+    elif car_data.daily_rental_rate is not None:
+        vehicle.rental_daily_rate = car_data.daily_rental_rate
+    elif car_data.daily_rate is not None:
+        vehicle.rental_daily_rate = car_data.daily_rate
+    if car_data.rental_available is not None:
+        vehicle.rental_available = car_data.rental_available
+    if car_data.with_driver_only is not None:
+        vehicle.with_driver_only = car_data.with_driver_only
 
     if car_data.image_urls is not None:
         db.query(models.VehicleImage).filter(models.VehicleImage.vehicle_id == vehicle.id).delete()
@@ -707,6 +808,21 @@ def delete_vehicle(
             detail="Forbidden: You do not have permission to delete vehicles belonging to another dealership."
         )
 
+    # 1. Clean up associated physical image files from static/uploads/ if physical files exist
+    for img in car.images:
+        if img.image_url:
+            try:
+                delete_media_file(img.image_url)
+            except Exception as e:
+                print(f"Notice: Failed to delete image file {img.image_url}: {e}")
+
+    # 2. Delete related records from rental_bookings where vehicle_id = id
+    db.query(models.RentalBooking).filter(models.RentalBooking.vehicle_id == vehicle_id).delete(synchronize_session=False)
+
+    # 3. Delete related records from appointments or inquiries where vehicle_id = id
+    db.query(models.Appointment).filter(models.Appointment.vehicle_id == vehicle_id).delete(synchronize_session=False)
+
+    # 4. Execute db.delete(car) and commit the transaction cleanly
     db.delete(car)
     db.commit()
     return {"message": f"Vehicle #{vehicle_id} deleted successfully"}
@@ -809,9 +925,45 @@ def update_admin_dealership(
         dealer.telegram_bot_token = payload.telegram_bot_token.strip() if payload.telegram_bot_token.strip() else None
     if payload.telegram_chat_id is not None:
         dealer.telegram_chat_id = payload.telegram_chat_id.strip() if payload.telegram_chat_id.strip() else None
+    if hasattr(payload, "telegram_bot_username") and payload.telegram_bot_username is not None:
+        clean_user = payload.telegram_bot_username.strip()
+        dealer.telegram_bot_username = clean_user if clean_user else None
 
     db.commit()
     db.refresh(dealer)
+    return dealer
+
+
+@app.post("/api/admin/dealership/disconnect-telegram", response_model=schemas.DealershipOut)
+def disconnect_dealership_telegram(
+    dealership_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin)
+):
+    """
+    Clears all Telegram bot credentials (token, chat_id, username) from the dealership record.
+    Allows the client or owner to disconnect testing bots and connect their own bot cleanly.
+    """
+    target_id = dealership_id if (current_user.is_superadmin and dealership_id) else current_user.dealership_id
+    if not target_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No dealership linked to current admin account."
+        )
+
+    dealer = db.query(models.Dealership).filter(models.Dealership.id == target_id).first()
+    if not dealer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dealership record not found."
+        )
+
+    dealer.telegram_bot_token = None
+    dealer.telegram_chat_id = None
+    dealer.telegram_bot_username = None
+    db.commit()
+    db.refresh(dealer)
+    logger.info(f"Telegram credentials successfully disconnected and cleared for dealership '{dealer.name}' (ID: {dealer.id})")
     return dealer
 
 
@@ -946,7 +1098,7 @@ async def test_telegram_alert(
         elif payload.chat_id and payload.chat_id.strip():
             chat_id = payload.chat_id.strip()
 
-    # 2. Fall back to platform bot token or dealer token
+    # 2. Fall back to saved dealer credentials
     if not bot_token and dealer.telegram_bot_token and dealer.telegram_bot_token.strip():
         bot_token = dealer.telegram_bot_token.strip()
     if not bot_token:
@@ -955,22 +1107,23 @@ async def test_telegram_alert(
     if not chat_id and dealer.telegram_chat_id:
         chat_id = dealer.telegram_chat_id.strip()
 
-    if not chat_id:
+    if not bot_token or not bot_token.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="ቴሌግራም ገና አልተገናኘም። እባክዎ መጀመሪያ 'ቴሌግራምን በአንድ ጠቅታ ያገናኙ' የሚለውን በመጫን ቴሌግራምዎን ያገናኙ። (Telegram is not connected. Please connect via 1-click button first.)"
+            detail="የቦት ቶከን አልገባም። እባክዎ ከ @BotFather ያገኙትን የቦት ቶከን (Bot Token) ያስገቡ። (Please enter your Bot Token from @BotFather)."
         )
 
-    if not bot_token or "your_" in bot_token:
+    if not chat_id or not chat_id.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Platform Telegram Bot Token is not configured."
+            detail="የቴሌግራም ቻት መለያ (Chat ID) አልገባም። እባክዎ የቻት መለያ ቁጥርዎን ያስገቡ። (Please enter your Telegram Chat ID)."
         )
 
     test_message = (
         "🔔 *የቴሌግራም ቦት ማረጋገጫ (Bot Verified)*\n\n"
-        f"ድርጅት: {dealer.name}\n"
-        "ሁኔታ: ቦቱ በትክክል ተገናኝቷል! የደንበኞች ቀጠሮ እና ጥያቄዎች እዚህ ይደርሳሉ።"
+        f"🏢 *ድርጅት:* {dealer.name}\n"
+        "✅ *ሁኔታ:* ቦቱ በተሳካ ሁኔታ ተገናኝቷል!\n\n"
+        "የደንበኞች አዲስ የቀጠሮ ጥያቄዎች (Appointments) እና መልእክቶች በቀጥታ ወደዚህ ቻት ይደርሳሉ።"
     )
 
     payload_data = {
@@ -986,7 +1139,7 @@ async def test_telegram_alert(
             if resp.status_code == 200:
                 return schemas.TelegramTestResponse(
                     success=True,
-                    message=f"Test alert sent successfully to Telegram Chat ID: {chat_id}!"
+                    message=f"የሙከራ መልእክት በተሳካ ሁኔታ ወደ Telegram Chat ID ({chat_id}) ተልኳል! (Test alert sent successfully!)"
                 )
             else:
                 try:
@@ -1000,9 +1153,18 @@ async def test_telegram_alert(
         except HTTPException:
             raise
         except Exception as e:
+            err_str = str(e)
+            if "WinError 10060" in err_str or "timed out" in err_str.lower():
+                detail_msg = (
+                    "የአውታረ መረብ ግንኙነት ችግር (Connection Timeout): ወደ api.telegram.org መገናኘት አልተቻለም። "
+                    "በኢትዮጵያ ውስጥ በኮምፒውተርዎ ላይ VPN ካልበራ በቀጥታ ቴሌግራም ሊዘጋ ይችላል። "
+                    "በሰርቨሩ (Production VPS) ላይ ግን ቴሌግራም ያለምንም ገደብ በቀጥታ ይሰራል!"
+                )
+            else:
+                detail_msg = f"Network error connecting to Telegram: {err_str}"
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Network error connecting to Telegram: {str(e)}"
+                detail=detail_msg
             )
 
 
@@ -1013,21 +1175,190 @@ async def test_telegram_alert(
 @app.get("/api/superadmin/stats", response_model=schemas.SuperAdminStatsOut)
 def get_superadmin_stats(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_superadmin)
+    current_user: models.User = Depends(get_current_admin)
 ):
-    total_dealerships = db.query(models.Dealership).count()
-    total_active_listings = db.query(models.Vehicle).filter(
-        models.Vehicle.status != models.VehicleStatus.SOLD
+    sales_count = db.query(models.Vehicle).filter(
+        models.Vehicle.listing_type.in_(["sale", "both"])
     ).count()
+
+    rental_count = db.query(models.Vehicle).filter(
+        models.Vehicle.listing_type.in_(["rent", "both"])
+    ).count()
+
+    drivers_count = db.query(models.Driver).filter(
+        models.Driver.is_active == True
+    ).count()
+
+    appointments_count = db.query(models.Appointment).count()
+    rentals_count = db.query(models.RentalBooking).count()
+    leads_count = appointments_count + rentals_count
+
+    total_dealerships = db.query(models.Dealership).count()
     total_val = db.query(func.coalesce(func.sum(models.Vehicle.price), 0.0)).scalar()
-    total_leads = db.query(models.Appointment).count()
 
     return schemas.SuperAdminStatsOut(
+        sales_count=sales_count,
+        rental_count=rental_count,
+        drivers_count=drivers_count,
+        leads_count=leads_count,
+        total_sales_inventory=sales_count,
+        active_rental_fleet=rental_count,
+        registered_drivers=drivers_count,
+        total_leads_bookings=leads_count,
         total_dealerships=total_dealerships,
-        total_active_listings=total_active_listings,
+        total_active_listings=sales_count,
         total_inventory_value=float(total_val or 0.0),
-        total_leads_generated=total_leads
+        total_leads_generated=leads_count
     )
+
+
+@app.get("/api/superadmin/executive-stats", response_model=schemas.ExecutiveStatsOut)
+def get_superadmin_executive_stats(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin)
+):
+    primary_dealer = get_primary_dealership(db)
+
+    # Card 1: Total Sales Inventory (listing_type in ('sale', 'both'))
+    sales_count = db.query(models.Vehicle).filter(
+        models.Vehicle.listing_type.in_(["sale", "both"])
+    ).count()
+
+    # Card 2: Active Rental Fleet (listing_type in ('rent', 'both'))
+    rental_count = db.query(models.Vehicle).filter(
+        models.Vehicle.listing_type.in_(["rent", "both"])
+    ).count()
+
+    # Card 3: Registered Drivers (records in drivers where is_active == True)
+    drivers_count = db.query(models.Driver).filter(
+        models.Driver.is_active == True
+    ).count()
+
+    # Card 4: Total Customer Inquiries & Rental Bookings
+    sales_inquiries = db.query(models.Appointment).count()
+    rental_bookings = db.query(models.RentalBooking).count()
+    leads_count = sales_inquiries + rental_bookings
+
+    total_val = db.query(func.coalesce(func.sum(models.Vehicle.price), 0.0)).scalar() or 0.0
+
+    return schemas.ExecutiveStatsOut(
+        sales_inventory=sales_count,
+        rental_fleet=rental_count,
+        active_drivers=drivers_count,
+        total_inquiries_and_bookings=leads_count,
+        total_sales_inquiries=sales_inquiries,
+        total_rental_bookings=rental_bookings,
+        total_inventory_value=float(total_val),
+        dealership_name=primary_dealer.name if primary_dealer else "AC WALE MARKET",
+        sales_count=sales_count,
+        rental_count=rental_count,
+        drivers_count=drivers_count,
+        leads_count=leads_count,
+        total_sales_inventory=sales_count,
+        active_rental_fleet=rental_count,
+        registered_drivers=drivers_count,
+        total_leads_bookings=leads_count,
+    )
+
+
+@app.get("/api/superadmin/staff", response_model=List[schemas.StaffUserOut])
+def get_superadmin_staff(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin)
+):
+    primary_dealer = get_primary_dealership(db)
+    dealer_id = primary_dealer.id if primary_dealer else 1
+    staff_users = db.query(models.User).filter(
+        (models.User.dealership_id == dealer_id) | (models.User.dealership_id == None)
+    ).order_by(models.User.created_at.desc()).all()
+    return staff_users
+
+
+@app.post("/api/superadmin/staff", response_model=schemas.StaffUserOut)
+def invite_or_create_staff(
+    payload: schemas.StaffInviteRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin)
+):
+    from auth import normalize_ethiopian_phone
+    try:
+        norm_phone = normalize_ethiopian_phone(payload.phone_number)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    primary_dealer = get_primary_dealership(db)
+    dealer_id = primary_dealer.id if primary_dealer else 1
+
+    # Check if user with this normalized phone already exists
+    user = db.query(models.User).filter(
+        (models.User.phone_number == norm_phone) |
+        (models.User.phone_number == f"+{norm_phone}")
+    ).first()
+
+    if user:
+        if payload.full_name:
+            user.full_name = payload.full_name.strip()
+        user.role = payload.role or "sales_agent"
+        user.is_active = True
+        user.dealership_id = dealer_id
+        db.commit()
+        db.refresh(user)
+        return user
+
+    new_user = models.User(
+        phone_number=norm_phone,
+        full_name=payload.full_name.strip() if payload.full_name else None,
+        role=payload.role or "sales_agent",
+        dealership_id=dealer_id,
+        is_active=True
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
+@app.patch("/api/superadmin/staff/{user_id}/status", response_model=schemas.StaffUserOut)
+def update_staff_status(
+    user_id: int,
+    payload: schemas.StaffStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin)
+):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+
+    if user.id == current_user.id:
+        if payload.is_active is False:
+            raise HTTPException(status_code=400, detail="Cannot deactivate your own executive account")
+
+    if payload.is_active is not None:
+        user.is_active = payload.is_active
+    if payload.role is not None:
+        user.role = payload.role
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.delete("/api/superadmin/staff/{user_id}")
+def delete_staff_member(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin)
+):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+
+    if user.id == current_user.id or user.role == "superadmin":
+        raise HTTPException(status_code=400, detail="Cannot delete superadmin executive account")
+
+    db.delete(user)
+    db.commit()
+    return {"message": "Staff member deleted successfully"}
 
 
 @app.get("/api/superadmin/dealerships", response_model=List[schemas.SuperAdminDealershipOut])

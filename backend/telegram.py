@@ -93,6 +93,9 @@ async def send_telegram_lead(
         dealer_name=dealer_name
     )
 
+    # Local development dispatch log
+    print(f"[LOCAL TELEGRAM DISPATCH] Lead sent to chat_id {chat_id}: {message_text}")
+
     payload = {
         "chat_id": chat_id,
         "text": message_text,
@@ -136,6 +139,8 @@ async def send_telegram_test_message(
         "ሁኔታ: ቦቱ በትክክል ተገናኝቷል! የደንበኞች ቀጠሮ እና ጥያቄዎች እዚህ ይደርሳሉ።"
     )
 
+    print(f"[LOCAL TELEGRAM DISPATCH] Lead sent to chat_id {chat_id}: {test_message}")
+
     payload = {
         "chat_id": chat_id,
         "text": test_message,
@@ -156,3 +161,131 @@ async def send_telegram_test_message(
                 return False, f"Telegram API Error ({resp.status_code}): {desc}"
         except Exception as e:
             return False, f"Network error connecting to Telegram: {str(e)}"
+
+
+async def send_rental_lead_telegram(
+    bot_token: str,
+    chat_id: str,
+    booking: Any,
+    vehicle_title: str,
+    dealer_name: str = "AC Wale Cars"
+) -> Tuple[bool, str]:
+    """
+    Dispatches an instant rental booking lead to AC Wale Cars Telegram desk.
+    """
+    raw_phone = getattr(booking, "customer_phone", "")
+    intl_phone = normalize_ethiopian_phone_digits(raw_phone)
+    safe_name = str(getattr(booking, "customer_name", "Valued Customer")).replace("*", "").replace("_", " ")
+
+    start_date = getattr(booking, "start_date", "")
+    start_str = start_date.strftime("%Y-%m-%d %H:%M") if hasattr(start_date, "strftime") else str(start_date)
+    end_date = getattr(booking, "end_date", "")
+    end_str = end_date.strftime("%Y-%m-%d %H:%M") if hasattr(end_date, "strftime") else str(end_date)
+
+    total_days = getattr(booking, "total_days", 1)
+    total_price = getattr(booking, "total_price", 0.0)
+    deliv_type = getattr(booking, "delivery_type", "showroom_pickup")
+    deliv_label = "ያሉበት ድረስ (Doorstep Delivery)" if deliv_type == "doorstep_delivery" else "ከሾውሩም መረከብ (Showroom Pickup)"
+    deliv_address = getattr(booking, "delivery_address", "")
+    address_line = f"📍 *አድራሻ (Location):* {deliv_address}\n" if deliv_address else ""
+
+    message_text = (
+        f"🔑 *አዲስ የመኪና ኪራይ ትዕዛዝ (New Rental Booking)*\n"
+        f"🏢 *ሾውሩም:* {dealer_name}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"🚘 *መኪና:* {vehicle_title}\n"
+        f"👤 *ደንበኛ:* {safe_name} (`+{intl_phone}`)\n"
+        f"📅 *የኪራይ ጊዜ:* {start_str} እስከ {end_str} ({total_days} ቀን)\n"
+        f"💰 *ጠቅላላ ክፍያ:* {total_price:,.0f} ETB\n"
+        f"🚚 *ማድረሻ (Delivery):* {deliv_label}\n"
+        f"{address_line}"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"📌 *ሁኔታ:* በመጠባበቅ ላይ (Pending)"
+    )
+
+    print(f"[LOCAL TELEGRAM DISPATCH] Lead sent to chat_id {chat_id}: {message_text}")
+
+    reply_markup = {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "💬 Open Telegram Chat",
+                    "url": f"https://t.me/+{intl_phone}"
+                }
+            ]
+        ]
+    }
+
+    payload = {
+        "chat_id": chat_id,
+        "text": message_text,
+        "parse_mode": "Markdown",
+        "reply_markup": reply_markup
+    }
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(url, json=payload, timeout=8.0)
+            if resp.status_code == 200:
+                return True, "Telegram rental lead dispatched successfully"
+            else:
+                return False, f"Telegram API error: {resp.text}"
+        except Exception as e:
+            return False, f"Telegram error: {str(e)}"
+
+
+async def send_driver_dispatch_telegram(
+    bot_token: str,
+    chat_id: str,
+    driver_name: str,
+    driver_phone: str,
+    booking: Any,
+    vehicle_title: str
+) -> Tuple[bool, str]:
+    """
+    Dispatches a driver assignment alert to Telegram desk/channel.
+    """
+    cust_phone = getattr(booking, "customer_phone", "")
+    intl_cust_phone = normalize_ethiopian_phone_digits(cust_phone)
+    cust_name = str(getattr(booking, "customer_name", "Customer")).replace("*", "").replace("_", " ")
+
+    start_date = getattr(booking, "start_date", "")
+    start_str = start_date.strftime("%Y-%m-%d %H:%M") if hasattr(start_date, "strftime") else str(start_date)
+    end_date = getattr(booking, "end_date", "")
+    end_str = end_date.strftime("%Y-%m-%d %H:%M") if hasattr(end_date, "strftime") else str(end_date)
+    total_days = getattr(booking, "total_days", 1)
+    deliv_type = getattr(booking, "delivery_type", "showroom_pickup")
+    location = getattr(booking, "delivery_address", "AC Wale Cars Showroom")
+
+    message_text = (
+        f"🚨 *የአሽከርካሪ ስምሪት ተከናውኗል (Driver Dispatched)*\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"👨‍✈️ *የተመደበው አሽከርካሪ:* {driver_name} (`{driver_phone}`)\n"
+        f"🚘 *መኪና:* {vehicle_title}\n"
+        f"👤 *ደንበኛ:* {cust_name} (`+{intl_cust_phone}`)\n"
+        f"📅 *የኪራይ ቀን:* {start_str} - {end_str} ({total_days} ቀናት)\n"
+        f"🚚 *አይነት:* {deliv_type}\n"
+        f"📍 *መድረሻ/ቦታ:* {location}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"✅ ሁኔታ: አሽከርካሪ ተመድቧል (Driver Assigned)"
+    )
+
+    print(f"[LOCAL TELEGRAM DISPATCH] Lead sent to chat_id {chat_id}: {message_text}")
+
+    payload = {
+        "chat_id": chat_id,
+        "text": message_text,
+        "parse_mode": "Markdown",
+    }
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(url, json=payload, timeout=8.0)
+            if resp.status_code == 200:
+                return True, "Dispatch notification sent"
+            return False, resp.text
+        except Exception as e:
+            return False, str(e)
+

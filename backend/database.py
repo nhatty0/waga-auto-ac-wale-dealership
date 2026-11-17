@@ -4,16 +4,31 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
-env_path = Path(__file__).resolve().parent / ".env"
+BASE_DIR = Path(__file__).resolve().parent
+
+env_path = BASE_DIR / ".env"
 if env_path.exists():
     load_dotenv(dotenv_path=env_path)
 else:
     load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./elite_motors.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ac_wale_cars.db").strip().strip("\"'")
 
 # Handles SQLite vs PostgreSQL connection flags cleanly
-if DATABASE_URL.startswith("sqlite"):
+# Strictly ensures that SQLite databases resolve to the backend folder regardless of working directory
+if DATABASE_URL.startswith("sqlite:///./") or DATABASE_URL == "sqlite:///./ac_wale_cars.db":
+    db_filename = DATABASE_URL.replace("sqlite:///./", "")
+    db_file_path = (BASE_DIR / db_filename).resolve()
+    engine = create_engine(f"sqlite:///{db_file_path.as_posix()}", connect_args={"check_same_thread": False})
+elif DATABASE_URL.startswith("sqlite:///"):
+    # If a relative SQLite path like sqlite:///ac_wale_cars.db was given
+    sub_path = DATABASE_URL[len("sqlite:///"):]
+    if not (":" in sub_path or sub_path.startswith("/") or sub_path.startswith("\\")):
+        db_file_path = (BASE_DIR / sub_path).resolve()
+        engine = create_engine(f"sqlite:///{db_file_path.as_posix()}", connect_args={"check_same_thread": False})
+    else:
+        engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+elif DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:
     engine = create_engine(DATABASE_URL)

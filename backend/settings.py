@@ -11,9 +11,17 @@ else:
 
 
 class Settings:
+    # Single-Tenant Configuration
+    SINGLE_TENANT_MODE: bool = os.getenv("SINGLE_TENANT_MODE", "true").strip().strip("\"'").lower() in ("true", "1", "yes")
+    PLATFORM_NAME: str = os.getenv("PLATFORM_NAME", "AC WALE MARKET").strip().strip("\"'")
+    PRIMARY_DEALERSHIP_SLUG: str = os.getenv("PRIMARY_DEALERSHIP_SLUG", "ac-wale-cars").strip().strip("\"'")
+    PRIMARY_DEALERSHIP_NAME: str = os.getenv("PRIMARY_DEALERSHIP_NAME", "AC WALE MARKET").strip().strip("\"'")
+    PRIMARY_DEALERSHIP_PHONE: str = os.getenv("PRIMARY_DEALERSHIP_PHONE", "+251911646628").strip().strip("\"'")
+    PRIMARY_DEALERSHIP_PHONE_2: str = os.getenv("PRIMARY_DEALERSHIP_PHONE_2", "+251900061300").strip().strip("\"'")
+
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql+psycopg2://postgres:Alphacode%4037@localhost:5432/elite_motors_db"
+        "sqlite:///./ac_wale_cars.db"
     )
     PORT: int = int(os.getenv("PORT", "8000"))
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "elite_motors_super_secret_jwt_key_2026_ethiopia")
@@ -31,7 +39,7 @@ class Settings:
     ).strip().strip("\"'")
     TELEGRAM_PLATFORM_BOT_USERNAME: str = (
         os.getenv("TELEGRAM_PLATFORM_BOT_USERNAME") or
-        os.getenv("TELEGRAM_BOT_USERNAME", "WagaDealershipBot")
+        os.getenv("TELEGRAM_BOT_USERNAME", "WagaCarsAlert_bot")
     ).strip().strip("\"'").lstrip("@")
 
     # Backwards compatibility aliases

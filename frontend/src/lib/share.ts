@@ -8,7 +8,7 @@ export function formatTelegramVehicleCaption(
   const dealerName =
     dealershipName ||
     vehicle.dealership?.name ||
-    "Elite Motors Addis";
+    "AC WALE MARKET";
 
   const formattedPrice =
     vehicle.price != null

@@ -165,6 +165,8 @@ export default function CompareModal({
               ? "bg-amber-500/20 text-amber-400 border-amber-400/40"
               : v.condition === "Slightly Used"
               ? "bg-emerald-500/20 text-emerald-400 border-emerald-400/40"
+              : v.condition === "Excellent Condition"
+              ? "bg-sky-500/20 text-sky-400 border-sky-400/40"
               : "bg-zinc-800 text-zinc-300 border-zinc-700"
           }`}
         >
@@ -280,11 +282,7 @@ export default function CompareModal({
             <div key={car.id} className="flex-1">
               {car.status === "Sold" ? (
                 <a
-                  href={`https://t.me/EliteMotorsAlert_bot?text=${encodeURIComponent(
-                    `ሰላም! የ${car.year} ${car.make} ${car.model} ተሽጧል የሚል አየሁ። እባካችሁ ተመሳሳይ መኪና ፈልጉልኝ።`
-                  )}`}
-                  target="_blank"
-                  rel="noreferrer"
+                  href="tel:+251911646628"
                   className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-1"
                 >
                   {t.findSimilar}

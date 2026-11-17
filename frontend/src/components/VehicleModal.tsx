@@ -143,9 +143,9 @@ export default function VehicleModal({
         `🛣️ *የተጓዘው:* ${mileageText}\n` +
         `⛽ *ነዳጅ:* ${vehicle.fuel_type} | ⚙️ *ማርሽ:* ${vehicle.transmission}\n` +
         `🚙 *የቦዲ ዓይነት:* ${vehicle.body_type} | 🏎️ *ድራይቭ:* ${vehicle.drive_train || "FWD"}\n\n` +
-        `📍 *ኤሊት ሞተርስ (Elite Motors) - አዲስ አበባ*\n` +
-        `📞 *ስልክ:* +251 918 032 065\n` +
-        `💬 *ቴሌግራም:* @EliteMotorsAlert_bot`
+        `📍 *ኤሲ ዋለ የመኪና መሸጫ (AC WALE MARKET) - 22 አዋራሪስ ሆቴል ጀርባ፣ አዲስ አበባ*\n` +
+        `📞 *ስልክ:* +251 911 646 628 / +251 900 061 300\n` +
+        `📧 *Email:* acwalecarmarket@gmail.com`
       );
     }
 
@@ -159,9 +159,9 @@ export default function VehicleModal({
       `🛣️ *Mileage:* ${mileageText}\n` +
       `⛽ *Fuel:* ${vehicle.fuel_type} | ⚙️ *Transmission:* ${vehicle.transmission}\n` +
       `🚙 *Body Type:* ${vehicle.body_type} | 🏎️ *Drivetrain:* ${vehicle.drive_train || "FWD"}\n\n` +
-      `📍 *Elite Motors - Addis Ababa*\n` +
-      `📞 *Call:* +251 918 032 065\n` +
-      `💬 *Telegram:* @EliteMotorsAlert_bot`
+      `📍 *AC WALE MARKET (ኤሲ ዋለ የመኪና መሸጫ) - 22 Behind Awraris Hotel, Addis Ababa*\n` +
+      `📞 *Call:* +251 911 646 628 / +251 900 061 300\n` +
+      `📧 *Email:* acwalecarmarket@gmail.com`
     );
   };
 
@@ -389,6 +389,8 @@ export default function VehicleModal({
                     ? "bg-amber-500/95 text-black border-amber-400"
                     : vehicle.condition === "Slightly Used"
                     ? "bg-emerald-500/90 text-black border-emerald-400"
+                    : vehicle.condition === "Excellent Condition"
+                    ? "bg-sky-500/90 text-black border-sky-400"
                     : "bg-black/80 text-zinc-200 border-zinc-700"
                 }`}
               >
@@ -626,27 +628,23 @@ export default function VehicleModal({
            {/* FIXED BOTTOM ACTION BAR */}
             <div className="p-4 border-t border-zinc-800 bg-zinc-950 flex gap-2.5 flex-shrink-0">
               <a
-                href="https://t.me/EliteMotorsAlert_bot"
-                target="_blank"
-                rel="noreferrer"
-                className="px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-sky-400 rounded-xl transition flex items-center justify-center gap-1.5 text-xs font-bold"
+                href="tel:+251911646628"
+                className="px-4 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-xl transition flex items-center justify-center gap-1.5 text-xs font-bold"
+                title="Call Sales Desk (+251 911 646 628)"
               >
-                <MessageSquare size={16} /> Telegram
+                <Phone size={16} /> 0911 646 628
               </a>
               <a
-                href={`tel:${dealership?.phone_number || "+251905445544"}`}
+                href="tel:+251900061300"
                 className="px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-emerald-400 rounded-xl transition flex items-center justify-center gap-1.5 text-xs font-bold"
+                title="Call Sales Desk (+251 900 061 300)"
               >
-                <Phone size={16} /> {lang === "am" ? "ደውል" : "Call"}
+                <Phone size={16} /> 0900 061 300
               </a>
 
               {vehicle.status === "Sold" ? (
                 <a
-                  href={`https://t.me/EliteMotorsAlert_bot?text=${encodeURIComponent(
-                    `ሰላም! የ${vehicle.year} ${vehicle.make} ${vehicle.model} ተሽጧል የሚል አየሁ። እባካችሁ ተመሳሳይ መኪና ፈልጉልኝ።`
-                  )}`}
-                  target="_blank"
-                  rel="noreferrer"
+                  href="tel:+251911646628"
                   className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl text-xs sm:text-sm transition text-center flex items-center justify-center"
                 >
                   {t.findSimilar}

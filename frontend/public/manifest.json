@@ -1,11 +1,11 @@
 {
-  "name": "Waga Dealership Hub",
-  "short_name": "Waga Cars",
-  "description": "የመኪና መገበያያ እና የሾውሩም አስተዳደር መድረክ",
+  "name": "AC WALE MARKET",
+  "short_name": "AC WALE MARKET",
+  "description": "AC WALE MARKET - ኤሲ ዋለ የመኪና መሸጫ እና ኪራይ ማዕከል",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "orientation": "portrait",
   "icons": [
     {

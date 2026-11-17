@@ -22,10 +22,10 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
     "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=1000&q=80"
   );
 
-  // Telegram deep-link for instant mobile inquiry
-  const telegramInquiryUrl = `https://t.me/EliteMotorsAlert_bot?text=${encodeURIComponent(
-    `Hello Elite Motors! I am at your showroom viewing the ${vehicle.year} ${vehicle.make} ${vehicle.model} (Plate: ${vehicle.plate_status || "Code 2"}). I would like more information or to request a test drive.`
-  )}`;
+  // Instant mobile inquiry or digital showroom link
+  const inquiryQrUrl = typeof window !== "undefined" && window.location.origin
+    ? `${window.location.origin}/?car=${vehicle.id}`
+    : "tel:+251911646628";
 
   const plateSpec = getFlyerPlateSpec(vehicle.plate_status);
 
@@ -82,6 +82,14 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
     }, 150);
   };
 
+  const getConditionLabel = (cond?: string) => {
+    const lower = (cond || "").toLowerCase().trim();
+    if (lower === "brand new") return "አዲስ / ዜሮ ኪ.ሜ (Brand New)";
+    if (lower === "slightly used") return "በጥቂቱ ያገለገለ (Slightly Used)";
+    if (lower === "excellent condition") return "በጣም ጥሩ ይዞታ (Excellent Condition)";
+    return "ጥሩ ይዞታ (Good Condition)";
+  };
+
   // Reusable Flyer Sheet Component
   const FlyerSheet = ({ isForPrint = false }: { isForPrint?: boolean }) => (
     <div
@@ -96,32 +104,39 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
         breakInside: "avoid",
       }}
     >
-      {/* TOP HEADER: Dealership Identity */}
+      {/* TOP HEADER: AC WALE MARKET Identity */}
       <div className="border-b-2 border-zinc-900 pb-3 mb-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-black text-amber-400 font-black flex items-center justify-center text-xl shadow-md border-2 border-amber-400">
-            E
-          </div>
+          <img
+            src="/ac-wale-logo.png"
+            alt="AC WALE MARKET Icon"
+            className="h-14 sm:h-16 w-14 sm:w-16 rounded-xl object-contain flex-shrink-0 bg-black border border-zinc-800"
+          />
           <div>
             <h1 className="text-xl sm:text-2xl font-black tracking-tight text-black leading-none">
-              ELITE MOTORS ADDIS
+              AC WALE MARKET (ኤሲ ዋለ የመኪና መሸጫ)
             </h1>
-            <p className="text-[11px] font-bold text-zinc-600 tracking-wider uppercase mt-0.5">
-              Addis Ababa Premier Digital Showroom
+            <p className="text-[12px] font-bold text-amber-600 tracking-wide mt-1">
+              ቅንጡ እና ዘመናዊ መኪኖች መሸጫ እና ማከራያ
             </p>
           </div>
         </div>
 
         <div className="text-right text-xs space-y-0.5 font-semibold text-zinc-800">
           <div className="flex items-center justify-end gap-1.5 text-black font-bold">
-            <Phone size={13} className="text-zinc-900" />
-            <span>+251 918 032 065</span>
+            <Phone size={13} className="text-amber-600" />
+            <a href="tel:+251911646628" className="hover:underline">+251 911 646 628</a>
           </div>
-          <div className="flex items-center justify-end gap-1.5 text-zinc-700">
-            <MessageSquare size={13} className="text-sky-600" />
-            <span>@EliteMotorsAlert_bot</span>
+          <div className="flex items-center justify-end gap-1.5 text-zinc-900 font-bold">
+            <Phone size={13} className="text-zinc-700" />
+            <a href="tel:+251900061300" className="hover:underline">+251 900 061 300</a>
           </div>
-          <p className="text-[10px] text-zinc-500">Bole • Addis Ababa, Ethiopia</p>
+          <div className="text-[11px] text-zinc-700 font-medium">
+            <a href="mailto:acwalecarmarket@gmail.com" className="hover:underline">acwalecarmarket@gmail.com</a>
+          </div>
+          <p className="text-[10px] text-zinc-700 font-bold">
+            22 አዋራሪስ ሆቴል ጀርባ | Hayahulet, Behind Awraris Hotel
+          </p>
         </div>
       </div>
 
@@ -148,7 +163,7 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
               {plateSpec.am} / {plateSpec.en}
             </span>
             <span className="bg-zinc-100 border border-zinc-300 text-zinc-700 text-[10px] font-bold px-2 py-0.5 rounded">
-              ★ {vehicle.condition}
+              ★ {getConditionLabel(vehicle.condition)}
             </span>
           </div>
         </div>
@@ -293,17 +308,21 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
           <p className="text-[11px] text-zinc-600 leading-snug max-w-sm">
             Scan QR Code on your phone for full vehicle photo gallery, video tour, or appointment booking with our sales desk.
           </p>
-          <div className="pt-0.5 flex items-center gap-2 text-[10px] font-bold text-zinc-800">
-            <span>💬 Telegram: @EliteMotorsAlert_bot</span>
+          <div className="pt-0.5 flex flex-wrap items-center gap-2 text-[10px] font-bold text-zinc-800">
+            <span>📞 +251 911 646 628</span>
             <span>•</span>
-            <span>📞 +251 918 032 065</span>
+            <span>📞 +251 900 061 300</span>
+            <span>•</span>
+            <span>📧 acwalecarmarket@gmail.com</span>
+            <span>•</span>
+            <span>📍 22 አዋራሪስ ሆቴል ጀርባ • Addis Ababa</span>
           </div>
         </div>
 
         {/* QR Code */}
         <div className="p-1.5 bg-white border-2 border-black rounded-xl shadow flex-shrink-0">
           <QRCodeSVG
-            value={telegramInquiryUrl}
+            value={inquiryQrUrl}
             size={88}
             level="H"
             includeMargin={false}

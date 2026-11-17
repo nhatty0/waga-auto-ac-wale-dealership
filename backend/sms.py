@@ -122,3 +122,119 @@ async def send_lead_sms(
     except Exception as e:
         logger.error(f"✗ [AFROMESSAGE LEAD SMS] Exception during dispatch: {e}")
         return False
+
+
+async def send_rental_booking_sms(
+    desk_phone: str,
+    customer_name: str,
+    customer_phone: str,
+    vehicle_title: str,
+    total_days: int,
+    total_price: float,
+    delivery_type: str,
+    delivery_address: str = None
+) -> bool:
+    """
+    Sends an instant SMS notification to AC Wale Cars management desk when a new rental is booked.
+    """
+    token = (settings.AFROMESSAGE_API_TOKEN or "").strip().strip("\"'")
+    deliv_label = "ያሉበት ድረስ (Doorstep)" if delivery_type == "doorstep_delivery" else "ከሾውሩም (Showroom)"
+    address_str = f" ({delivery_address})" if delivery_address else ""
+    message_body = (
+        f"አዲስ የመኪና ኪራይ ከ AC Wale Cars! ደንበኛ: {customer_name} ({customer_phone}) "
+        f"ለመኪና: {vehicle_title}፣ ቀናት: {total_days} ቀን፣ ጠቅላላ: {total_price:,.0f} ETB፣ "
+        f"ማድረሻ: {deliv_label}{address_str}።"
+    )
+
+    if not token or not settings.ENABLE_SMS_DISPATCH:
+        logger.warning(f"[MOCK RENTAL SMS] To {desk_phone}: {message_body}")
+        return True
+
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip().strip("\"'")
+
+    raw_phone = str(desk_phone or "")
+    normalized_phone = raw_phone.replace("+251", "0") if raw_phone.startswith("+251") else raw_phone
+    if normalized_phone.startswith("251"):
+        normalized_phone = "0" + normalized_phone[3:]
+
+    url = "https://api.afromessage.com/api/send"
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {"to": normalized_phone, "message": message_body}
+    if settings.AFROMESSAGE_SENDER_NAME:
+        params["sender"] = settings.AFROMESSAGE_SENDER_NAME.strip().strip("\"'")
+    if hasattr(settings, "AFROMESSAGE_IDENTIFIER_ID") and settings.AFROMESSAGE_IDENTIFIER_ID:
+        params["from"] = settings.AFROMESSAGE_IDENTIFIER_ID.strip().strip("\"'")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.get(url, params=params, headers=headers)
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("acknowledge") == "success":
+                    logger.info(f"✓ [AFROMESSAGE RENTAL SMS] Sent to {normalized_phone}")
+                    return True
+            logger.error(f"✗ [AFROMESSAGE RENTAL SMS] Error: {res.text}")
+            return False
+    except Exception as e:
+        logger.error(f"✗ [AFROMESSAGE RENTAL SMS] Exception: {e}")
+        return False
+
+
+async def send_driver_dispatch_sms(
+    driver_phone: str,
+    driver_name: str,
+    customer_name: str,
+    customer_phone: str,
+    vehicle_title: str,
+    total_days: int,
+    start_date_str: str,
+    end_date_str: str,
+    delivery_type: str,
+    delivery_address: str = None
+) -> bool:
+    """
+    Sends an instant SMS dispatch alert directly to the driver with trip details.
+    """
+    token = (settings.AFROMESSAGE_API_TOKEN or "").strip().strip("\"'")
+    location_str = delivery_address if (delivery_type == "doorstep_delivery" and delivery_address) else "AC Wale Cars Showroom"
+    message_body = (
+        f"ሰላም {driver_name}! ከ AC Wale Cars አዲስ የጉዞ ስምሪት ተመድበውልዎታል። "
+        f"መኪና: {vehicle_title}፣ ደንበኛ: {customer_name} ({customer_phone})፣ "
+        f"ቀናት: {total_days} ቀን ({start_date_str} - {end_date_str})፣ ቦታ: {location_str}።"
+    )
+
+    if not token or not settings.ENABLE_SMS_DISPATCH:
+        logger.warning(f"[MOCK DRIVER DISPATCH SMS] To {driver_phone}: {message_body}")
+        return True
+
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip().strip("\"'")
+
+    raw_phone = str(driver_phone or "")
+    normalized_phone = raw_phone.replace("+251", "0") if raw_phone.startswith("+251") else raw_phone
+    if normalized_phone.startswith("251"):
+        normalized_phone = "0" + normalized_phone[3:]
+
+    url = "https://api.afromessage.com/api/send"
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {"to": normalized_phone, "message": message_body}
+    if settings.AFROMESSAGE_SENDER_NAME:
+        params["sender"] = settings.AFROMESSAGE_SENDER_NAME.strip().strip("\"'")
+    if hasattr(settings, "AFROMESSAGE_IDENTIFIER_ID") and settings.AFROMESSAGE_IDENTIFIER_ID:
+        params["from"] = settings.AFROMESSAGE_IDENTIFIER_ID.strip().strip("\"'")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.get(url, params=params, headers=headers)
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("acknowledge") == "success":
+                    logger.info(f"✓ [AFROMESSAGE DRIVER DISPATCH SMS] Sent to {normalized_phone}")
+                    return True
+            logger.error(f"✗ [AFROMESSAGE DRIVER DISPATCH SMS] Error: {res.text}")
+            return False
+    except Exception as e:
+        logger.error(f"✗ [AFROMESSAGE DRIVER DISPATCH SMS] Exception: {e}")
+        return False
+

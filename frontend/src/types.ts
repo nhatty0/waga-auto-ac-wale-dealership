@@ -35,6 +35,14 @@ export interface Vehicle {
   // Plate Status
   plate_status?: string | null;
 
+  // Car Rental Engine Properties
+  listing_type?: "sale" | "rent" | "both";
+  rental_daily_rate?: number | null;
+  daily_rental_rate?: number | null;
+  daily_rate?: number | null;
+  rental_available?: boolean;
+  with_driver_only?: boolean;
+
   // Multi-tenant Dealership ID & Scoped Profile
   dealership_id?: number | null;
   dealership?: Dealership | null;
@@ -115,4 +123,187 @@ export interface User {
   is_active: boolean;
   created_at: string;
 }
+
+export interface Driver {
+  id: number;
+  full_name: string;
+  phone_number: string;
+  license_number?: string | null;
+  is_active: boolean;
+  dealership_id?: number | null;
+  created_at?: string;
+}
+
+export interface RentalBookingPayload {
+  vehicle_id: number;
+  customer_name: string;
+  customer_phone: string;
+  start_date: string;
+  end_date: string;
+  delivery_type: "showroom_pickup" | "doorstep_delivery";
+  delivery_address?: string | null;
+  dealership_id?: number | null;
+}
+
+export interface RentalBooking {
+  id: number;
+  vehicle_id: number;
+  customer_name: string;
+  customer_phone: string;
+  start_date: string;
+  end_date: string;
+  total_days: number;
+  total_price: number;
+  delivery_type: "showroom_pickup" | "doorstep_delivery";
+  delivery_address?: string | null;
+  assigned_driver_id?: number | null;
+  status: "pending" | "confirmed" | "driver_assigned" | "delivered" | "completed" | "cancelled";
+  dealership_id?: number | null;
+  created_at: string;
+  vehicle?: Vehicle | null;
+  assigned_driver?: Driver | null;
+}
+
+export interface ExecutiveStats {
+  sales_count?: number;
+  rental_count?: number;
+  drivers_count?: number;
+  leads_count?: number;
+  total_sales_inventory?: number;
+  active_rental_fleet?: number;
+  registered_drivers?: number;
+  total_leads_bookings?: number;
+  sales_inventory?: number;
+  rental_fleet?: number;
+  active_drivers?: number;
+  total_inquiries_and_bookings?: number;
+  total_sales_inquiries?: number;
+  total_rental_bookings?: number;
+  total_inventory_value?: number;
+  dealership_name?: string;
+}
+
+export interface StaffUser {
+  id: number;
+  phone_number: string;
+  full_name?: string | null;
+  role: string;
+  is_active: boolean;
+  dealership_id?: number | null;
+  created_at: string;
+}
+
+export interface GatePass {
+  id: number;
+  slip_number: string;
+  date: string;
+  driver_name: string;
+  plate_number: string;
+  release_reason: string;
+  authorized_by: string;
+  lot_intake_id?: number | null;
+  dealership_id?: number | null;
+  created_at?: string;
+}
+
+export interface LotIntake {
+  id: number;
+  vehicle_name: string;
+  year_of_production?: number | null;
+  plate_number: string;
+  primary_cash_price?: number | null;
+  primary_bank_price?: number | null;
+  final_cash_price?: number | null;
+  final_bank_price?: number | null;
+  received_date: string;
+  owner_name: string;
+  owner_phone: string;
+  remark?: string | null;
+  received_by_name?: string | null;
+  is_in_lot: boolean;
+  published_vehicle_id?: number | null;
+  dealership_id?: number | null;
+  created_at?: string;
+  gate_passes?: GatePass[];
+}
+
+export interface LotIntakePayload {
+  vehicle_name: string;
+  year_of_production?: number | null;
+  plate_number: string;
+  primary_cash_price?: number | null;
+  primary_bank_price?: number | null;
+  final_cash_price?: number | null;
+  final_bank_price?: number | null;
+  received_date?: string | null;
+  owner_name: string;
+  owner_phone: string;
+  remark?: string | null;
+  received_by_name?: string | null;
+  publish_to_showroom?: boolean;
+  dealership_id?: number | null;
+}
+
+export interface GatePassPayload {
+  driver_name: string;
+  plate_number?: string | null;
+  release_reason: string;
+  authorized_by: string;
+  slip_number?: string | null;
+  date?: string | null;
+}
+
+export interface HandoverBelonging {
+  item_name: string;
+  quantity: string;
+}
+
+export interface VehicleHandover {
+  id: number;
+  contract_number: string;
+  date: string;
+  owner_full_name: string;
+  owner_phone: string;
+  owner_subcity?: string | null;
+  owner_woreda?: string | null;
+  owner_house_no?: string | null;
+  vehicle_type: string;
+  manufacture_year?: number | null;
+  chassis_number?: string | null;
+  engine_number?: string | null;
+  horsepower?: string | null;
+  color?: string | null;
+  plate_number: string;
+  belongings_json?: string | null;
+  agreed_selling_price?: number | null;
+  commission_or_net_payout?: string | null;
+  vehicle_id?: number | null;
+  dealership_id?: number | null;
+  created_at?: string;
+}
+
+export interface VehicleHandoverPayload {
+  contract_number?: string | null;
+  date?: string | null;
+  owner_full_name: string;
+  owner_phone: string;
+  owner_subcity?: string | null;
+  owner_woreda?: string | null;
+  owner_house_no?: string | null;
+  vehicle_type: string;
+  manufacture_year?: number | null;
+  chassis_number?: string | null;
+  engine_number?: string | null;
+  horsepower?: string | null;
+  color?: string | null;
+  plate_number: string;
+  belongings_json?: string | null;
+  agreed_selling_price?: number | null;
+  commission_or_net_payout?: string | null;
+  vehicle_id?: number | null;
+  dealership_id?: number | null;
+}
+
+
+
 

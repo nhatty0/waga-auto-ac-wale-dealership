@@ -1,189 +1,96 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Deep Obsidian Radial Gradient (#09090b) -->
-    <radialGradient id="bgObsidian" cx="50%" cy="30%" r="75%">
-      <stop offset="0%" stop-color="#161619"/>
-      <stop offset="50%" stop-color="#0c0c0e"/>
+    <!-- Background Obsidian Gradient -->
+    <radialGradient id="bgDark" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="60%" stop-color="#0c0c0e"/>
       <stop offset="100%" stop-color="#050507"/>
     </radialGradient>
 
-    <!-- Metallic Outer Border Gradient (#27272a, #52525b, #71717a) -->
-    <linearGradient id="borderMetallic" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#52525b"/>
-      <stop offset="25%" stop-color="#27272a"/>
-      <stop offset="50%" stop-color="#71717a"/>
-      <stop offset="75%" stop-color="#27272a"/>
-      <stop offset="100%" stop-color="#3f3f46"/>
-    </linearGradient>
-
-    <!-- Crisp Titanium White Gradients (#F8FAFC, #FFFFFF, #CBD5E1) -->
-    <linearGradient id="titaniumLight" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="50%" stop-color="#F8FAFC"/>
-      <stop offset="100%" stop-color="#CBD5E1"/>
-    </linearGradient>
-
-    <linearGradient id="titaniumDark" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#E2E8F0"/>
-      <stop offset="50%" stop-color="#94A3B8"/>
-      <stop offset="100%" stop-color="#475569"/>
-    </linearGradient>
-
-    <!-- Vibrant Amber / Gold Gradients (#F59E0B, #FDE68A, #D97706) -->
+    <!-- Amber Gold Gradient -->
     <linearGradient id="amberGold" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FDE68A"/>
-      <stop offset="35%" stop-color="#F59E0B"/>
+      <stop offset="40%" stop-color="#F59E0B"/>
       <stop offset="100%" stop-color="#D97706"/>
     </linearGradient>
 
-    <linearGradient id="amberPure" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FBBF24"/>
-      <stop offset="100%" stop-color="#B45309"/>
+    <!-- Vibrant Red Car Contour Gradient -->
+    <linearGradient id="vibrantRed" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#EF4444" stop-opacity="0.2"/>
+      <stop offset="25%" stop-color="#EF4444"/>
+      <stop offset="70%" stop-color="#DC2626"/>
+      <stop offset="100%" stop-color="#B91C1C"/>
     </linearGradient>
 
-    <!-- Center Showroom Underglow -->
-    <radialGradient id="stageGlow" cx="50%" cy="56%" r="48%">
-      <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.30"/>
-      <stop offset="55%" stop-color="#F59E0B" stop-opacity="0.06"/>
+    <!-- Titanium White Gradient -->
+    <linearGradient id="titaniumGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="60%" stop-color="#F1F5F9"/>
+      <stop offset="100%" stop-color="#CBD5E1"/>
+    </linearGradient>
+
+    <!-- Outer Border Gradient -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.6"/>
+      <stop offset="50%" stop-color="#27272a"/>
+      <stop offset="100%" stop-color="#EF4444" stop-opacity="0.5"/>
+    </linearGradient>
+
+    <!-- Ambient Amber Underglow -->
+    <radialGradient id="ambientAmber" cx="50%" cy="45%" r="45%">
+      <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.25"/>
+      <stop offset="60%" stop-color="#F59E0B" stop-opacity="0.05"/>
       <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
     </radialGradient>
 
-    <!-- Windshield Tint -->
-    <linearGradient id="windshieldTint" x1="50%" y1="0%" x2="50%" y2="100%">
-      <stop offset="0%" stop-color="#090c12"/>
-      <stop offset="55%" stop-color="#121822"/>
-      <stop offset="100%" stop-color="#07090d"/>
-    </linearGradient>
-
-    <!-- Laser Headlight Glow Filters -->
-    <filter id="headlightBlur" x="-30%" y="-30%" width="160%" height="160%">
+    <!-- Glow Filter -->
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
       <feGaussianBlur stdDeviation="6" result="blur"/>
       <feComposite in="SourceGraphic" in2="blur" operator="over"/>
     </filter>
-
-    <filter id="crispGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="2.5" result="glow"/>
-      <feComposite in="SourceGraphic" in2="glow" operator="over"/>
-    </filter>
-
-    <filter id="badgeShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.8"/>
-    </filter>
   </defs>
 
-  <!-- Background Base -->
-  
-      <rect x="8" y="8" width="496" height="496" rx="108" fill="#09090b"/>
-      <rect x="8" y="8" width="496" height="496" rx="108" fill="url(#bgObsidian)"/>
-      <rect x="8" y="8" width="496" height="496" rx="108" fill="none" stroke="url(#borderMetallic)" stroke-width="4"/>
-    
+  <!-- Base Plate with Rounded Corners -->
+  <rect x="8" y="8" width="496" height="496" rx="108" fill="url(#bgDark)"/>
+  <rect x="8" y="8" width="496" height="496" rx="108" fill="none" stroke="url(#borderGrad)" stroke-width="3"/>
+  <rect x="14" y="14" width="484" height="484" rx="102" fill="none" stroke="#FFFFFF" stroke-opacity="0.05" stroke-width="1.5"/>
 
-  <g >
-    <!-- Ambient Stage Underglow -->
-    <ellipse cx="256" cy="275" rx="195" ry="125" fill="url(#stageGlow)"/>
+  <!-- Ambient Underglow -->
+  <ellipse cx="256" cy="220" rx="190" ry="140" fill="url(#ambientAmber)"/>
 
-    <!-- ========================================================
-         1. SLANTED AERODYNAMIC ROOFLINE & GREENHOUSE
-         ======================================================== -->
-    <!-- Cockpit Glass Area -->
-    <path d="M 164 212 C 190 142 224 122 256 122 C 288 122 322 142 348 212 C 314 222 198 222 164 212 Z" 
-          fill="url(#windshieldTint)" stroke="#1e293b" stroke-width="1.5"/>
+  <!-- EMBLEM GROUP (Centered at x: 256, y: 190) -->
+  <g id="center-emblem" transform="translate(256, 195) scale(2.1) translate(-64, -62)">
+    <!-- Red Car Silhouette Contour Line (Aerodynamic Roofline) -->
+    <path d="M 5 78 C 15 50, 42 22, 64 22 C 86 22, 105 48, 118 76 C 122 80, 128 80, 132 75 C 130 70, 118 40, 95 18 C 76 2, 48 3, 24 22 C 8 36, 0 58, 0 78 Z"
+          fill="url(#vibrantRed)" filter="url(#softGlow)"/>
 
-    <!-- Windshield Horizon Light Sheen -->
-    <path d="M 196 176 C 224 162 256 160 286 166" 
-          stroke="url(#titaniumLight)" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.45"/>
+    <!-- Stylized "A" Monogram Left Blade -->
+    <path d="M 64 25 L 53 25 L 18 95 L 34 95 L 45 73 L 64 73 Z"
+          fill="url(#titaniumGrad)"/>
 
-    <!-- Slanted Aerodynamic Roofline Arch (Titanium White) -->
-    <path d="M 150 220 C 178 136 220 114 256 114 C 292 114 334 136 362 220 C 348 220 338 212 330 192 C 310 140 282 128 256 128 C 230 128 202 140 182 192 C 174 212 164 220 150 220 Z" 
-          fill="url(#titaniumLight)"/>
+    <!-- Stylized "A" Monogram Right Blade -->
+    <path d="M 64 25 L 75 25 L 110 95 L 94 95 L 83 73 L 64 73 Z"
+          fill="url(#titaniumGrad)"/>
 
-    <!-- ========================================================
-         2. SCULPTED SUPERCAR FRONT FASCIA & FENDERS
-         ======================================================== -->
-    <!-- Left Fender Shoulder Arch -->
-    <path d="M 72 284 C 70 256 86 234 116 222 C 142 212 160 216 174 220 L 166 238 C 150 232 136 230 118 238 C 96 248 88 264 92 284 Z" 
-          fill="url(#titaniumDark)"/>
+    <!-- Embraced Amber-Gold "C" Monogram Arc -->
+    <path d="M 76 43 C 86 48, 92 58, 90 70 C 88 80, 78 89, 64 89 C 50 89, 40 80, 39 68 C 38 58, 44 48, 54 43 L 59 52 C 53 55, 49 61, 50 67 C 51 74, 57 79, 64 79 C 72 79, 78 74, 79 67 C 80 61, 76 56, 71 52 Z"
+          fill="url(#amberGold)"/>
 
-    <!-- Right Fender Shoulder Arch -->
-    <path d="M 440 284 C 442 256 426 234 396 222 C 370 212 352 216 338 220 L 346 238 C 362 232 376 230 394 238 C 416 248 424 264 420 284 Z" 
-          fill="url(#titaniumDark)"/>
+    <!-- "WALE" Horizontal Bar of "A" -->
+    <rect x="36" y="65" width="56" height="15" rx="3" fill="#09090b" stroke="url(#amberGold)" stroke-width="1.2"/>
+    <text x="64" y="77" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="10.5" letter-spacing="2.5" fill="#FFFFFF" text-anchor="middle">WALE</text>
 
-    <!-- Hood Center Powerdome Creases -->
-    <path d="M 218 218 L 256 204 L 294 218 L 278 234 L 256 224 L 234 234 Z" 
-          fill="#11141c" stroke="#27272a" stroke-width="1.2"/>
-    <polygon points="256,202 258,224 254,224" fill="url(#amberGold)"/>
-
-    <!-- ========================================================
-         3. AGGRESSIVE HYPERCAR LED HEADLIGHTS
-         Fierce, razor-sharp slanted LED lightbars glaring forward
-         ======================================================== -->
-    <!-- Left LED Headlight Assembly -->
-    <!-- Amber DRL Eyebrow Glow -->
-    <polygon points="98,244 196,270 190,282 92,256" fill="#F59E0B" opacity="0.7" filter="url(#headlightBlur)"/>
-    <!-- Black Bezel Housing -->
-    <polygon points="100,246 194,269 188,278 94,255" fill="#09090b" stroke="#F59E0B" stroke-width="1.8"/>
-    <!-- Intense Pure White Laser LED Core Strip -->
-    <polygon points="106,248 190,268 186,274 102,254" fill="#FFFFFF" filter="url(#crispGlow)"/>
-    <!-- Secondary Lower Amber DRL Claw -->
-    <polygon points="120,265 180,280 176,285 116,270" fill="url(#amberGold)"/>
-
-    <!-- Right LED Headlight Assembly -->
-    <!-- Amber DRL Eyebrow Glow -->
-    <polygon points="414,244 316,270 322,282 420,256" fill="#F59E0B" opacity="0.7" filter="url(#headlightBlur)"/>
-    <!-- Black Bezel Housing -->
-    <polygon points="412,246 318,269 324,278 418,255" fill="#09090b" stroke="#F59E0B" stroke-width="1.8"/>
-    <!-- Intense Pure White Laser LED Core Strip -->
-    <polygon points="406,248 322,268 326,274 410,254" fill="#FFFFFF" filter="url(#crispGlow)"/>
-    <!-- Secondary Lower Amber DRL Claw -->
-    <polygon points="392,265 332,280 336,285 396,270" fill="url(#amberGold)"/>
-
-    <!-- Dark Center Grille Intake Cavity -->
-    <path d="M 194 274 L 256 290 L 318 274 L 328 348 L 256 368 L 184 348 Z" 
-          fill="#0a0b0e" stroke="#1c202a" stroke-width="1.5"/>
-
-    <!-- ========================================================
-         4. THE PROMINENT STYLIZED "W" BRAND MONOGRAM
-         Sleek, bold, faceted, floating right in the center stage
-         ======================================================== -->
-    <g filter="url(#badgeShadow)">
-      <!-- Outer Left Blade (Titanium White) -->
-      <polygon points="166,270 190,270 216,346 192,346" fill="url(#titaniumLight)"/>
-      <polygon points="190,270 200,270 224,342 216,346" fill="url(#titaniumDark)"/>
-
-      <!-- Inner Left Blade (Titanium White / Silver) -->
-      <polygon points="256,252 256,276 226,352 208,352" fill="url(#titaniumLight)"/>
-      <polygon points="256,252 248,252 218,348 226,352" fill="#CBD5E1"/>
-
-      <!-- Inner Right Blade (Vibrant Amber Gold) -->
-      <polygon points="256,252 256,276 286,352 304,352" fill="url(#amberGold)"/>
-      <polygon points="256,252 264,252 294,348 286,352" fill="url(#amberPure)"/>
-
-      <!-- Outer Right Blade (Vibrant Amber Gold) -->
-      <polygon points="346,270 322,270 296,346 320,346" fill="url(#amberGold)"/>
-      <polygon points="322,270 312,270 288,342 296,346" fill="#B45309"/>
-
-      <!-- Center Apex Power Jewel -->
-      <polygon points="256,242 264,258 256,264 248,258" fill="#FFFFFF"/>
-    </g>
-
-    <!-- ========================================================
-         5. LOWER AERODYNAMIC SPLITTER & GROUND EFFECT
-         ======================================================== -->
-    <!-- Main Carbon Ground Splitter Lip -->
-    <path d="M 82 360 L 256 390 L 430 360 L 418 346 L 256 370 L 94 346 Z" 
-          fill="#16171a" stroke="#2d3038" stroke-width="1.5"/>
-
-    <!-- Amber Illuminated Neon Splitter Strip -->
-    <path d="M 86 363 L 256 392 L 426 363" 
-          stroke="url(#amberGold)" stroke-width="4.5" stroke-linecap="round" fill="none" filter="url(#crispGlow)"/>
-
-    <!-- Crisp Center Titanium Highlight -->
-    <path d="M 174 380 L 256 392 L 338 380" 
-          stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" fill="none"/>
-
-    <!-- Aerodynamic Endplates / Canards -->
-    <polygon points="76,344 90,346 84,364 70,360" fill="url(#titaniumLight)"/>
-    <polygon points="436,344 422,346 428,364 442,360" fill="url(#amberGold)"/>
+    <!-- Dynamic Red Accent Dash (Front Splitter) -->
+    <path d="M 12 96 L 116 96 L 110 99 L 18 99 Z" fill="#EF4444"/>
   </g>
+
+  <!-- TYPOGRAPHY TEXT COMPANION (Centered Lower Half) -->
+  <!-- Line 1: AC WALE MARKET (Bold Amber-Gold #F59E0B) -->
+  <text x="256" y="388" fill="url(#amberGold)" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="34" letter-spacing="3" text-anchor="middle">AC WALE MARKET</text>
+
+  <!-- Line 2: ኤሲ ዋለ የመኪና መሸጫ እና ኪራይ (Amharic Subtitle in Clean Light Gray / White) -->
+  <text x="256" y="428" fill="#E2E8F0" font-family="'Noto Sans Ethiopic', 'Nyala', 'Abyssinica SIL', system-ui, sans-serif" font-weight="700" font-size="20" letter-spacing="1" text-anchor="middle">ኤሲ ዋለ የመኪና መሸጫ እና ኪራይ</text>
+
+  <!-- Bottom Accent Line -->
+  <line x1="160" y1="448" x2="352" y2="448" stroke="url(#vibrantRed)" stroke-width="2.5" stroke-linecap="round"/>
 </svg>

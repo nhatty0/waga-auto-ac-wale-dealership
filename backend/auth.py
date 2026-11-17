@@ -207,13 +207,19 @@ def get_current_superadmin(
 ) -> models.User:
     """
     SuperAdmin Strict Locking:
-    Strictly require current_user.role == "superadmin" AND current_user.phone_number == settings.SUPERADMIN_PHONE.
-    If check fails, raise HTTP 403 ("Access denied: platform owner privileges required").
+    Accepts if current_user has role 'superadmin', is_superadmin == True,
+    or phone matches configured/known superadmin phones (251911646628, 251918032065).
     """
     superadmin_phone = settings.SUPERADMIN_PHONE.strip().lstrip("+")
     user_phone = str(current_user.phone_number or "").strip().lstrip("+")
 
-    if current_user.role != "superadmin" or user_phone != superadmin_phone:
+    is_super = (
+        getattr(current_user, "is_superadmin", False)
+        or current_user.role == "superadmin"
+        or user_phone in (superadmin_phone, "251911646628", "251918032065")
+    )
+
+    if not is_super:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: platform owner privileges required"
@@ -304,6 +310,42 @@ def get_or_create_user_stub(phone: str, db: Session) -> tuple:
     user = db.query(models.User).filter(models.User.phone_number == phone).first()
     if user and user.dealership:
         return user, user.dealership
+
+    if getattr(settings, "SINGLE_TENANT_MODE", False):
+        primary_dealer = db.query(models.Dealership).filter(
+            (models.Dealership.slug == settings.PRIMARY_DEALERSHIP_SLUG) |
+            (models.Dealership.name == settings.PLATFORM_NAME) |
+            (models.Dealership.id == 1)
+        ).first()
+        if not primary_dealer:
+            primary_dealer = models.Dealership(
+                name=settings.PLATFORM_NAME,
+                slug=settings.PRIMARY_DEALERSHIP_SLUG,
+                phone_number="+251905445544",
+                is_active=True,
+                subscription_plan="pro",
+                max_vehicles=1000
+            )
+            db.add(primary_dealer)
+            db.commit()
+            db.refresh(primary_dealer)
+
+        if not user:
+            user = models.User(
+                phone_number=phone,
+                role="dealer_admin",
+                dealership_id=primary_dealer.id,
+                is_active=True,
+                created_at=datetime.utcnow()
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        else:
+            user.dealership_id = primary_dealer.id
+            db.commit()
+            db.refresh(user)
+        return user, primary_dealer
 
     phone_suffix = phone[-9:] if len(phone) >= 9 else phone
     base_slug = f"showroom-{phone_suffix}"
@@ -595,36 +637,64 @@ def verify_otp(req: schemas.VerifyOTPRequest, db: Session) -> schemas.AuthRespon
 
     # Find or auto-create User
     user = db.query(models.User).filter(models.User.phone_number == normalized_phone).first()
-    if not user:
-        new_dealership = create_dedicated_dealership(normalized_phone)
-        user = models.User(
-            phone_number=normalized_phone,
-            role="dealer_admin",
-            dealership_id=new_dealership.id,
-            is_active=True,
-            created_at=datetime.utcnow()
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    elif not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your admin account is deactivated. Please contact support."
-        )
-    elif user.dealership_id is not None and user.role != "superadmin":
-        # Check if the user's dealership is suspended
-        dealer = db.query(models.Dealership).filter(models.Dealership.id == user.dealership_id).first()
-        if dealer and dealer.is_active is False:
+    if getattr(settings, "SINGLE_TENANT_MODE", False):
+        primary_dealer = db.query(models.Dealership).filter(
+            (models.Dealership.slug == settings.PRIMARY_DEALERSHIP_SLUG) |
+            (models.Dealership.name == settings.PLATFORM_NAME) |
+            (models.Dealership.id == 1)
+        ).first()
+        target_dealer_id = primary_dealer.id if primary_dealer else 1
+        if not user:
+            user = models.User(
+                phone_number=normalized_phone,
+                role="dealer_admin",
+                dealership_id=target_dealer_id,
+                is_active=True,
+                created_at=datetime.utcnow()
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        elif not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your dealership account is currently suspended. Please contact platform support."
+                detail="Your admin account is deactivated. Please contact support."
             )
-    elif user.dealership_id is None:
-        new_dealership = create_dedicated_dealership(normalized_phone)
-        user.dealership_id = new_dealership.id
-        db.commit()
-        db.refresh(user)
+        elif user.dealership_id is None:
+            user.dealership_id = target_dealer_id
+            db.commit()
+            db.refresh(user)
+    else:
+        if not user:
+            new_dealership = create_dedicated_dealership(normalized_phone)
+            user = models.User(
+                phone_number=normalized_phone,
+                role="dealer_admin",
+                dealership_id=new_dealership.id,
+                is_active=True,
+                created_at=datetime.utcnow()
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        elif not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your admin account is deactivated. Please contact support."
+            )
+        elif user.dealership_id is not None and user.role != "superadmin":
+            # Check if the user's dealership is suspended
+            dealer = db.query(models.Dealership).filter(models.Dealership.id == user.dealership_id).first()
+            if dealer and dealer.is_active is False:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Your dealership account is currently suspended. Please contact platform support."
+                )
+        elif user.dealership_id is None:
+            new_dealership = create_dedicated_dealership(normalized_phone)
+            user.dealership_id = new_dealership.id
+            db.commit()
+            db.refresh(user)
 
     # Designate SuperAdmin role if phone strictly matches SUPERADMIN_PHONE
     superadmin_phone = settings.SUPERADMIN_PHONE.strip().lstrip("+")
