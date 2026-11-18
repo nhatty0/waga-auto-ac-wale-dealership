@@ -6,6 +6,8 @@ import {
   Search,
   Sparkles,
   Gauge,
+  Fuel,
+  Cog,
   ArrowRight,
   Settings,
   Plus,
@@ -350,12 +352,19 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
     return true;
   });
 
-  const getConditionLabel = (cond?: string) => {
+  // Short, single-language condition label for card badges (the full bilingual label is in the detail view).
+  const getShortConditionLabel = (cond?: string) => {
     const lower = (cond || "").toLowerCase();
-    if (lower === "brand new") return t.conditionBrandNew;
-    if (lower === "slightly used") return t.conditionSlightlyUsed;
-    if (lower === "excellent condition") return t.conditionExcellent;
-    return t.conditionGood;
+    const key: ConditionChipKey =
+      lower === "brand new"
+        ? "brand_new"
+        : lower === "slightly used"
+        ? "slightly_used"
+        : lower === "excellent condition"
+        ? "excellent_condition"
+        : "good_condition";
+    const chip = CONDITION_CHIPS.find((c) => c.key === key)!;
+    return lang === "am" ? chip.am : chip.en;
   };
 
   return (
@@ -601,7 +610,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
           >
             {filteredVehicles.map((car) => {
               const coverImg = resolveImageUrl(
@@ -616,9 +625,11 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                   layoutId={`vehicle-card-${car.id}`}
                   whileHover={shouldReduceMotion ? {} : { y: -6, scale: 1.015, transition: { duration: 0.25 } }}
                   onClick={() => setActiveVehicle(car)}
-                  className="bg-zinc-900/90 border border-zinc-800 hover:border-amber-500/40 rounded-2xl overflow-hidden transition-colors cursor-pointer group flex flex-col justify-between shadow-lg hover:shadow-2xl hover:shadow-amber-500/10"
+                  data-vehicle-card
+                  data-vehicle-id={car.id}
+                  className="min-w-0 bg-zinc-900/70 ring-1 ring-white/[0.06] hover:ring-amber-500/40 rounded-2xl overflow-hidden transition-shadow cursor-pointer group flex flex-col shadow-lg hover:shadow-2xl hover:shadow-amber-500/10"
                 >
-                  <div className="relative h-48 w-full bg-zinc-950 overflow-hidden">
+                  <div className="relative aspect-[16/10] w-full bg-zinc-950 overflow-hidden">
                     <img
                       src={coverImg}
                       alt={car.model}
@@ -631,7 +642,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                     />
                     {/* Condition Badge (Top-Left) */}
                     <span
-                      className={`absolute top-3 left-3 backdrop-blur-md text-[10px] font-bold px-2.5 py-1 rounded-full border shadow-md ${
+                      className={`absolute top-3 left-3 max-w-[60%] truncate backdrop-blur-md text-[11px] font-bold px-2.5 py-1 rounded-full border shadow-md ${
                         car.condition === "Brand New"
                           ? "bg-amber-500/90 text-black border-amber-400"
                           : car.condition === "Slightly Used"
@@ -641,7 +652,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                               : "bg-black/75 text-zinc-200 border-zinc-700"
                       }`}
                     >
-                      ★ {getConditionLabel(car.condition)}
+                      ★ {getShortConditionLabel(car.condition)}
                     </span>
 
                     {/* Status Badge (Top-Right: Sold, Reserved, In Transit) */}
@@ -667,36 +678,55 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                     )}
 
                     {/* Plate Status Badge (Bottom-Left) */}
-                    <span className={`absolute bottom-3 left-3 text-[10px] font-bold px-2.5 py-0.5 rounded-md flex items-center gap-1 shadow-md ${getPlateBadgeClasses(car.plate_status)}`}>
+                    <span className={`absolute bottom-3 left-3 max-w-[70%] truncate text-[11px] font-bold px-2.5 py-0.5 rounded-md flex items-center gap-1 shadow-md ${getPlateBadgeClasses(car.plate_status)}`}>
                       🏷️ {getPlateLabel(car.plate_status, lang === "am")}
-                    </span>
-
-                    <span className="absolute bottom-3 right-3 bg-black/75 backdrop-blur-md text-zinc-300 text-[10px] font-medium px-2 py-0.5 rounded-md flex items-center gap-1">
-                      <Gauge size={12} /> {(car.mileage ?? 0).toLocaleString()} km
                     </span>
                   </div>
 
-                  <div className="p-4 space-y-3">
-                    <div>
-                      <span className="text-zinc-500 text-[11px] font-semibold uppercase">
+                  <div className="p-4 flex flex-col gap-3 flex-1">
+                    <div className="min-w-0">
+                      <span className="block text-zinc-500 text-[11px] font-semibold uppercase tracking-wide truncate">
                         {car.make}
                       </span>
-                      <h3 className="font-bold text-white text-base leading-tight">
+                      <h3 className="font-bold text-white text-[17px] leading-snug line-clamp-2 break-words">
                         {car.year} {car.model}
                       </h3>
-                      <p className="text-zinc-400 text-[11px] mt-0.5">
-                        {car.fuel_type} • {car.transmission} • {car.body_type} • {getPlateLabel(car.plate_status, lang === "am")}
-                      </p>
                     </div>
 
-                    <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2">
+                    {/* Key specs as small inline chips */}
+                    <ul className="flex flex-wrap gap-1.5 text-[11px] text-zinc-300">
+                      <li className="inline-flex items-center gap-1 h-6 px-2 rounded-md bg-white/[0.05]">
+                        <Gauge size={12} className="text-zinc-500" />
+                        {(car.mileage ?? 0).toLocaleString()} km
+                      </li>
+                      {car.fuel_type && (
+                        <li className="inline-flex items-center gap-1 h-6 px-2 rounded-md bg-white/[0.05]">
+                          <Fuel size={12} className="text-zinc-500" />
+                          {car.fuel_type}
+                        </li>
+                      )}
+                      {car.transmission && (
+                        <li className="inline-flex items-center gap-1 h-6 px-2 rounded-md bg-white/[0.05]">
+                          <Cog size={12} className="text-zinc-500" />
+                          {car.transmission}
+                        </li>
+                      )}
+                      {car.body_type && (
+                        <li className="inline-flex items-center gap-1 h-6 px-2 rounded-md bg-white/[0.05]">
+                          <Car size={12} className="text-zinc-500" />
+                          {car.body_type}
+                        </li>
+                      )}
+                    </ul>
+
+                    <div className="mt-auto pt-3 border-t border-white/[0.06] flex flex-col gap-3">
                       {catalogMode === "rent" || (car.listing_type === "rent" && !car.price) ? (
                         <div>
                           <span className="text-[10px] text-zinc-500 uppercase font-semibold block">
                             {lang === "am" ? "የቀን ኪራይ" : "Daily Rental Rate"}
                           </span>
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-amber-400 font-black text-base sm:text-lg">
+                          <div className="flex items-baseline gap-1 whitespace-nowrap">
+                            <span className="text-amber-400 font-black text-lg">
                               {((car.rental_daily_rate ?? (car as any).daily_rental_rate ?? (car as any).daily_rate) || 3500).toLocaleString()} ETB
                             </span>
                             <span className="text-zinc-400 text-[10px] font-semibold">
@@ -721,7 +751,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                         />
                       )}
 
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="flex items-center gap-2">
                         {/* Telegram Instant Share */}
                         <button
                           type="button"
@@ -729,21 +759,23 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                             e.stopPropagation();
                             openTelegramShare(car, dealership?.name || "AC Wale Cars");
                           }}
-                          className="py-1.5 px-2 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-[#45B6ED] hover:text-white border border-[#229ED9]/30 rounded-xl text-xs font-semibold transition flex items-center gap-1 shadow-sm active:scale-95"
+                          className="h-11 w-11 shrink-0 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-[#45B6ED] hover:text-white rounded-xl transition flex items-center justify-center active:scale-95"
                           title={lang === "am" ? "በቴሌግራም አጋራ" : "Share on Telegram"}
+                          aria-label={lang === "am" ? "በቴሌግራም አጋራ" : "Share on Telegram"}
                         >
-                          <TelegramIcon size={13} />
-                          <span className="hidden sm:inline">{lang === "am" ? "አጋራ" : "Share"}</span>
+                          <TelegramIcon size={17} />
                         </button>
 
                         {/* Compare Toggle Button */}
                         <button
                           type="button"
+                          data-compare-toggle
+                          aria-pressed={isInCompare(car.id)}
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleCompare(car);
                           }}
-                          className={`py-1.5 px-2.5 rounded-xl text-xs font-semibold border transition flex items-center gap-1 ${
+                          className={`h-11 px-3 shrink-0 rounded-xl text-xs font-semibold border transition flex items-center gap-1 whitespace-nowrap ${
                             isInCompare(car.id)
                               ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-sm"
                               : "bg-zinc-800/60 border-zinc-700/80 text-zinc-400 hover:text-white hover:border-zinc-600"
@@ -766,11 +798,12 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                         {/* Action Button: Rent Mode -> Book Rental; Buy Mode -> Book Visit */}
                         {catalogMode === "rent" ? (
                           <button
+                            data-rent-button
                             onClick={(e) => {
                               e.stopPropagation();
                               setRentalVehicle(car);
                             }}
-                            className="py-1.5 px-3 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl text-xs transition flex items-center gap-1 shadow-md shadow-amber-500/20 active:scale-95"
+                            className="h-11 flex-1 min-w-0 px-3 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl text-[13px] transition flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 whitespace-nowrap"
                           >
                             <Key size={13} />
                             <span>{lang === "am" ? "መኪና ይከራዩ" : "Rent"}</span>
@@ -784,20 +817,21 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                             target="_blank"
                             rel="noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="py-1.5 px-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-semibold transition flex items-center gap-1"
+                            className="h-11 flex-1 min-w-0 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-[13px] font-semibold transition flex items-center justify-center gap-1 whitespace-nowrap"
                           >
-                            {t.findSimilar}
+                            <span className="truncate">{t.findSimilar}</span>
                           </a>
                         ) : (
                           <button
+                            data-book-button
                             onClick={(e) => {
                               e.stopPropagation();
                               setBookingVehicle(car);
                             }}
-                            className="py-1.5 px-2.5 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-black border border-amber-500/30 rounded-xl text-xs font-semibold transition flex items-center gap-1"
+                            className="h-11 flex-1 min-w-0 px-3 bg-amber-500 hover:bg-amber-400 text-black rounded-xl text-[13px] font-black transition flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 whitespace-nowrap"
                           >
-                            {lang === "am" ? "ቀጠሮ" : "Book"}{" "}
-                            <ArrowRight size={13} />
+                            <span className="truncate">{lang === "am" ? "ቀጠሮ ይያዙ" : "Book a Visit"}</span>
+                            <ArrowRight size={15} className="shrink-0" />
                           </button>
                         )}
                       </div>

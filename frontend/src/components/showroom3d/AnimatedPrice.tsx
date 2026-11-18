@@ -75,7 +75,7 @@ export default function AnimatedPrice({
         <span className="text-[10px] text-zinc-500 block uppercase font-medium">
           {lang === "am" ? "የመኪናው ሙሉ ዋጋ" : "Negotiable Price"}
         </span>
-        <div className="flex items-baseline gap-1">
+        <div className="flex items-baseline gap-1 whitespace-nowrap">
           <span
             className={`font-black text-amber-400 tabular-nums ${
               size === "lg"
@@ -121,7 +121,7 @@ export default function AnimatedPrice({
                 {lang === "am" ? "የባንክ ዕዳ:" : "Loan:"}{" "}
                 {effectiveLoan.toLocaleString()}
               </span>
-              {bankName && <span className="opacity-75">({bankName})</span>}
+              {bankName && <span className="opacity-75 truncate max-w-[9rem]">({bankName})</span>}
             </motion.span>
           )}
         </motion.div>
