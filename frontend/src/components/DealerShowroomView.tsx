@@ -44,23 +44,29 @@ interface DealerShowroomViewProps {
   dealerSlug: string;
 }
 
-type ConditionChipKey =
-  | "all"
-  | "new_series"
-  | "brand_new"
-  | "slightly_used"
-  | "excellent_condition"
-  | "good_condition";
+type QuickChipKey = "all" | "brand_new" | "slightly_used" | "good_condition" | "gas";
 
-// Bilingual labels for the condition chip row (primary line follows the language toggle).
-const CONDITION_CHIPS: { key: ConditionChipKey; am: string; en: string }[] = [
+// Quick filter row. "Slightly Used" and "Excellent Condition" are one merged chip
+// (matchesConditionFilter already treats them as the same group). New Series plates
+// remain available under Plate in the Filters drawer.
+const QUICK_CHIPS: { key: QuickChipKey; am: string; en: string }[] = [
   { key: "all", am: "ሁሉም", en: "All" },
-  { key: "new_series", am: "አዲስ ሰሌዳ", en: "New Series (AAA)" },
-  { key: "brand_new", am: "አዲስ / ዜሮ ኪ.ሜ", en: "Brand New" },
-  { key: "slightly_used", am: "በጥቂቱ ያገለገለ", en: "Slightly Used" },
-  { key: "excellent_condition", am: "በጣም ጥሩ ይዞታ", en: "Excellent" },
+  { key: "brand_new", am: "አዲስ", en: "Brand New" },
+  { key: "slightly_used", am: "በጣም ጥሩ ይዞታ (Slightly Used)", en: "በጣም ጥሩ ይዞታ (Slightly Used)" },
   { key: "good_condition", am: "ጥሩ ይዞታ", en: "Good" },
+  { key: "gas", am: "ቤንዚን", en: "Gas" },
 ];
+
+const isGasoline = (fuel?: string | null) =>
+  ["gasoline", "petrol", "gas", "benzine"].includes((fuel || "").toLowerCase().trim());
+
+// Short, single-language condition badge text for cards (exact condition, not the merged chip).
+const CONDITION_BADGE: Record<string, { am: string; en: string }> = {
+  "brand new": { am: "አዲስ", en: "Brand New" },
+  "slightly used": { am: "በጥቂቱ ያገለገለ", en: "Slightly Used" },
+  "excellent condition": { am: "በጣም ጥሩ ይዞታ", en: "Excellent" },
+  "good condition": { am: "ጥሩ ይዞታ", en: "Good" },
+};
 
 export const matchesConditionFilter = (
   vehicleCondition: string | undefined | null,
@@ -136,7 +142,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategoryKey, setSelectedCategoryKey] = useState<ConditionChipKey>("all");
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState<QuickChipKey>("all");
   const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
   const [bookingVehicle, setBookingVehicle] = useState<Vehicle | null>(null);
   const [rentalVehicle, setRentalVehicle] = useState<Vehicle | null>(null);
@@ -296,13 +302,11 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
     const matchesSearch = searchableText.includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
 
-    if (selectedCategoryKey !== "all") {
-      if (selectedCategoryKey === "new_series") {
-        if (!isNewSeriesPlate(v.plate_status)) return false;
-      } else if (!matchesConditionFilter(v.condition, selectedCategoryKey)) {
-        // Condition chips (with OR overlap for Slightly Used & Excellent Condition)
-        return false;
-      }
+    if (selectedCategoryKey === "gas") {
+      if (!isGasoline(v.fuel_type)) return false;
+    } else if (selectedCategoryKey !== "all") {
+      // Condition chips (Slightly Used chip also matches Excellent Condition)
+      if (!matchesConditionFilter(v.condition, selectedCategoryKey)) return false;
     }
 
     if (filters.minPrice !== "") {
@@ -354,17 +358,8 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
 
   // Short, single-language condition label for card badges (the full bilingual label is in the detail view).
   const getShortConditionLabel = (cond?: string) => {
-    const lower = (cond || "").toLowerCase();
-    const key: ConditionChipKey =
-      lower === "brand new"
-        ? "brand_new"
-        : lower === "slightly used"
-        ? "slightly_used"
-        : lower === "excellent condition"
-        ? "excellent_condition"
-        : "good_condition";
-    const chip = CONDITION_CHIPS.find((c) => c.key === key)!;
-    return lang === "am" ? chip.am : chip.en;
+    const badge = CONDITION_BADGE[(cond || "").toLowerCase().trim()] ?? CONDITION_BADGE["good condition"];
+    return lang === "am" ? badge.am : badge.en;
   };
 
   return (
@@ -562,32 +557,27 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
           </button>
         </div>
 
-        {/* Condition chips: one horizontally scrollable, snapping row */}
+        {/* Quick filter chips: one minimal, horizontally sliding, snapping row */}
         <div
           role="group"
-          aria-label={lang === "am" ? "ይዞታ" : "Condition"}
-          className="mt-3 -mx-4 px-4 flex gap-2 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible"
+          aria-label={lang === "am" ? "ፈጣን ማጣሪያ" : "Quick filters"}
+          className="mt-3 -mx-4 px-4 flex gap-2 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-4 overscroll-x-contain"
         >
-          {CONDITION_CHIPS.map((chip) => {
+          {QUICK_CHIPS.map((chip) => {
             const active = selectedCategoryKey === chip.key;
-            const primary = lang === "am" ? chip.am : chip.en;
-            const secondary = lang === "am" ? chip.en : chip.am;
             return (
               <button
                 key={chip.key}
                 type="button"
                 aria-pressed={active}
                 onClick={() => setSelectedCategoryKey(chip.key)}
-                className={`snap-start shrink-0 h-11 px-4 rounded-full flex flex-col items-center justify-center leading-none transition whitespace-nowrap ${
+                className={`snap-start shrink-0 h-11 px-4 rounded-full text-[13px] font-semibold whitespace-nowrap transition ${
                   active
-                    ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
+                    ? "bg-amber-500 text-black"
                     : "bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800"
                 }`}
               >
-                <span className="text-[13px] font-bold">{primary}</span>
-                <span className={`text-[9.5px] mt-1 font-medium ${active ? "text-black/70" : "text-zinc-500"}`}>
-                  {secondary}
-                </span>
+                {lang === "am" ? chip.am : chip.en}
               </button>
             );
           })}
