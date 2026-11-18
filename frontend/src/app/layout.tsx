@@ -6,6 +6,8 @@ import InstallAppBanner from "@/components/InstallAppBanner";
 
 export const viewport: Viewport = {
   themeColor: "#000000",
+  // Lets env(safe-area-inset-*) report real values on iPhones (notch / home indicator).
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {

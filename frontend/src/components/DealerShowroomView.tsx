@@ -355,28 +355,28 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
   return (
     <main className="min-h-screen bg-black text-white pb-32">
       {/* Dealership-Specific Mobile-First Header */}
-      <header className="sticky top-0 z-40 bg-black/85 backdrop-blur-md border-b border-zinc-800/80 px-4 py-3.5">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
+      <header className="sticky top-0 z-40 bg-black/70 backdrop-blur-xl border-b border-white/[0.06] pt-[env(safe-area-inset-top)]">
+        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center gap-2">
           <div
             onClick={handleSecretLogoTap}
-            className="flex items-center gap-2.5 cursor-pointer select-none active:scale-95 transition flex-shrink-0 min-w-0"
+            className="flex items-center gap-2 cursor-pointer select-none active:scale-95 transition min-w-0 flex-1"
             title="AC WALE MARKET (ኤሲ ዋለ የመኪና መሸጫ)"
           >
             <img
               src="/ac-wale-logo.png"
               alt="AC WALE"
-              className="h-10 w-10 rounded-lg object-contain flex-shrink-0 bg-black border border-zinc-800/80"
+              className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg object-contain shrink-0 bg-black border border-zinc-800/80"
             />
             <div className="flex flex-col justify-center min-w-0">
-              <h1 className="font-bold text-sm sm:text-base md:text-lg tracking-tight text-white leading-tight uppercase whitespace-nowrap truncate">
+              <h1 className="font-black text-sm sm:text-base md:text-lg tracking-tight text-white leading-tight uppercase whitespace-nowrap truncate">
                 AC WALE MARKET
               </h1>
-              <span className="text-xs text-amber-400 font-bold block leading-none mt-0.5 whitespace-nowrap">
+              <span className="hidden min-[400px]:block text-[11px] text-amber-400 font-semibold leading-tight truncate">
                 ኤሲ ዋለ የመኪና መሸጫ
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-0.5 sm:gap-2 shrink-0">
             {/* Desktop Navigation Links: About Us & Location */}
             <div className="hidden lg:flex items-center gap-1 bg-zinc-900 border border-zinc-800 p-1 rounded-full text-xs font-bold text-zinc-300">
               <button
@@ -412,54 +412,45 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                 if (el) el.scrollIntoView({ behavior: "smooth" });
                 else setAboutModalTab("location");
               }}
-              className="lg:hidden py-1 px-2 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] font-bold text-amber-400 flex items-center gap-1 active:scale-95 transition"
+              data-location-button
+              className="lg:hidden h-11 w-11 rounded-full text-amber-400 hover:bg-white/5 flex items-center justify-center active:scale-95 transition"
               title="Showroom Location & Trust / አድራሻ"
+              aria-label={lang === "am" ? "አድራሻ" : "Showroom location"}
             >
-              <MapPin size={12} />
-              <span>{lang === "am" ? "አድራሻ" : "Lot"}</span>
+              <MapPin size={19} />
             </button>
 
-            {/* Language Switcher Pill */}
+            {/* Language Switcher: shows the language you'll switch TO on phones, both on larger screens */}
             <button
               onClick={toggleLang}
-              className="px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-full bg-zinc-900 border border-zinc-700/80 hover:border-amber-500 text-xs font-bold text-zinc-200 hover:text-amber-400 transition flex items-center gap-1"
+              className="h-11 min-w-11 px-1.5 sm:px-3 rounded-full sm:bg-zinc-900 sm:border sm:border-zinc-700/80 hover:border-amber-500 text-xs font-bold text-zinc-200 hover:text-amber-400 transition flex items-center justify-center gap-1"
               title="Switch Language / ቋንቋ ቀይር"
+              aria-label={lang === "am" ? "Switch to English" : "ወደ አማርኛ ቀይር"}
             >
-              <span
-                className={
-                  lang === "en"
-                    ? "text-amber-400 font-black"
-                    : "text-zinc-500 font-normal"
-                }
-              >
+              <span className="sm:hidden text-[13px] font-black">{lang === "am" ? "EN" : "አማ"}</span>
+              <span className={`hidden sm:inline ${lang === "en" ? "text-amber-400 font-black" : "text-zinc-500 font-normal"}`}>
                 EN
               </span>
-              <span className="text-zinc-600">|</span>
-              <span
-                className={
-                  lang === "am"
-                    ? "text-amber-400 font-black"
-                    : "text-zinc-500 font-normal"
-                }
-              >
+              <span className="hidden sm:inline text-zinc-600">|</span>
+              <span className={`hidden sm:inline ${lang === "am" ? "text-amber-400 font-black" : "text-zinc-500 font-normal"}`}>
                 አማ
               </span>
             </button>
 
-            {/* Direct Contact CTAs */}
+            {/* Direct Contact CTA: prominent round button on phones, number on larger screens */}
             <a
               href="tel:+251911646628"
-              className="text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 px-2.5 sm:px-3 py-1.5 rounded-full transition flex items-center gap-1 shadow-sm shrink-0"
+              className="h-11 w-11 sm:w-auto sm:px-4 ml-0.5 sm:ml-0 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 rounded-full transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/25 shrink-0 active:scale-95"
               title="Call Sales Desk (+251 911 646 628)"
+              aria-label={lang === "am" ? "ደውል +251 911 646 628" : "Call +251 911 646 628"}
             >
-              <Phone size={12} />
+              <Phone size={18} className="sm:w-3.5 sm:h-3.5" />
               <span className="hidden sm:inline">+251 911 646 628</span>
-              <span className="sm:hidden font-black">{lang === "am" ? "ደውል" : "Call"}</span>
             </a>
 
             <a
               href="tel:+251900061300"
-              className="hidden md:flex text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-full hover:bg-amber-500/20 transition items-center gap-1.5 shadow-sm shrink-0"
+              className="hidden md:flex h-11 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-4 rounded-full hover:bg-amber-500/20 transition items-center gap-1.5 shadow-sm shrink-0"
               title="Call Sales Desk (+251 900 061 300)"
             >
               <Phone size={12} className="text-amber-400" />
