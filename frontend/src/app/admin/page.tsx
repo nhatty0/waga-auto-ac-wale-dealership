@@ -52,6 +52,7 @@ import HandoverFormModal from "@/components/HandoverFormModal";
 import HandoverPrintModal from "@/components/HandoverPrintModal";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
+import { compressImage } from "@/lib/compressImage";
 import { getPlateLabel, getPlateBadgeClasses, getPlateType, extractPlateNumber } from "@/lib/plates";
 
 // Regex for strictly valid Ethiopian mobile formats (09..., 07..., 9..., 7..., 2519..., +2519..., etc.)
@@ -1231,10 +1232,10 @@ export default function AdminDashboard() {
     setSettingsStatus(null);
 
     const token = getAuthToken();
-    const data = new FormData();
-    data.append("file", file);
 
     try {
+      const data = new FormData();
+      data.append("file", await compressImage(file, 800));
       const baseApi = getApiBaseUrl();
       const res = await fetch(`${baseApi}/api/admin/dealership/logo`, {
         method: "POST",
@@ -1245,8 +1246,8 @@ export default function AdminDashboard() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to upload logo image");
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Failed to upload logo image (HTTP ${res.status})`);
       }
 
       const updated = await res.json();
@@ -1365,30 +1366,49 @@ export default function AdminDashboard() {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
+    const input = e.target;
+    const files = Array.from(input.files!);
     setUploading(true);
-    const files = Array.from(e.target.files);
-    const data = new FormData();
-    files.forEach((file) => data.append("files", file));
+
+    const baseApi = getApiBaseUrl();
+    const failed: string[] = [];
 
     try {
-      const baseApi = getApiBaseUrl();
-      const res = await fetch(`${baseApi}/api/admin/upload-images`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: data,
-      });
-      if (res.status === 401) {
-        handleUnauthorized();
-        return;
+      // One photo per request keeps each body small enough for shared hosting limits.
+      for (const original of files) {
+        try {
+          const file = await compressImage(original, 1600, 0.85);
+          const data = new FormData();
+          data.append("files", file);
+          const res = await fetch(`${baseApi}/api/admin/upload-images`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: data,
+          });
+          if (res.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+          if (!res.ok) {
+            failed.push(`${original.name} (HTTP ${res.status})`);
+            continue;
+          }
+          const urls: string[] = await res.json();
+          const normalizedUrls = urls.map((u) => resolveImageUrl(u));
+          setUploadedImages((prev) => [...prev, ...normalizedUrls]);
+        } catch {
+          failed.push(`${original.name} (network error)`);
+        }
       }
-      if (!res.ok) throw new Error("Upload failed");
-      const urls: string[] = await res.json();
-      const normalizedUrls = urls.map((u) => resolveImageUrl(u));
-      setUploadedImages((prev) => [...prev, ...normalizedUrls]);
-    } catch (err) {
-      alert("Failed to upload image(s).");
+
+      if (failed.length > 0) {
+        alert(
+          `${failed.length} of ${files.length} photo(s) failed to upload:\n` + failed.join("\n")
+        );
+      }
     } finally {
       setUploading(false);
+      input.value = "";
     }
   };
 
