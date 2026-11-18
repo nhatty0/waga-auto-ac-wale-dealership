@@ -218,6 +218,14 @@ export default function AdminDashboard() {
     "inventory" | "appointments" | "rentals" | "lot_operations" | "drivers" | "settings"
   >("inventory");
 
+  // Phones: keep the selected tab fully visible in the horizontally scrolling tab row.
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>(`[data-admin-tab="${activeTab}"]`);
+    const row = el?.parentElement;
+    if (!el || !row || row.scrollWidth <= row.clientWidth) return;
+    row.scrollTo({ left: el.offsetLeft - (row.clientWidth - el.offsetWidth) / 2, behavior: "smooth" });
+  }, [activeTab]);
+
   // Lot Operations & Gate Pass States
   const [lotIntakes, setLotIntakes] = useState<LotIntake[]>([]);
   const [loadingLotIntakes, setLoadingLotIntakes] = useState(false);
@@ -1925,15 +1933,16 @@ export default function AdminDashboard() {
 
   // 2. Main Dashboard (unlocked)
   return (
-    <div className="min-h-screen bg-black text-white p-4 sm:p-6 pb-20 max-w-5xl mx-auto">
+    <div className="min-h-screen bg-black text-white px-4 sm:px-6 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-6 pb-20 max-w-5xl mx-auto">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-800 pb-4 mb-6">
-        <div className="flex items-center justify-between w-full sm:w-auto">
-          <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-800 pb-4 mb-4 sm:mb-6">
+        <div className="flex items-center justify-between w-full sm:w-auto min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
             <Link
-              href={dealership?.slug ? `/${dealership.slug}` : "/"}
-              className="p-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 text-zinc-300 shrink-0"
+              href="/"
+              className="h-11 w-11 flex items-center justify-center bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 text-zinc-300 shrink-0"
               title="Return to Showroom"
+              aria-label="Return to Showroom"
             >
               <ArrowLeft size={18} />
             </Link>
@@ -1942,7 +1951,7 @@ export default function AdminDashboard() {
               alt="AC WALE"
               className="h-10 w-10 rounded-lg object-contain bg-black border border-zinc-800 shrink-0"
             />
-            <div>
+            <div className="min-w-0">
               <h1 className="text-lg sm:text-xl font-bold truncate">
                 AC WALE MARKET
               </h1>
@@ -1953,7 +1962,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end overflow-x-auto pb-1 sm:pb-0">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           {currentUser && (
             <div className="hidden lg:flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl text-zinc-300 font-mono text-[11px] shrink-0">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -1968,7 +1977,7 @@ export default function AdminDashboard() {
           {currentUser?.role === "superadmin" && (
             <Link
               href="/superadmin"
-              className="px-2.5 sm:px-3.5 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:border-purple-400 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shrink-0"
+              className="h-11 px-2.5 sm:px-3.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:border-purple-400 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shrink-0"
               title="SuperAdmin Master Platform Control"
             >
               <ShieldCheck size={14} className="text-purple-400" />
@@ -1982,7 +1991,7 @@ export default function AdminDashboard() {
             href={showroomUrl}
             target="_blank"
             rel="noreferrer"
-            className="flex-1 sm:flex-initial px-3 sm:px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:border-amber-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm shrink-0"
+            className="flex-1 sm:flex-initial h-11 px-3 sm:px-3.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:border-amber-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm shrink-0"
             title="Preview Public Digital Showroom in a new tab"
           >
             <ExternalLink size={14} />
@@ -1994,15 +2003,16 @@ export default function AdminDashboard() {
               resetForm();
               setShowAddModal(true);
             }}
-            className="flex-1 sm:flex-initial bg-amber-500 hover:bg-amber-400 text-black px-3 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 shrink-0 whitespace-nowrap"
+            className="flex-1 sm:flex-initial h-11 bg-amber-500 hover:bg-amber-400 text-black px-3 sm:px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 shrink-0 whitespace-nowrap"
           >
             <Plus size={16} />
             <span>Add Vehicle</span>
           </button>
           <button
             onClick={handleLogout}
-            className="p-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-800 rounded-xl transition shrink-0"
+            className="h-11 w-11 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-800 rounded-xl transition shrink-0"
             title="Log out of Dealership"
+            aria-label="Log out of Dealership"
           >
             <LogOut size={16} />
           </button>
@@ -2010,8 +2020,8 @@ export default function AdminDashboard() {
       </div>
 
       {/* DEALER SHARE CENTER / "SHARE MY SHOWROOM" ACTION BAR */}
-      <div className="mb-6 w-full max-w-full overflow-hidden bg-gradient-to-r from-zinc-900/95 via-zinc-900 to-zinc-950 border border-amber-500/30 rounded-2xl p-3.5 sm:p-5 shadow-xl shadow-black/40">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 w-full max-w-full">
+      <div className="mb-4 sm:mb-6 w-full max-w-full overflow-hidden bg-gradient-to-r from-zinc-900/95 via-zinc-900 to-zinc-950 border border-amber-500/30 rounded-2xl p-3 sm:p-5 shadow-xl shadow-black/40">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 w-full max-w-full">
           {/* Left: Branding & Vanity URL Display */}
           <div className="space-y-1.5 flex-1 min-w-0 w-full max-w-full overflow-hidden">
             <div className="flex items-center gap-2">
@@ -2024,15 +2034,16 @@ export default function AdminDashboard() {
               </span>
             </div>
 
-            <div className="flex items-center gap-2 bg-black/60 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 w-full max-w-full overflow-hidden">
+            <div className="flex items-center gap-2 bg-black/60 border border-zinc-800 rounded-xl pl-3 text-xs font-mono text-zinc-300 w-full max-w-full overflow-hidden">
               <Globe size={14} className="text-amber-400 shrink-0" />
               <span className="truncate select-all text-amber-200/90 font-semibold flex-1 min-w-0">{showroomUrl}</span>
               <a
                 href={showroomUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="ml-auto text-zinc-400 hover:text-white transition p-1 shrink-0"
+                className="ml-auto h-11 w-11 flex items-center justify-center text-zinc-400 hover:text-white transition shrink-0"
                 title="Open showroom in new tab"
+                aria-label="Open showroom in new tab"
               >
                 <ExternalLink size={13} />
               </a>
@@ -2040,26 +2051,30 @@ export default function AdminDashboard() {
           </div>
 
           {/* Right: 3 Action Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto shrink-0">
+          {/* 3 action buttons: one compact row on phones (short labels), full labels from sm up */}
+          <div className="grid grid-cols-3 gap-2 w-full lg:w-auto shrink-0">
             {/* Button 1: Copy Link */}
             <button
               type="button"
               onClick={handleCopyShowroomLink}
-              className={`w-full justify-center px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 border ${
+              className={`w-full min-w-0 h-11 justify-center px-2 sm:px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2 border ${
                 copiedShowroomLink
                   ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
                   : "bg-zinc-800/80 hover:bg-zinc-800 text-zinc-200 border-zinc-700 hover:border-zinc-500"
               }`}
+              title="ሊንክ ኮፒ አድርግ (Copy Link)"
             >
               {copiedShowroomLink ? (
                 <>
-                  <Check size={14} className="text-emerald-400" />
-                  <span>ተቀድቷል! (Copied)</span>
+                  <Check size={14} className="text-emerald-400 shrink-0" />
+                  <span className="truncate sm:hidden">Copied</span>
+                  <span className="hidden sm:inline">ተቀድቷል! (Copied)</span>
                 </>
               ) : (
                 <>
-                  <Copy size={14} />
-                  <span>ሊንክ ኮፒ አድርግ (Copy Link)</span>
+                  <Copy size={14} className="shrink-0" />
+                  <span className="truncate sm:hidden">ኮፒ (Copy)</span>
+                  <span className="hidden sm:inline">ሊንክ ኮፒ አድርግ (Copy Link)</span>
                 </>
               )}
             </button>
@@ -2069,30 +2084,37 @@ export default function AdminDashboard() {
               href={telegramShareUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full justify-center px-3.5 py-2.5 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-[#229ED9] border border-[#229ED9]/40 hover:border-[#229ED9] rounded-xl text-xs font-bold transition flex items-center gap-2"
+              className="w-full min-w-0 h-11 justify-center px-2 sm:px-3.5 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-[#229ED9] border border-[#229ED9]/40 hover:border-[#229ED9] rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2"
+              title="በቴሌግራም አጋራ (Telegram)"
             >
-              <Send size={14} />
-              <span>በቴሌግራም አጋራ (Telegram)</span>
+              <Send size={14} className="shrink-0" />
+              <span className="truncate sm:hidden">Telegram</span>
+              <span className="hidden sm:inline">በቴሌግራም አጋራ (Telegram)</span>
             </a>
 
             {/* Button 3: Showroom QR Code */}
             <button
               type="button"
               onClick={() => setShowQrModal(true)}
-              className="w-full justify-center px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs transition flex items-center gap-2 shadow-sm shadow-amber-500/20"
+              className="w-full min-w-0 h-11 justify-center px-2 sm:px-3.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs transition flex items-center gap-1.5 sm:gap-2 shadow-sm shadow-amber-500/20"
+              title="የሾውሩም QR ኮድ (QR)"
             >
-              <QrCode size={14} />
-              <span>የሾውሩም QR ኮድ (QR)</span>
+              <QrCode size={14} className="shrink-0" />
+              <span className="truncate sm:hidden">QR ኮድ</span>
+              <span className="hidden sm:inline">የሾውሩም QR ኮድ (QR)</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full mb-6">
+      <div role="tablist" aria-label="Dashboard sections" className="sticky top-0 z-30 -mx-4 px-4 py-2 mb-4 bg-black/85 backdrop-blur-md flex gap-2 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-4 sm:static sm:mx-0 sm:px-0 sm:py-0 sm:mb-6 sm:bg-transparent sm:backdrop-blur-none sm:grid sm:grid-cols-3 lg:grid-cols-6 sm:overflow-visible">
         <button
           onClick={() => setActiveTab("inventory")}
-          className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl text-[11px] sm:text-xs font-semibold border transition text-center ${
+          role="tab"
+          aria-selected={activeTab === "inventory"}
+          data-admin-tab="inventory"
+          className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
             activeTab === "inventory"
               ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
               : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
@@ -2103,7 +2125,10 @@ export default function AdminDashboard() {
         </button>
         <button
           onClick={() => setActiveTab("appointments")}
-          className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl text-[11px] sm:text-xs font-semibold border transition text-center ${
+          role="tab"
+          aria-selected={activeTab === "appointments"}
+          data-admin-tab="appointments"
+          className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
             activeTab === "appointments"
               ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
               : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
@@ -2114,7 +2139,10 @@ export default function AdminDashboard() {
         </button>
         <button
           onClick={() => setActiveTab("rentals")}
-          className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl text-[11px] sm:text-xs font-semibold border transition text-center ${
+          role="tab"
+          aria-selected={activeTab === "rentals"}
+          data-admin-tab="rentals"
+          className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
             activeTab === "rentals"
               ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
               : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
@@ -2125,7 +2153,10 @@ export default function AdminDashboard() {
         </button>
         <button
           onClick={() => setActiveTab("lot_operations")}
-          className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2.5 rounded-xl text-[11px] sm:text-xs font-semibold border transition text-center ${
+          role="tab"
+          aria-selected={activeTab === "lot_operations"}
+          data-admin-tab="lot_operations"
+          className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
             activeTab === "lot_operations"
               ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
               : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
@@ -2136,7 +2167,10 @@ export default function AdminDashboard() {
         </button>
         <button
           onClick={() => setActiveTab("drivers")}
-          className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl text-[11px] sm:text-xs font-semibold border transition text-center ${
+          role="tab"
+          aria-selected={activeTab === "drivers"}
+          data-admin-tab="drivers"
+          className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
             activeTab === "drivers"
               ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
               : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
@@ -2147,7 +2181,10 @@ export default function AdminDashboard() {
         </button>
         <button
           onClick={() => setActiveTab("settings")}
-          className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl text-[11px] sm:text-xs font-semibold border transition text-center ${
+          role="tab"
+          aria-selected={activeTab === "settings"}
+          data-admin-tab="settings"
+          className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
             activeTab === "settings"
               ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
               : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
@@ -2505,18 +2542,20 @@ export default function AdminDashboard() {
       {activeTab === "lot_operations" && (
         <div className="space-y-4">
           {/* Sub-Navigation Toggle between Daily Intake & Gate Pass and One-Time Handover Contracts */}
-          <div className="flex flex-wrap items-center gap-2 bg-zinc-900 border border-zinc-800 p-1.5 rounded-2xl w-fit">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center gap-1.5 sm:gap-2 bg-zinc-900 border border-zinc-800 p-1.5 rounded-2xl w-full sm:w-fit">
             <button
               type="button"
               onClick={() => setActiveLotDeskTab("daily_intake")}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition ${
+              data-lot-desk-tab="daily_intake"
+              className={`min-h-11 flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition ${
                 activeLotDeskTab === "daily_intake"
                   ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
                   : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
               }`}
             >
               <ClipboardList size={15} />
-              <span>📅 የዕለት ርክክብ እና መውጫ (Daily Intake & Gate Pass)</span>
+              <span className="sm:hidden text-left leading-tight">📅 ርክክብ እና መውጫ</span>
+              <span className="hidden sm:inline">📅 የዕለት ርክክብ እና መውጫ (Daily Intake & Gate Pass)</span>
               <span
                 className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
                   activeLotDeskTab === "daily_intake" ? "bg-black/20 text-black" : "bg-zinc-800 text-zinc-300"
@@ -2532,14 +2571,16 @@ export default function AdminDashboard() {
                 setActiveLotDeskTab("handover_contracts");
                 fetchHandovers();
               }}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition ${
+              data-lot-desk-tab="handover_contracts"
+              className={`min-h-11 flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition ${
                 activeLotDeskTab === "handover_contracts"
                   ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
                   : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
               }`}
             >
               <FileText size={15} />
-              <span>📄 የመኪና መረከቢያ ፎርም (One-Time Vehicle Handover Contracts)</span>
+              <span className="sm:hidden text-left leading-tight">📄 መረከቢያ ውሎች</span>
+              <span className="hidden sm:inline">📄 የመኪና መረከቢያ ፎርም (One-Time Vehicle Handover Contracts)</span>
               <span
                 className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
                   activeLotDeskTab === "handover_contracts" ? "bg-black/20 text-black" : "bg-zinc-800 text-zinc-300"
