@@ -32,6 +32,21 @@ body {
   overflow-x: clip;
 }
 
+/* Phones: form controls at 16px so iOS Safari doesn't zoom on focus, and at least 44px tall.
+   Unlayered, so it wins over Tailwind's layered text-xs / h-8 utilities on small screens only.
+   (No form controls are part of any printed sheet.) */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]),
+  select {
+    min-height: 44px;
+  }
+}
+
 /* Horizontal chip rows: scrollable, but without a visible scrollbar */
 @utility no-scrollbar {
   scrollbar-width: none;

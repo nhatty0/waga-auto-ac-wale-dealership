@@ -3900,22 +3900,25 @@ export default function AdminDashboard() {
 
       {/* ADD / EDIT VEHICLE MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4 border-b border-zinc-800 pb-3">
-              <h2 className="text-base font-bold text-white">
+        <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/85 backdrop-blur-sm sm:p-4 animate-in fade-in">
+          {/* Phones: full-screen sheet with sticky header and sticky Save bar */}
+          <div className="bg-zinc-900 sm:border border-zinc-800 sm:rounded-2xl max-w-lg w-full h-[100dvh] sm:h-auto sm:max-h-[90vh] overflow-y-auto overscroll-contain">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 bg-zinc-900/95 backdrop-blur border-b border-zinc-800 px-4 sm:px-5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
+              <h2 className="text-base font-bold text-white truncate">
                 {editingVehicleId
                   ? "Edit Vehicle Listing"
                   : "Add New Vehicle to Inventory"}
               </h2>
               <button
+                type="button"
                 onClick={() => {
                   setShowAddModal(false);
                   resetForm();
                 }}
-                className="p-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-800"
+                aria-label="Close"
+                className="h-11 w-11 shrink-0 flex items-center justify-center text-zinc-400 hover:text-white rounded-xl bg-zinc-800"
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
@@ -3929,9 +3932,9 @@ export default function AdminDashboard() {
                   e.preventDefault();
                 }
               }}
-              className="space-y-4 text-xs"
+              className="space-y-4 text-xs px-4 sm:px-5 pt-4"
             >
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-zinc-400 block mb-1">Make *</label>
                   <input
@@ -3958,7 +3961,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-zinc-400 block mb-1">Year *</label>
                   <input
@@ -4155,7 +4158,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Body Type Selection with Custom Input */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-zinc-400 block mb-1">Body Type</label>
                   <select
@@ -4209,7 +4212,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-zinc-400 block mb-1">Condition</label>
                   <select
@@ -4353,11 +4356,11 @@ export default function AdminDashboard() {
                 </label>
 
                 {uploadedImages.length > 0 && (
-                  <div className="grid grid-cols-4 gap-2 pt-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-2">
                     {uploadedImages.map((url, idx) => (
                       <div
                         key={idx}
-                        className="relative group h-14 rounded-lg overflow-hidden border border-zinc-800"
+                        className="relative group aspect-[4/3] rounded-lg overflow-hidden border border-zinc-800"
                       >
                         <img
                           src={resolveImageUrl(url)}
@@ -4367,9 +4370,13 @@ export default function AdminDashboard() {
                         <button
                           type="button"
                           onClick={() => removeUploadedImage(idx)}
-                          className="absolute top-1 right-1 bg-red-600/90 text-white rounded-full p-0.5 opacity-90 hover:opacity-100"
+                          aria-label={`Remove photo ${idx + 1}`}
+                          title="Remove photo"
+                          className="absolute top-0 right-0 h-11 w-11 flex items-start justify-end p-1.5"
                         >
-                          <X size={12} />
+                          <span className="h-7 w-7 flex items-center justify-center bg-red-600/90 hover:bg-red-600 text-white rounded-full shadow-md ring-2 ring-black/40">
+                            <X size={15} />
+                          </span>
                         </button>
                       </div>
                     ))}
@@ -4377,13 +4384,15 @@ export default function AdminDashboard() {
                 )}
               </div>
 
-              <button
-                type="submit"
-                disabled={uploadedImages.length === 0 || uploading}
-                className="w-full py-3 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold rounded-xl text-xs transition shadow-lg shadow-amber-500/20"
-              >
-                {editingVehicleId ? "Update Vehicle" : "Create Listing"}
-              </button>
+              <div className="sticky bottom-0 -mx-4 sm:-mx-5 px-4 sm:px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-zinc-900/95 backdrop-blur border-t border-zinc-800">
+                <button
+                  type="submit"
+                  disabled={uploadedImages.length === 0 || uploading}
+                  className="w-full h-12 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold rounded-xl text-sm transition shadow-lg shadow-amber-500/20"
+                >
+                  {editingVehicleId ? "Update Vehicle" : "Create Listing"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -4409,8 +4418,8 @@ export default function AdminDashboard() {
 
       {/* ASSIGN DRIVER MODAL */}
       {assigningBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] max-w-md w-full max-h-[92dvh] overflow-y-auto shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
               <h3 className="font-bold text-base text-white flex items-center gap-2">
                 <Truck size={18} className="text-amber-400" />
@@ -4418,7 +4427,8 @@ export default function AdminDashboard() {
               </h3>
               <button
                 onClick={() => setAssigningBooking(null)}
-                className="text-zinc-500 hover:text-white"
+                aria-label="Close"
+                className="h-11 w-11 -mr-2 shrink-0 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-zinc-800"
               >
                 <X size={18} />
               </button>
@@ -4460,7 +4470,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setAssigningBooking(null)}
-                className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                className="flex-1 h-12 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
               >
                 ይቅር (Cancel)
               </button>
@@ -4472,7 +4482,7 @@ export default function AdminDashboard() {
                     handleAssignDriver(assigningBooking.id, Number(selectedDriverId));
                   }
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black text-xs shadow-md shadow-amber-500/20"
+                className="flex-1 h-12 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black text-xs shadow-md shadow-amber-500/20"
               >
                 {assigningLoading ? "ስምሪት እየተከናወነ ነው..." : "ስምሪት አረጋግጥ (Dispatch)"}
               </button>
@@ -4483,8 +4493,8 @@ export default function AdminDashboard() {
 
       {/* ADD DRIVER MODAL */}
       {showDriverModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] max-w-md w-full max-h-[92dvh] overflow-y-auto shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
               <h3 className="font-bold text-base text-white flex items-center gap-2">
                 <UserCheck size={18} className="text-amber-400" />
@@ -4492,7 +4502,8 @@ export default function AdminDashboard() {
               </h3>
               <button
                 onClick={() => setShowDriverModal(false)}
-                className="text-zinc-500 hover:text-white"
+                aria-label="Close"
+                className="h-11 w-11 -mr-2 shrink-0 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-zinc-800"
               >
                 <X size={18} />
               </button>
@@ -4557,10 +4568,10 @@ export default function AdminDashboard() {
 
       {/* NEW VEHICLE INTAKE MODAL (FORM 1) */}
       {showIntakeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center sm:p-4 bg-black/85 backdrop-blur-md">
+          <div className="bg-zinc-950 sm:border border-zinc-800 sm:rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col h-[100dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
+            <div className="shrink-0 px-4 sm:px-5 pb-3 sm:pb-5 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-5 border-b border-zinc-800 flex items-center justify-between gap-3 bg-zinc-900/60">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-500 flex items-center justify-center font-bold">
                   📋
@@ -4577,14 +4588,15 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setShowIntakeModal(false)}
-                className="p-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-800 hover:bg-zinc-700"
+                aria-label="Close"
+                className="h-11 w-11 shrink-0 flex items-center justify-center text-zinc-400 hover:text-white rounded-xl bg-zinc-800 hover:bg-zinc-700"
               >
                 <X size={18} />
               </button>
             </div>
 
             {/* Modal Form Body */}
-            <form onSubmit={handleCreateIntake} className="p-4 sm:p-6 overflow-y-auto space-y-4">
+            <form onSubmit={handleCreateIntake} className="flex-1 min-h-0 px-4 sm:px-6 pt-4 sm:pt-6 overflow-y-auto overscroll-contain space-y-4">
               {intakeError && (
                 <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
                   <AlertCircle size={15} className="shrink-0 text-rose-400" />
@@ -4655,7 +4667,7 @@ export default function AdminDashboard() {
                 <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2.5">
                   2. የዋጋ መረጃ (Primary & Final Pricing in ETB)
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 min-[400px]:grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs font-medium text-zinc-300 block mb-1">
                       መነሻ በእጅ (Primary Cash)
@@ -4825,19 +4837,19 @@ export default function AdminDashboard() {
                 </label>
               </div>
 
-              {/* Modal Actions */}
-              <div className="flex gap-2 pt-3 border-t border-zinc-800">
+              {/* Modal Actions (sticky Submit bar) */}
+              <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-zinc-950/95 backdrop-blur flex gap-2 border-t border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setShowIntakeModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition"
+                  className="flex-1 h-12 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition"
                 >
                   ይቅር (Cancel)
                 </button>
                 <button
                   type="submit"
                   disabled={intakeSubmitting}
-                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-extrabold text-xs shadow-lg shadow-amber-500/20 active:scale-95 transition flex items-center justify-center gap-2"
+                  className="flex-1 h-12 px-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-extrabold text-xs shadow-lg shadow-amber-500/20 active:scale-95 transition flex items-center justify-center gap-2"
                 >
                   {intakeSubmitting ? (
                     <>
@@ -4859,10 +4871,10 @@ export default function AdminDashboard() {
 
       {/* GATE PASS RELEASE MODAL (FORM 2) */}
       {showReleaseModal && releasingIntake && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-lg w-full shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center sm:p-4 bg-black/85 backdrop-blur-md">
+          <div className="bg-zinc-950 sm:border border-zinc-800 sm:rounded-2xl max-w-lg w-full shadow-2xl flex flex-col h-[100dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
+            <div className="shrink-0 px-4 sm:px-5 pb-3 sm:pb-5 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-5 border-b border-zinc-800 flex items-center justify-between gap-3 bg-zinc-900/60">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-orange-600/20 text-orange-400 flex items-center justify-center font-bold">
                   🚪
@@ -4879,14 +4891,15 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setShowReleaseModal(false)}
-                className="p-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-800 hover:bg-zinc-700"
+                aria-label="Close"
+                className="h-11 w-11 shrink-0 flex items-center justify-center text-zinc-400 hover:text-white rounded-xl bg-zinc-800 hover:bg-zinc-700"
               >
                 <X size={18} />
               </button>
             </div>
 
             {/* Form Body */}
-            <form onSubmit={handleGenerateGatePass} className="p-4 sm:p-6 overflow-y-auto space-y-4">
+            <form onSubmit={handleGenerateGatePass} className="flex-1 min-h-0 px-4 sm:px-6 pt-4 sm:pt-6 overflow-y-auto overscroll-contain space-y-4">
               {releaseError && (
                 <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
                   <AlertCircle size={15} className="shrink-0 text-rose-400" />
@@ -4988,7 +5001,7 @@ export default function AdminDashboard() {
                       onClick={() =>
                         setReleaseFormData({ ...releaseFormData, release_reason: preset })
                       }
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                      className={`min-h-11 px-3 py-2 rounded-lg text-xs font-medium transition ${
                         releaseFormData.release_reason === preset
                           ? "bg-amber-500 text-black font-bold shadow-sm"
                           : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white"
@@ -5027,19 +5040,19 @@ export default function AdminDashboard() {
                 />
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-2 pt-3 border-t border-zinc-800">
+              {/* Actions (sticky Submit bar) */}
+              <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-zinc-950/95 backdrop-blur flex gap-2 border-t border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setShowReleaseModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition"
+                  className="flex-1 h-12 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition"
                 >
                   ይቅር (Cancel)
                 </button>
                 <button
                   type="submit"
                   disabled={releaseSubmitting}
-                  className="flex-1 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-extrabold text-xs shadow-lg shadow-orange-600/25 active:scale-95 transition flex items-center justify-center gap-2"
+                  className="flex-1 h-12 px-2 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-extrabold text-xs shadow-lg shadow-orange-600/25 active:scale-95 transition flex items-center justify-center gap-2"
                 >
                   {releaseSubmitting ? (
                     <>

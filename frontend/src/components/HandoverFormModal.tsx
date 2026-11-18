@@ -203,19 +203,20 @@ export default function HandoverFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      <div className="relative w-full max-w-4xl bg-zinc-950 border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-white my-auto max-h-[95vh]">
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center sm:p-5 bg-black/85 backdrop-blur-md animate-in fade-in">
+      <div className="relative w-full max-w-4xl bg-zinc-950 sm:border border-zinc-800 sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden text-white h-[100dvh] sm:h-auto sm:max-h-[95vh]">
         {/* Top Header */}
-        <div className="p-4 sm:p-5 border-b border-zinc-800 bg-zinc-900/90 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2.5">
-            <span className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold">
+        <div className="px-4 sm:px-5 pb-3 sm:pb-5 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-5 border-b border-zinc-800 bg-zinc-900/90 flex items-center justify-between gap-3 flex-shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="hidden min-[400px]:flex shrink-0 w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold">
               <FileText size={20} />
             </span>
-            <div>
-              <h3 className="font-black text-sm sm:text-base text-white tracking-tight">
-                አዲስ የመኪና መረከቢያ ፎርም (New Vehicle Handover Contract)
+            <div className="min-w-0">
+              <h3 className="font-black text-sm sm:text-base text-white tracking-tight truncate">
+                <span className="sm:hidden">አዲስ የመኪና መረከቢያ ፎርም</span>
+                <span className="hidden sm:inline">አዲስ የመኪና መረከቢያ ፎርም (New Vehicle Handover Contract)</span>
               </h3>
-              <p className="text-[11px] text-amber-400 font-semibold mt-0.5">
+              <p className="hidden min-[480px]:block truncate text-[11px] text-amber-400 font-semibold mt-0.5">
                 የተሽከርካሪ እና ንብረቶች መረከቢያ ህጋዊ ሰነድ (AC WALE MARKET)
               </p>
             </div>
@@ -223,7 +224,8 @@ export default function HandoverFormModal({
 
           <button
             onClick={onClose}
-            className="p-2 text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-xl transition"
+            aria-label="Close"
+            className="h-11 w-11 shrink-0 flex items-center justify-center text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-xl transition"
             title="Close modal"
           >
             <X size={18} />
@@ -231,7 +233,7 @@ export default function HandoverFormModal({
         </div>
 
         {/* Modal Scrollable Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-4 sm:pt-6 space-y-6">
           {errorMessage && (
             <div className="p-3 bg-red-500/15 border border-red-500/40 text-red-300 rounded-xl text-xs font-semibold">
               ⚠️ {errorMessage}
@@ -245,11 +247,11 @@ export default function HandoverFormModal({
                 <Sparkles size={14} className="text-amber-400 shrink-0" />
                 <span className="font-semibold text-zinc-300">ፈጣን መሙያ (Auto-Fill from Records):</span>
               </div>
-              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 w-full sm:w-auto min-w-0">
                 {existingIntakes.length > 0 && (
                   <select
                     onChange={(e) => handlePrefillFromIntake(e.target.value)}
-                    className="bg-zinc-950 border border-zinc-700 rounded-xl px-2.5 py-1.5 text-xs text-white"
+                    className="w-full sm:w-auto min-w-0 max-w-full sm:max-w-[16rem] bg-zinc-950 border border-zinc-700 rounded-xl px-2.5 py-1.5 text-xs text-white"
                     defaultValue=""
                   >
                     <option value="" disabled>
@@ -265,7 +267,7 @@ export default function HandoverFormModal({
                 {existingVehicles.length > 0 && (
                   <select
                     onChange={(e) => handlePrefillFromVehicle(e.target.value)}
-                    className="bg-zinc-950 border border-zinc-700 rounded-xl px-2.5 py-1.5 text-xs text-white"
+                    className="w-full sm:w-auto min-w-0 max-w-full sm:max-w-[16rem] bg-zinc-950 border border-zinc-700 rounded-xl px-2.5 py-1.5 text-xs text-white"
                     defaultValue=""
                   >
                     <option value="" disabled>
@@ -318,7 +320,7 @@ export default function HandoverFormModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 min-[400px]:grid-cols-3 gap-3">
               <div>
                 <label className="text-[11px] font-bold text-zinc-400 block mb-1">ክ/ከተማ</label>
                 <input
@@ -389,7 +391,7 @@ export default function HandoverFormModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 min-[400px]:grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <label className="text-[11px] font-bold text-zinc-300 block mb-1">
                   ሰሌዳ ቁጥር (Plate No) <span className="text-red-400">*</span>
@@ -477,7 +479,7 @@ export default function HandoverFormModal({
               <button
                 type="button"
                 onClick={handleAddBelongingRow}
-                className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                className="min-h-11 shrink-0 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-bold transition flex items-center gap-1"
               >
                 <Plus size={13} />
                 <span>+ ንብረት ጨምር (Add Row)</span>
@@ -493,7 +495,7 @@ export default function HandoverFormModal({
                     key={idx}
                     type="button"
                     onClick={() => handleChipClick(chip)}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-amber-500/60 text-zinc-300 hover:text-white text-[11px] font-semibold transition active:scale-95 flex items-center gap-1"
+                    className="min-h-10 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-amber-500/60 text-zinc-300 hover:text-white text-[11px] font-semibold transition active:scale-95 flex items-center gap-1"
                   >
                     <span>+</span>
                     <span>{chip.name}</span>
@@ -509,7 +511,7 @@ export default function HandoverFormModal({
                   key={idx}
                   className="flex items-center gap-2 bg-zinc-900/60 border border-zinc-800/80 p-2 rounded-xl"
                 >
-                  <span className="text-xs font-mono font-bold text-zinc-500 w-6 text-center">
+                  <span className="text-xs font-mono font-bold text-zinc-500 w-5 shrink-0 text-center">
                     {idx + 1}.
                   </span>
                   <input
@@ -517,19 +519,20 @@ export default function HandoverFormModal({
                     value={b.item_name}
                     onChange={(e) => handleUpdateBelonging(idx, "item_name", e.target.value)}
                     placeholder="የንብረቱ ስም (e.g. EV Charger, Jack, Libre Copy)"
-                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-amber-500 focus:outline-none"
+                    className="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-amber-500 focus:outline-none"
                   />
                   <input
                     type="text"
                     value={b.quantity}
                     onChange={(e) => handleUpdateBelonging(idx, "quantity", e.target.value)}
                     placeholder="ብዛት (1)"
-                    className="w-20 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-center font-bold text-white focus:border-amber-500 focus:outline-none font-mono"
+                    className="w-16 sm:w-20 shrink-0 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-center font-bold text-white focus:border-amber-500 focus:outline-none font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => handleRemoveBelongingRow(idx)}
-                    className="p-1.5 text-zinc-500 hover:text-red-400 transition"
+                    aria-label="Remove item"
+                    className="h-11 w-11 shrink-0 flex items-center justify-center text-zinc-500 hover:text-red-400 transition"
                     title="Remove item"
                   >
                     <Trash2 size={15} />
@@ -599,19 +602,19 @@ export default function HandoverFormModal({
             </div>
           </div>
 
-          {/* Footer Actions */}
-          <div className="pt-4 border-t border-zinc-800 flex items-center justify-end gap-3">
+          {/* Footer Actions (sticky Save bar) */}
+          <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-zinc-950/95 backdrop-blur border-t border-zinc-800 flex items-center justify-end gap-2 sm:gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-xs font-bold text-zinc-400 hover:text-white rounded-xl bg-zinc-900 border border-zinc-800 transition"
+              className="h-12 shrink-0 px-4 text-xs font-bold text-zinc-400 hover:text-white rounded-xl bg-zinc-900 border border-zinc-800 transition"
             >
               ተመለስ (Cancel)
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold rounded-xl text-xs sm:text-sm transition flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 disabled:opacity-50"
+              className="h-12 flex-1 sm:flex-none min-w-0 justify-center px-4 sm:px-5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold rounded-xl text-xs sm:text-sm transition flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
