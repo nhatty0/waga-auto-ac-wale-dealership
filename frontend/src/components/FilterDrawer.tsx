@@ -11,6 +11,10 @@ export interface FilterState {
   bankLoanOnly: boolean;
   fuelType: "All" | "Gasoline" | "Electric" | "Hybrid" | "Diesel";
   condition: "All" | "Brand New" | "Slightly Used" | "Excellent Condition" | "Good Condition";
+  /** "All" or a make name (case-insensitive match) */
+  brand: string;
+  /** Include vehicles marked Sold */
+  showSold: boolean;
 }
 
 interface FilterDrawerProps {
@@ -20,7 +24,16 @@ interface FilterDrawerProps {
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   onReset: () => void;
   resultCount: number;
+  /** Makes offered in the Brand section */
+  brandOptions?: string[];
 }
+
+const chipClass = (active: boolean) =>
+  `min-h-11 py-2 px-3.5 rounded-xl text-xs font-bold border transition ${
+    active
+      ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+      : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white"
+  }`;
 
 export default function FilterDrawer({
   isOpen,
@@ -29,8 +42,16 @@ export default function FilterDrawer({
   setFilters,
   onReset,
   resultCount,
+  brandOptions = [],
 }: FilterDrawerProps) {
   const { lang, t } = useLanguage();
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -111,15 +132,35 @@ export default function FilterDrawer({
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-zinc-400 hover:text-white rounded-xl bg-zinc-900 border border-zinc-800 transition"
+            aria-label={lang === "am" ? "ዝጋ" : "Close"}
+            className="h-11 w-11 flex items-center justify-center text-zinc-400 hover:text-white rounded-xl bg-zinc-900 border border-zinc-800 transition"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Scrollable Filter Form */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6">
-          
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-6">
+
+          {/* Brand (moved here from the showroom chip row) */}
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+              🚘 {lang === "am" ? "የመኪና ብራንድ" : "Brand"}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {["All", ...brandOptions].map((b) => (
+                <button
+                  key={b}
+                  type="button"
+                  onClick={() => setFilters((prev) => ({ ...prev, brand: b }))}
+                  className={chipClass(filters.brand.toLowerCase() === b.toLowerCase())}
+                >
+                  {b === "All" ? t.allOption : b === "Toyota" ? t.catToyota : b === "BYD" ? t.catByd : b}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Section 1: Price Range */}
           <div className="space-y-3">
             <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-200 uppercase tracking-wider">
@@ -136,7 +177,7 @@ export default function FilterDrawer({
                     key={preset.label}
                     type="button"
                     onClick={() => handlePresetClick(preset.min, preset.max)}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition text-center ${
+                    className={`min-h-11 py-2 px-3 rounded-xl text-xs font-bold border transition text-center ${
                       active
                         ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
                         : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white"
@@ -162,9 +203,9 @@ export default function FilterDrawer({
                     onChange={(e) =>
                       setFilters((prev) => ({ ...prev, minPrice: e.target.value }))
                     }
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 font-mono"
+                    className="w-full h-11 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-base sm:text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 font-mono"
                   />
-                  <span className="absolute right-2.5 top-2.5 text-[10px] text-zinc-500 font-bold">
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500 font-bold">
                     ETB
                   </span>
                 </div>
@@ -182,9 +223,9 @@ export default function FilterDrawer({
                     onChange={(e) =>
                       setFilters((prev) => ({ ...prev, maxPrice: e.target.value }))
                     }
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 font-mono"
+                    className="w-full h-11 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-base sm:text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 font-mono"
                   />
-                  <span className="absolute right-2.5 top-2.5 text-[10px] text-zinc-500 font-bold">
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500 font-bold">
                     ETB
                   </span>
                 </div>
@@ -243,11 +284,7 @@ export default function FilterDrawer({
                     onClick={() =>
                       setFilters((prev) => ({ ...prev, plateStatus: item.value }))
                     }
-                    className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition ${
-                      active
-                        ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
-                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white"
-                    }`}
+                    className={chipClass(active)}
                   >
                     {item.label}
                   </button>
@@ -271,11 +308,7 @@ export default function FilterDrawer({
                     onClick={() =>
                       setFilters((prev) => ({ ...prev, transmission: item.value }))
                     }
-                    className={`py-1.5 px-3.5 rounded-xl text-xs font-bold border transition ${
-                      active
-                        ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
-                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white"
-                    }`}
+                    className={chipClass(active)}
                   >
                     {item.label}
                   </button>
@@ -299,11 +332,7 @@ export default function FilterDrawer({
                     onClick={() =>
                       setFilters((prev) => ({ ...prev, fuelType: item.value }))
                     }
-                    className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition ${
-                      active
-                        ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
-                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white"
-                    }`}
+                    className={chipClass(active)}
                   >
                     {item.label}
                   </button>
@@ -327,11 +356,7 @@ export default function FilterDrawer({
                     onClick={() =>
                       setFilters((prev) => ({ ...prev, condition: item.value }))
                     }
-                    className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition ${
-                      active
-                        ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
-                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white"
-                    }`}
+                    className={chipClass(active)}
                   >
                     {item.label}
                   </button>
@@ -340,14 +365,35 @@ export default function FilterDrawer({
             </div>
           </div>
 
+          {/* Sold vehicles toggle (moved here from the showroom chip row) */}
+          <div className="pt-2 border-t border-zinc-800/80">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={filters.showSold}
+              onClick={() => setFilters((prev) => ({ ...prev, showSold: !prev.showSold }))}
+              className="w-full min-h-12 flex items-center justify-between gap-3 p-3.5 rounded-2xl border border-zinc-800 bg-zinc-900/60 hover:border-zinc-700 transition text-left"
+            >
+              <span className="min-w-0">
+                <span className="block text-xs font-bold text-white">{t.showSold}</span>
+                <span className="block text-[11px] text-zinc-400 mt-0.5">
+                  {lang === "am" ? "ተሽጠው ያለቁ መኪኖችንም ያካትቱ" : "Include vehicles that are already sold"}
+                </span>
+              </span>
+              <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${filters.showSold ? "bg-amber-500" : "bg-zinc-700"}`}>
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${filters.showSold ? "left-[22px]" : "left-0.5"}`} />
+              </span>
+            </button>
+          </div>
+
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-zinc-800/80 bg-zinc-950 flex items-center gap-3 flex-shrink-0">
+        <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-zinc-800/80 bg-zinc-950 flex items-center gap-3 flex-shrink-0">
           <button
             type="button"
             onClick={onReset}
-            className="py-3 px-4 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+            className="min-h-12 py-3 px-4 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
           >
             <RotateCcw size={14} />
             <span>{t.resetFilters}</span>

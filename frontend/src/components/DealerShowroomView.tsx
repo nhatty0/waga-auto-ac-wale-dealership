@@ -42,6 +42,24 @@ interface DealerShowroomViewProps {
   dealerSlug: string;
 }
 
+type ConditionChipKey =
+  | "all"
+  | "new_series"
+  | "brand_new"
+  | "slightly_used"
+  | "excellent_condition"
+  | "good_condition";
+
+// Bilingual labels for the condition chip row (primary line follows the language toggle).
+const CONDITION_CHIPS: { key: ConditionChipKey; am: string; en: string }[] = [
+  { key: "all", am: "ሁሉም", en: "All" },
+  { key: "new_series", am: "አዲስ ሰሌዳ", en: "New Series (AAA)" },
+  { key: "brand_new", am: "አዲስ / ዜሮ ኪ.ሜ", en: "Brand New" },
+  { key: "slightly_used", am: "በጥቂቱ ያገለገለ", en: "Slightly Used" },
+  { key: "excellent_condition", am: "በጣም ጥሩ ይዞታ", en: "Excellent" },
+  { key: "good_condition", am: "ጥሩ ይዞታ", en: "Good" },
+];
+
 export const matchesConditionFilter = (
   vehicleCondition: string | undefined | null,
   targetCondition: string
@@ -116,10 +134,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [hideSold, setHideSold] = useState(true);
-  const [selectedCategoryKey, setSelectedCategoryKey] = useState<
-    "all" | "toyota" | "byd" | "electric" | "brand_new" | "slightly_used" | "excellent_condition" | "good_condition" | "new_series"
-  >("all");
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState<ConditionChipKey>("all");
   const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
   const [bookingVehicle, setBookingVehicle] = useState<Vehicle | null>(null);
   const [rentalVehicle, setRentalVehicle] = useState<Vehicle | null>(null);
@@ -134,6 +149,8 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
     bankLoanOnly: false,
     fuelType: "All",
     condition: "All",
+    brand: "All",
+    showSold: false,
   };
 
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
@@ -177,8 +194,19 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
     if (filters.bankLoanOnly) count++;
     if (filters.fuelType !== "All") count++;
     if (filters.condition !== "All") count++;
+    if (filters.brand !== "All") count++;
+    if (filters.showSold) count++;
     return count;
   }, [filters]);
+
+  // Brands offered in the filter drawer: the original Toyota / BYD shortcuts plus every make in stock.
+  const brandOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const b of ["Toyota", "BYD", ...vehicles.map((v) => (v.make || "").trim())]) {
+      if (b && !seen.has(b.toLowerCase())) seen.set(b.toLowerCase(), b);
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  }, [vehicles]);
 
   const handleResetFilters = () => {
     setFilters(defaultFilters);
@@ -245,21 +273,6 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
     }, 1500);
   };
 
-  const categories: {
-    key: "all" | "toyota" | "byd" | "electric" | "brand_new" | "slightly_used" | "excellent_condition" | "good_condition" | "new_series";
-    label: string;
-  }[] = [
-    { key: "all", label: t.catAll },
-    { key: "new_series", label: lang === "am" ? "አዲስ ሰሌዳ (AAA)" : "New Series (AAA)" },
-    { key: "brand_new", label: t.conditionBrandNew },
-    { key: "slightly_used", label: t.conditionSlightlyUsed },
-    { key: "excellent_condition", label: t.conditionExcellent },
-    { key: "good_condition", label: t.conditionGood },
-    { key: "toyota", label: t.catToyota },
-    { key: "byd", label: t.catByd },
-    { key: "electric", label: t.catElectric },
-  ];
-
   const filteredVehicles = vehicles.filter((v) => {
     // Catalog mode filter (Buy vs Rent)
     if (catalogMode === "rent") {
@@ -270,7 +283,11 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
       if (v.listing_type === "rent") return false;
     }
 
-    if (hideSold && v.status === "Sold") return false;
+    if (!filters.showSold && v.status === "Sold") return false;
+
+    if (filters.brand !== "All" && !(v.make || "").toLowerCase().includes(filters.brand.toLowerCase())) {
+      return false;
+    }
 
     const searchableText =
       `${v.make || ""} ${v.model || ""} ${v.year || ""} ${v.body_type || ""}`.toLowerCase();
@@ -278,22 +295,11 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
     if (!matchesSearch) return false;
 
     if (selectedCategoryKey !== "all") {
-      const make = (v.make || "").toLowerCase();
-      const fuel = (v.fuel_type || "").toLowerCase();
-
-      if (selectedCategoryKey === "new_series" && !isNewSeriesPlate(v.plate_status)) return false;
-      if (selectedCategoryKey === "toyota" && !make.includes("toyota")) return false;
-      if (selectedCategoryKey === "byd" && !make.includes("byd")) return false;
-      if (selectedCategoryKey === "electric" && fuel !== "electric") return false;
-
-      // Condition filters in category pills (with OR overlap for Slightly Used & Excellent Condition)
-      if (
-        selectedCategoryKey === "brand_new" ||
-        selectedCategoryKey === "slightly_used" ||
-        selectedCategoryKey === "excellent_condition" ||
-        selectedCategoryKey === "good_condition"
-      ) {
-        if (!matchesConditionFilter(v.condition, selectedCategoryKey)) return false;
+      if (selectedCategoryKey === "new_series") {
+        if (!isNewSeriesPlate(v.plate_status)) return false;
+      } else if (!matchesConditionFilter(v.condition, selectedCategoryKey)) {
+        // Condition chips (with OR overlap for Slightly Used & Excellent Condition)
+        return false;
       }
     }
 
@@ -461,126 +467,126 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
       </header>
 
       {/* Search & Category Section */}
-      <div className="max-w-4xl mx-auto px-4 pt-6 pb-4">
-        <div className="mb-4">
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] font-medium mb-2">
-            <Sparkles size={12} /> {t.verifiedBadge}
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-            AC WALE MARKET
-          </h2>
-          <p className="text-zinc-400 text-xs mt-1">
+      <div className="max-w-5xl mx-auto px-4 pt-4 sm:pt-10 pb-3">
+        {/* Hero: one tagline (the brand name is already in the header) */}
+        <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] font-medium mb-3">
+          <Sparkles size={12} /> {t.verifiedBadge}
+        </span>
+        <h2 className="flex items-start gap-1.5 text-[15px] sm:text-3xl font-bold sm:font-black tracking-tight text-white leading-snug">
+          <Sparkles size={16} className="sm:hidden mt-[3px] shrink-0 text-amber-400" />
+          <span>
             {lang === "am"
-              ? "ኤሲ ዋለ የመኪና መሸጫ እና ኪራይ - ቅንጡ እና ዘመናዊ መኪኖች መሸጫ እና ማከራያ"
-              : "AC WALE MARKET - Premier Automotive Sales & Car Rental Center Addis Ababa"}
-          </p>
-        </div>
+              ? "የተረጋገጡ መኪኖች — ይግዙ ወይም ይከራዩ"
+              : "Verified cars to buy or rent in Addis Ababa"}
+          </span>
+        </h2>
 
         {/* PRIMARY CATALOG TOGGLE: BUY A CAR vs RENT A CAR */}
-        <div className="mb-5 flex justify-center">
-          <div className="bg-zinc-900 border border-zinc-800 p-1.5 rounded-2xl flex items-center gap-1.5 shadow-xl w-full max-w-md">
+        <div
+          role="tablist"
+          aria-label={lang === "am" ? "ይግዙ ወይም ይከራዩ" : "Buy or rent"}
+          className="mt-3 sm:mt-5 grid grid-cols-2 gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-2xl w-full sm:max-w-md"
+        >
+          {(["buy", "rent"] as const).map((mode) => (
             <button
+              key={mode}
               type="button"
-              onClick={() => setCatalogMode("buy")}
-              className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 ${
-                catalogMode === "buy"
+              role="tab"
+              aria-selected={catalogMode === mode}
+              data-catalog-mode={mode}
+              onClick={() => setCatalogMode(mode)}
+              className={`h-11 px-3 rounded-xl font-black text-[13px] sm:text-sm transition flex items-center justify-center gap-2 ${
+                catalogMode === mode
                   ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20"
                   : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
               }`}
             >
-              <span>🚗 {lang === "am" ? "መኪና ይግዙ" : "Buy a Car"}</span>
+              {mode === "buy" ? <CarFront size={16} /> : <Key size={16} />}
+              <span className="truncate">
+                {mode === "buy"
+                  ? lang === "am" ? "መኪና ይግዙ" : "Buy a Car"
+                  : lang === "am" ? "መኪና ይከራዩ" : "Rent a Car"}
+              </span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setCatalogMode("rent")}
-              className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 ${
-                catalogMode === "rent"
-                  ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20"
-                  : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
-              }`}
-            >
-              <span>🔑 {lang === "am" ? "መኪና ይከራዩ" : "Rent a Car"}</span>
-            </button>
-          </div>
+          ))}
         </div>
 
         {/* Search Input & Advanced Filter Trigger */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="relative flex-1">
+        <div className="mt-3 flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
             <Search
               size={18}
-              className="absolute left-3.5 top-3.5 text-zinc-500"
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
             />
             <input
-              type="text"
+              type="search"
+              enterKeyHint="search"
               placeholder={t.searchPlaceholder}
+              aria-label={t.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl pl-11 pr-4 py-3 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500 transition shadow-inner"
+              className="w-full h-12 bg-zinc-900 border border-zinc-800 rounded-2xl pl-11 pr-3 text-base sm:text-sm text-white placeholder:text-zinc-500 placeholder:text-sm focus:outline-none focus:border-amber-500 transition"
             />
           </div>
 
           <button
             type="button"
+            data-filter-button
             onClick={() => setIsFilterDrawerOpen(true)}
-            className={`py-3 px-3.5 sm:px-4 rounded-2xl border font-bold text-xs sm:text-sm transition flex items-center gap-2 flex-shrink-0 active:scale-95 shadow-md ${
+            className={`relative h-12 w-12 sm:w-auto sm:px-4 rounded-2xl border font-bold text-sm transition flex items-center justify-center gap-2 shrink-0 active:scale-95 ${
               activeFilterCount > 0
-                ? "bg-amber-500 border-amber-400 text-black shadow-amber-500/20 font-black"
+                ? "bg-amber-500/15 border-amber-500/60 text-amber-300"
                 : "bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-700"
             }`}
             title="Advanced Filters"
+            aria-label={
+              activeFilterCount > 0 ? `${t.filters} (${activeFilterCount})` : t.filters
+            }
           >
-            <SlidersHorizontal size={16} className={activeFilterCount > 0 ? "text-black" : "text-amber-400"} />
-            <span>{t.filters}</span>
+            <SlidersHorizontal size={18} className="text-amber-400" />
+            <span className="hidden sm:inline">{t.filters}</span>
             {activeFilterCount > 0 && (
-              <span className="w-5 h-5 rounded-full bg-black text-amber-400 text-[11px] font-black flex items-center justify-center shadow">
+              <span className="absolute -top-1.5 -right-1.5 sm:static min-w-5 h-5 px-1 rounded-full bg-amber-500 text-black text-[11px] font-black flex items-center justify-center ring-2 ring-black sm:ring-0">
                 {activeFilterCount}
               </span>
             )}
           </button>
         </div>
 
-        {/* Category Pills & Sold Toggle */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 mb-6">
-          <div className="flex flex-wrap gap-2">
-            {categories.map((cat) => (
+        {/* Condition chips: one horizontally scrollable, snapping row */}
+        <div
+          role="group"
+          aria-label={lang === "am" ? "ይዞታ" : "Condition"}
+          className="mt-3 -mx-4 px-4 flex gap-2 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible"
+        >
+          {CONDITION_CHIPS.map((chip) => {
+            const active = selectedCategoryKey === chip.key;
+            const primary = lang === "am" ? chip.am : chip.en;
+            const secondary = lang === "am" ? chip.en : chip.am;
+            return (
               <button
-                key={cat.key}
-                onClick={() => setSelectedCategoryKey(cat.key)}
-                className={`py-1.5 px-3.5 rounded-full text-xs font-semibold transition ${
-                  selectedCategoryKey === cat.key
+                key={chip.key}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setSelectedCategoryKey(chip.key)}
+                className={`snap-start shrink-0 h-11 px-4 rounded-full flex flex-col items-center justify-center leading-none transition whitespace-nowrap ${
+                  active
                     ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
-                    : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white"
+                    : "bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800"
                 }`}
               >
-                {cat.label}
+                <span className="text-[13px] font-bold">{primary}</span>
+                <span className={`text-[9.5px] mt-1 font-medium ${active ? "text-black/70" : "text-zinc-500"}`}>
+                  {secondary}
+                </span>
               </button>
-            ))}
-          </div>
-
-          {/* Hide/Show Sold Toggle */}
-          <button
-            type="button"
-            onClick={() => setHideSold(!hideSold)}
-            className={`text-xs font-semibold py-1.5 px-3 rounded-xl border transition flex items-center gap-1.5 ${
-              hideSold
-                ? "bg-zinc-800 border-zinc-700 text-zinc-300"
-                : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${
-                hideSold ? "bg-zinc-400" : "bg-emerald-400"
-              }`}
-            />
-            {hideSold ? t.showSold : t.hideSold}
-          </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Vehicle Grid */}
-      <section className="max-w-4xl mx-auto px-4 pt-2">
+      <section className="max-w-5xl mx-auto px-4 pt-1">
         {loading ? (
           <div className="py-20 text-center">
             <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -862,6 +868,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
         setFilters={setFilters}
         onReset={handleResetFilters}
         resultCount={filteredVehicles.length}
+        brandOptions={brandOptions}
       />
 
       {/* OFFICIAL AC WALE MARKET FOOTER */}
