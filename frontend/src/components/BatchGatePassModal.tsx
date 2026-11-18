@@ -1,7 +1,9 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, Printer, Loader2, CheckCircle2, AlertCircle, Copy, ArrowRight } from "lucide-react";
+import { Printer, Loader2, CheckCircle2, AlertCircle, Copy } from "lucide-react";
+import PrintModalShell from "@/components/print/PrintModalShell";
+import ScaledPreview, { A4_PORTRAIT_PX } from "@/components/print/ScaledPreview";
 import { GatePass, LotIntake, User } from "@/types";
 
 interface BatchGatePassModalProps {
@@ -376,259 +378,220 @@ export default function BatchGatePassModal({
         }
       `}</style>
 
-      {/* Screen Modal Overlay */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto print:hidden">
-        <div className="relative w-full max-w-4xl bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-          
-          {/* Modal Header */}
-          <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <img
-                src="/ac-wale-logo.png"
-                alt="AC WALE"
-                className="w-8 h-8 rounded-lg object-contain bg-black border border-zinc-800 shrink-0"
-              />
-              <div>
-                <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-                  <span>የጅምላ መውጫ ፈቃድ (Batch Gate Pass — 2x2 A4 Grid)</span>
-                  <span className="text-xs font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-800/80 px-2 py-0.5 rounded-full">
-                    {selectedIntakes.slice(0, 4).length} መኪኖች
-                  </span>
-                </h3>
-                <p className="text-xs text-zinc-400">
-                  እስከ 4 መኪኖች በአንድ A4 ወረቀት ላይ (2x2 Grid) ያለ ወረቀት ብክነት ይታተማሉ።
-                </p>
+      {/* Screen Modal (never printed: the portal below is what prints) */}
+      <PrintModalShell
+        title={
+          <>
+            <span className="sm:hidden">የጅምላ መውጫ ፈቃድ</span>
+            <span className="hidden sm:inline">የጅምላ መውጫ ፈቃድ (Batch Gate Pass — 2x2 A4 Grid)</span>
+          </>
+        }
+        badge={
+          <span className="text-xs font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-800/80 px-2 py-0.5 rounded-full">
+            {selectedIntakes.slice(0, 4).length} መኪኖች
+          </span>
+        }
+        description="እስከ 4 መኪኖች በአንድ A4 ወረቀት ላይ (2x2 Grid) ያለ ወረቀት ብክነት ይታተማሉ።"
+        icon={
+          <img
+            src="/ac-wale-logo.png"
+            alt="AC WALE"
+            className="w-8 h-8 rounded-lg object-contain bg-black border border-zinc-800 shrink-0"
+          />
+        }
+        onClose={onClose}
+        onPrint={isGenerated ? handlePrint : undefined}
+        printTitle="A4 ሰነድ አትም (Print 2x2 Grid)"
+        maxWidthClass="sm:max-w-4xl"
+        footer={
+          !isGenerated ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="text-[11px] text-zinc-500">
+                * ከተረጋገጠ በኋላ እያንዳንዱ መኪና በራስ-ሰር &quot;ወጥቷል&quot; ተብሎ ይመዘገባል።
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={submitting}
+                  className="h-11 px-4 text-xs font-medium text-zinc-400 hover:text-white rounded-xl bg-zinc-900 border border-zinc-800 transition"
+                >
+                  ሰርዝ (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  form="batch-gate-pass-form"
+                  disabled={submitting}
+                  className="h-11 flex-1 sm:flex-none px-4 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 disabled:opacity-50 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>በማዘጋጀት ላይ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Printer size={15} className="shrink-0" />
+                      <span className="truncate">ፈቃዶችን አዘጋጅና አትም (Generate & Print A4 Grid)</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-zinc-500 font-mono">2x2 Grid A4 Layout • 4-in-1 Waste-Elimination</span>
+              <button
+                onClick={onClose}
+                className="h-11 px-4 text-xs font-medium text-zinc-300 hover:text-white rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition"
+              >
+                ጨርስ (Done)
+              </button>
+            </div>
+          )
+        }
+      >
+        <div className="p-3 sm:p-6 bg-zinc-900/40">
+          {error && (
+            <div className="mb-4 p-3 bg-red-950/60 border border-red-800 rounded-xl flex items-center gap-2 text-xs text-red-300">
+              <AlertCircle size={16} className="text-red-400 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
-            <button
-              onClick={onClose}
-              className="p-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition"
-              title="Close modal"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* Modal Body: Switch between Form Configuration & Print Preview */}
-          <div className="p-4 sm:p-6 overflow-y-auto max-h-[75vh] bg-zinc-900/40">
-            {error && (
-              <div className="mb-4 p-3 bg-red-950/60 border border-red-800 rounded-xl flex items-center gap-2 text-xs text-red-300">
-                <AlertCircle size={16} className="text-red-400 shrink-0" />
-                <span>{error}</span>
+          {!isGenerated ? (
+            /* STEP 1: Quick Configuration Form */
+            <form id="batch-gate-pass-form" onSubmit={handleSubmitBatch} className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-zinc-900 border border-zinc-800 p-3 rounded-xl text-xs">
+                <span className="text-zinc-300">
+                  ለመረጧቸው {selectedIntakes.slice(0, 4).length} መኪኖች የሹፌር እና የመውጫ ምክንያት ይሙሉ:
+                </span>
+                {selectedIntakes.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleApplyRowOneToAll}
+                    className="min-h-11 px-3 py-2 text-xs text-amber-400 bg-amber-950/40 border border-amber-800/60 hover:bg-amber-900/40 rounded-lg transition flex items-center gap-1.5 font-medium text-left"
+                  >
+                    <Copy size={13} className="shrink-0" />
+                    <span>የመጀመሪያውን ረድፍ ለሁሉም ቅዳ (Copy Row 1 to All)</span>
+                  </button>
+                )}
               </div>
-            )}
 
-            {!isGenerated ? (
-              /* STEP 1: Quick Configuration Form */
-              <form onSubmit={handleSubmitBatch} className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 bg-zinc-900 border border-zinc-800 p-3 rounded-xl text-xs">
-                  <span className="text-zinc-300">
-                    ለመረጧቸው {selectedIntakes.slice(0, 4).length} መኪኖች የሹፌር እና የመውጫ ምክንያት ይሙሉ:
-                  </span>
-                  {selectedIntakes.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={handleApplyRowOneToAll}
-                      className="px-2.5 py-1 text-xs text-amber-400 bg-amber-950/40 border border-amber-800/60 hover:bg-amber-900/40 rounded-lg transition flex items-center gap-1 font-medium"
+              <div className="space-y-3">
+                {selectedIntakes.slice(0, 4).map((car, idx) => {
+                  const row = formData[car.id] || {
+                    driver_name: "",
+                    release_reason: "የዕለት መልስ",
+                    authorized_by: currentUser?.full_name || "Supervisor",
+                  };
+
+                  return (
+                    <div
+                      key={car.id}
+                      className="bg-zinc-900/80 border border-zinc-800 p-3.5 rounded-xl space-y-3 transition hover:border-zinc-700"
                     >
-                      <Copy size={12} />
-                      <span>የመጀመሪያውን ረድፍ ለሁሉም ቅዳ (Copy Row 1 to All)</span>
-                    </button>
-                  )}
-                </div>
-
-                <div className="space-y-3">
-                  {selectedIntakes.slice(0, 4).map((car, idx) => {
-                    const row = formData[car.id] || {
-                      driver_name: "",
-                      release_reason: "የዕለት መልስ",
-                      authorized_by: currentUser?.full_name || "Supervisor",
-                    };
-
-                    return (
-                      <div
-                        key={car.id}
-                        className="bg-zinc-900/80 border border-zinc-800 p-3.5 rounded-xl space-y-3 transition hover:border-zinc-700"
-                      >
-                        {/* Car Header */}
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">
-                              {idx + 1}
-                            </span>
-                            <span className="text-sm font-bold text-white">
-                              {car.vehicle_name}
-                            </span>
-                            <span className="text-xs font-mono font-black text-amber-300 bg-zinc-950 border border-zinc-700 px-2 py-0.5 rounded">
-                              {car.plate_number}
-                            </span>
-                          </div>
-                          <span className="text-[11px] text-zinc-400">
-                            ባለቤት: {car.owner_name} ({car.owner_phone})
+                      {/* Car Header */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                          <span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="text-sm font-bold text-white break-words min-w-0">
+                            {car.vehicle_name}
+                          </span>
+                          <span className="text-xs font-mono font-black text-amber-300 bg-zinc-950 border border-zinc-700 px-2 py-0.5 rounded">
+                            {car.plate_number}
                           </span>
                         </div>
+                        <span className="text-[11px] text-zinc-400 break-words">
+                          ባለቤት: {car.owner_name} ({car.owner_phone})
+                        </span>
+                      </div>
 
-                        {/* Input Fields */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
-                              የሹፌሩ ስም (Driver Name) *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="ለምሳሌ፡ ዮናስ በቀለ"
-                              value={row.driver_name}
-                              onChange={(e) =>
-                                handleFieldChange(car.id, "driver_name", e.target.value)
-                              }
-                              className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
-                            />
-                          </div>
+                      {/* Input Fields */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="min-w-0">
+                          <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                            የሹፌሩ ስም (Driver Name) *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="ለምሳሌ፡ ዮናስ በቀለ"
+                            value={row.driver_name}
+                            onChange={(e) => handleFieldChange(car.id, "driver_name", e.target.value)}
+                            className="w-full h-11 bg-zinc-950 border border-zinc-700 rounded-lg px-3 text-base sm:text-xs text-white focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
 
-                          <div>
-                            <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
-                              የመውጣት ምክንያት (Reason)
-                            </label>
-                            <select
-                              value={row.release_reason}
-                              onChange={(e) =>
-                                handleFieldChange(car.id, "release_reason", e.target.value)
-                              }
-                              className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
-                            >
-                              {REASON_OPTIONS.map((opt) => (
-                                <option key={opt} value={opt}>
-                                  {opt}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+                        <div className="min-w-0">
+                          <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                            የመውጣት ምክንያት (Reason)
+                          </label>
+                          <select
+                            value={row.release_reason}
+                            onChange={(e) => handleFieldChange(car.id, "release_reason", e.target.value)}
+                            className="w-full min-w-0 h-11 bg-zinc-950 border border-zinc-700 rounded-lg px-3 text-base sm:text-xs text-white focus:outline-none focus:border-amber-500"
+                          >
+                            {REASON_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                          <div>
-                            <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
-                              እንዲወጣ የፈቀደው (Authorized By)
-                            </label>
-                            <input
-                              type="text"
-                              value={row.authorized_by}
-                              onChange={(e) =>
-                                handleFieldChange(car.id, "authorized_by", e.target.value)
-                              }
-                              className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
-                            />
-                          </div>
+                        <div className="min-w-0">
+                          <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                            እንዲወጣ የፈቀደው (Authorized By)
+                          </label>
+                          <input
+                            type="text"
+                            value={row.authorized_by}
+                            onChange={(e) => handleFieldChange(car.id, "authorized_by", e.target.value)}
+                            className="w-full h-11 bg-zinc-950 border border-zinc-700 rounded-lg px-3 text-base sm:text-xs text-white focus:outline-none focus:border-amber-500"
+                          />
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </form>
+          ) : (
+            /* STEP 2: On-screen 2x2 Grid Print Preview */
+            <div className="space-y-4">
+              <div className="bg-emerald-950/40 border border-emerald-800/80 p-3 rounded-xl flex items-center gap-2 text-xs text-emerald-300">
+                <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                <span>{generatedPasses.length} የመውጫ ፈቃዶች በተከታታይ ቁጥር ተዘጋጅተዋል!</span>
+              </div>
 
-                {/* Form Action Buttons */}
-                <div className="flex items-center justify-between pt-3 border-t border-zinc-800">
-                  <span className="text-xs text-zinc-500">
-                    * ከተረጋገጠ በኋላ እያንዳንዱ መኪና በራስ-ሰር &quot;ወጥቷል&quot; ተብሎ ይመዘገባል።
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      disabled={submitting}
-                      className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white rounded-xl bg-zinc-900 border border-zinc-800 transition"
-                    >
-                      ሰርዝ (Cancel)
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={submitting}
-                      className="px-5 py-2 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 disabled:opacity-50 rounded-xl transition flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95"
-                    >
-                      {submitting ? (
-                        <>
-                          <Loader2 size={15} className="animate-spin" />
-                          <span>በማዘጋጀት ላይ...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Printer size={15} />
-                          <span>ፈቃዶችን አዘጋጅና አትም (Generate & Print A4 Grid)</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            ) : (
-              /* STEP 2: On-screen 2x2 Grid Print Preview */
-              <div className="space-y-4">
-                <div className="bg-emerald-950/40 border border-emerald-800/80 p-3 rounded-xl flex items-center justify-between text-xs text-emerald-300">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                    <span>
-                      {generatedPasses.length} የመውጫ ፈቃዶች በተከታታይ ቁጥር ተዘጋጅተዋል!
-                    </span>
-                  </div>
-                  <button
-                    onClick={handlePrint}
-                    className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-xs transition flex items-center gap-1.5 shadow-md shadow-amber-500/20"
-                  >
-                    <Printer size={13} />
-                    <span>አሁን አትም (Print Now)</span>
-                  </button>
-                </div>
-
-                {/* Scaled Preview of the 2x2 Grid on A4 */}
-                <div className="bg-zinc-950 p-4 sm:p-6 rounded-2xl border border-zinc-800 flex justify-center overflow-x-auto">
-                  <div
-                    className="bg-white p-3 rounded-lg shadow-2xl"
-                    style={{
-                      width: "600px",
-                      minHeight: "750px",
-                      boxSizing: "border-box",
-                    }}
-                  >
-                    <div className="border border-dashed border-gray-400 p-2 rounded h-full flex flex-col justify-between">
-                      <div className="grid grid-cols-2 grid-rows-2 gap-3 h-full">
-                        {gridSlots.map((item, idx) => (
-                          <div key={idx} className="h-full min-h-[340px]">
-                            {renderSingleSlip(item, idx, false)}
-                          </div>
-                        ))}
-                      </div>
+              {/* Preview of the 2x2 grid at true A4 width, scaled to fit */}
+              <ScaledPreview designWidth={A4_PORTRAIT_PX}>
+                <div
+                  className="bg-white p-3 rounded-lg shadow-2xl"
+                  style={{
+                    width: "100%",
+                    minHeight: `${Math.round(A4_PORTRAIT_PX * 1.414)}px`,
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <div className="border border-dashed border-gray-400 p-2 rounded h-full flex flex-col justify-between">
+                    <div className="grid grid-cols-2 grid-rows-2 gap-3 h-full">
+                      {gridSlots.map((item, idx) => (
+                        <div key={idx} className="h-full min-h-[520px]">
+                          {renderSingleSlip(item, idx, false)}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Modal Footer */}
-          <div className="p-4 border-t border-zinc-800 bg-zinc-950 flex items-center justify-between shrink-0">
-            <span className="text-xs text-zinc-500 font-mono">
-              2x2 Grid A4 Layout • 4-in-1 Waste-Elimination
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition"
-              >
-                {isGenerated ? "ጨርስ (Done)" : "ዝጋ (Close)"}
-              </button>
-              {isGenerated && (
-                <button
-                  onClick={handlePrint}
-                  className="px-5 py-2 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95"
-                >
-                  <Printer size={15} />
-                  <span>A4 ሰነድ አትም (Print 2x2 Grid)</span>
-                </button>
-              )}
+              </ScaledPreview>
             </div>
-          </div>
-
+          )}
         </div>
-      </div>
+      </PrintModalShell>
 
       {/* Dedicated Portal for Printing Directly into document.body */}
       {mounted &&

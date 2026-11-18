@@ -1,8 +1,14 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, Printer, Check, Copy } from "lucide-react";
+import { Check, Copy } from "lucide-react";
+import PrintModalShell from "@/components/print/PrintModalShell";
+import ScaledPreview from "@/components/print/ScaledPreview";
+
 import { GatePass } from "@/types";
+
+// 98mm slip at 96dpi (screen preview width only)
+const SLIP_PX = Math.ceil((98 / 25.4) * 96);
 
 interface GatePassModalProps {
   pass: GatePass;
@@ -219,74 +225,48 @@ export default function GatePassModal({ pass, vehicleName, onClose }: GatePassMo
         }
       `}</style>
 
-      {/* Screen Modal Overlay */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto print:hidden">
-        <div className="relative w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-          
-          {/* Modal Header */}
-          <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <img
-                src="/ac-wale-logo.png"
-                alt="AC WALE"
-                className="w-8 h-8 rounded-lg object-contain bg-black border border-zinc-800 shrink-0"
-              />
-              <div>
-                <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-                  <span>መኪና መውጫ ፈቃድ (Gate Pass)</span>
-                  <span className="text-xs font-mono font-normal text-amber-400 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800">
-                    {pass.slip_number}
-                  </span>
-                </h3>
-                <p className="text-xs text-zinc-400">
-                  ተሽከርካሪው በሰላም ከግቢ እንዲወጣ የተሰጠ ይፋዊ ደረሰኝ
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="p-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition"
-              title="Close modal"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* Modal Body Preview */}
-          <div className="p-4 sm:p-6 overflow-y-auto bg-zinc-900/30 flex justify-center">
+      {/* Screen Modal (never printed: the portal below is what prints) */}
+      <PrintModalShell
+        title={
+          <>
+            <span className="sm:hidden">መኪና መውጫ ፈቃድ</span>
+            <span className="hidden sm:inline">መኪና መውጫ ፈቃድ (Gate Pass)</span>
+          </>
+        }
+        badge={
+          <span className="text-xs font-mono font-normal text-amber-400 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800">
+            {pass.slip_number}
+          </span>
+        }
+        description="ተሽከርካሪው በሰላም ከግቢ እንዲወጣ የተሰጠ ይፋዊ ደረሰኝ"
+        icon={
+          <img
+            src="/ac-wale-logo.png"
+            alt="AC WALE"
+            className="w-8 h-8 rounded-lg object-contain bg-black border border-zinc-800 shrink-0"
+          />
+        }
+        onClose={onClose}
+        onPrint={handlePrint}
+        printTitle="ደረሰኝ አትም (Print Slip)"
+        maxWidthClass="sm:max-w-md"
+        footer={
+          <button
+            onClick={handleCopySlip}
+            className="h-11 w-full sm:w-auto text-xs text-zinc-300 hover:text-white flex items-center justify-center gap-1.5 px-3 rounded-xl bg-zinc-900 border border-zinc-800 transition"
+          >
+            {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+            <span>{copied ? "የደረሰኝ ቁጥር ተቀድቷል" : `የደረሰኝ ቁጥር ቅዳ (Copy #${pass.slip_number})`}</span>
+          </button>
+        }
+      >
+        {/* Screen preview: true slip size (98mm), scaled to fit */}
+        <div className="p-3 sm:p-6 bg-zinc-900/30">
+          <ScaledPreview designWidth={SLIP_PX}>
             <SlipContent isPrint={false} />
-          </div>
-
-          {/* Modal Footer Actions */}
-          <div className="p-4 border-t border-zinc-800 bg-zinc-950 flex flex-wrap items-center justify-between gap-3 shrink-0">
-            <button
-              onClick={handleCopySlip}
-              className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 transition"
-            >
-              {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-              <span>{copied ? "የደረሰኝ ቁጥር ተቀድቷል" : "የደረሰኝ ቁጥር ቅዳ (Copy #)"}</span>
-            </button>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition"
-              >
-                ዝጋ (Close)
-              </button>
-              <button
-                onClick={handlePrint}
-                className="px-5 py-2 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95"
-              >
-                <Printer size={15} />
-                <span>ደረሰኝ አትም (Print Slip)</span>
-              </button>
-            </div>
-          </div>
-
+          </ScaledPreview>
         </div>
-      </div>
+      </PrintModalShell>
 
       {/* Dedicated Portal for Printing Directly into document.body */}
       {mounted &&

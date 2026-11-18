@@ -1,8 +1,13 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, Printer, Copy, Check, FileText } from "lucide-react";
+import { Copy, Check, FileText } from "lucide-react";
+import PrintModalShell from "@/components/print/PrintModalShell";
+import ScaledPreview from "@/components/print/ScaledPreview";
 import { VehicleHandover, HandoverBelonging } from "@/types";
+
+// The sheet is max-w-3xl (768px); preview it at that width.
+const HANDOVER_SHEET_PX = 768;
 
 interface HandoverPrintModalProps {
   handover: VehicleHandover;
@@ -425,62 +430,49 @@ export default function HandoverPrintModal({ handover, onClose }: HandoverPrintM
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      <div className="relative w-full max-w-4xl bg-zinc-950 border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-white my-auto max-h-[95vh]">
-        {/* Top Control Bar */}
-        <div className="p-4 sm:p-5 border-b border-zinc-800 bg-zinc-900/90 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold">
-              <FileText size={18} />
-            </span>
-            <div>
-              <h3 className="font-black text-sm sm:text-base text-white tracking-tight flex items-center gap-2">
-                <span>የመኪና መረከቢያ ውል (Vehicle Handover Form)</span>
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-zinc-800 text-amber-400 border border-zinc-700">
-                  {handover.contract_number}
-                </span>
-              </h3>
-              <p className="text-[11px] text-zinc-400 mt-0.5">
-                A4 ወረቀት ላይ ለማተም ወይም ፒዲኤፍ ለማስቀመጥ ተዘጋጅቷል።
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleCopyNumber}
-              className="px-3 py-2 text-xs font-bold text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-xl transition flex items-center gap-1.5"
-              title="Copy Contract Number"
-            >
-              {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-              <span className="hidden sm:inline">{copied ? "ተቀድቷል" : "ቁጥር ቅዳ"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="px-4 py-2 text-xs font-extrabold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95"
-            >
-              <Printer size={15} />
-              <span>🖨️ ውል አትም (Print Contract)</span>
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-xl transition"
-              title="Close modal"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
-        {/* Scrollable Printable Document Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-950/80 flex justify-center items-start">
+    <PrintModalShell
+      title={
+        <>
+          <span className="sm:hidden">የመኪና መረከቢያ ውል</span>
+          <span className="hidden sm:inline">የመኪና መረከቢያ ውል (Vehicle Handover Form)</span>
+        </>
+      }
+      badge={
+        <span className="text-xs font-mono px-2 py-0.5 rounded bg-zinc-800 text-amber-400 border border-zinc-700">
+          {handover.contract_number}
+        </span>
+      }
+      description="A4 ወረቀት ላይ ለማተም ወይም ፒዲኤፍ ለማስቀመጥ ተዘጋጅቷል።"
+      icon={
+        <span className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold">
+          <FileText size={18} />
+        </span>
+      }
+      onClose={onClose}
+      onPrint={handlePrint}
+      printTitle="ውል አትም (Print Contract)"
+      maxWidthClass="sm:max-w-4xl"
+      headerActions={
+        <button
+          type="button"
+          onClick={handleCopyNumber}
+          className="hidden min-[400px]:flex h-11 w-11 sm:w-auto shrink-0 sm:px-3 items-center justify-center text-xs font-bold text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-xl transition gap-1.5"
+          title={`Copy Contract Number (${handover.contract_number})`}
+          aria-label="Copy Contract Number"
+        >
+          {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+          <span className="hidden sm:inline">{copied ? "ተቀድቷል" : "ቁጥር ቅዳ"}</span>
+        </button>
+      }
+    >
+      {/* Screen preview. #handover-print-area itself is untouched (its outerHTML is what prints);
+          only the wrapper around it is scaled. */}
+      <div className="p-3 sm:p-6 bg-zinc-950/80">
+        <ScaledPreview designWidth={HANDOVER_SHEET_PX}>
           <PrintableSheet />
-        </div>
+        </ScaledPreview>
       </div>
-    </div>,
+    </PrintModalShell>,
     document.body
   );
 }

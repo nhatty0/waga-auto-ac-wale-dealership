@@ -1,7 +1,9 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, Printer, Phone, MessageSquare } from "lucide-react";
+import { Printer, Phone } from "lucide-react";
+import PrintModalShell from "@/components/print/PrintModalShell";
+import ScaledPreview, { A4_PORTRAIT_PX } from "@/components/print/ScaledPreview";
 import { QRCodeSVG } from "qrcode.react";
 import { Vehicle } from "@/types";
 import { resolveImageUrl } from "@/lib/images";
@@ -96,10 +98,10 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
       className={`w-full bg-white text-zinc-950 font-sans flex flex-col justify-between ${
         isForPrint
           ? "p-4 sm:p-6"
-          : "max-w-[650px] rounded-xl p-6 sm:p-8 shadow-2xl border border-zinc-200"
+          : "rounded-xl p-8 shadow-2xl border border-zinc-200" /* preview: laid out at true A4 width, then scaled */
       }`}
       style={{
-        minHeight: isForPrint ? "auto" : "820px",
+        minHeight: isForPrint ? "auto" : `${A4_PORTRAIT_PX * 1.414}px`,
         pageBreakInside: "avoid",
         breakInside: "avoid",
       }}
@@ -376,45 +378,28 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
       `}</style>
 
       {/* Screen Modal Overlay (Only visible on screen, never during print) */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-2 sm:p-4 overflow-y-auto print:hidden">
-        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-3xl max-h-[96vh] flex flex-col overflow-hidden text-white shadow-2xl">
-          
-          {/* Modal Screen Action Header */}
-          <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/90 flex-shrink-0">
-            <div>
-              <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
-                <Printer size={18} className="text-amber-400" />
-                <span>Window Spec Sheet / Lot Flyer Generator</span>
-              </h3>
-              <p className="text-xs text-zinc-400">
-                A4 Printable window flyer with photo, price highlights, specs, and instant Telegram QR code.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handlePrint}
-                disabled={isPrinting}
-                className="py-2 px-4 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 disabled:opacity-50"
-              >
-                <Printer size={15} />
-                <span>{isPrinting ? "Preparing..." : "Print / Save as PDF (A4)"}</span>
-              </button>
-              <button
-                onClick={onClose}
-                className="p-2 text-zinc-400 hover:text-white rounded-xl bg-zinc-800 hover:bg-zinc-700 transition"
-              >
-                <X size={18} />
-              </button>
-            </div>
-          </div>
-
-          {/* Interactive Screen Preview Container */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-900/40 flex justify-center">
+      <PrintModalShell
+        title={
+          <>
+            <span className="sm:hidden">Lot Flyer</span>
+            <span className="hidden sm:inline">Window Spec Sheet / Lot Flyer Generator</span>
+          </>
+        }
+        description="A4 Printable window flyer with photo, price highlights, specs, and instant Telegram QR code."
+        icon={<Printer size={18} className="text-amber-400" />}
+        onClose={onClose}
+        onPrint={handlePrint}
+        printing={isPrinting}
+        printTitle="Print / Save as PDF (A4)"
+        maxWidthClass="sm:max-w-3xl"
+      >
+        {/* Screen preview: true A4 width, scaled to fit */}
+        <div className="p-3 sm:p-6 bg-zinc-900/40">
+          <ScaledPreview designWidth={A4_PORTRAIT_PX}>
             <FlyerSheet isForPrint={false} />
-          </div>
-
+          </ScaledPreview>
         </div>
-      </div>
+      </PrintModalShell>
 
       {/* Dedicated Portal for Printing directly into document.body */}
       {mounted &&
