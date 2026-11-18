@@ -9,7 +9,7 @@ from typing import List, Optional, Any, Union
 from datetime import datetime, timedelta
 import httpx
 import jwt
-from fastapi import FastAPI, Depends, HTTPException, Query, status, UploadFile, File, Body
+from fastapi import FastAPI, Depends, HTTPException, Query, status, UploadFile, File, Body, Header
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -145,7 +145,8 @@ app.include_router(lot_operations.router)
 # CORS configuration to allow requests from the Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # Comma-separated list in production, e.g. CORS_ORIGINS=https://acwale.et,https://www.acwale.et
+    allow_origins=[o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -154,12 +155,9 @@ app.add_middleware(
 
 # Directories for static & uploaded files
 BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
-STATIC_UPLOADS_DIR = STATIC_DIR / "uploads"
+from storage import STATIC_DIR, LEGACY_UPLOAD_DIR as LEGACY_UPLOADS_DIR  # honours STATIC_ROOT env
+STATIC_UPLOADS_DIR = UPLOAD_DIR
 STATIC_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-
-LEGACY_UPLOADS_DIR = BASE_DIR / "uploads"
-LEGACY_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Mount static directory explicitly so images are served at: /static/uploads/<filename>
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -418,9 +416,15 @@ def handle_verify_otp(req: schemas.VerifyOTPRequest, db: Session = Depends(get_d
 
 
 @app.post("/api/auth/link-telegram")
-def link_telegram_chat(req: schemas.LinkTelegramRequest, db: Session = Depends(get_db)):
+def link_telegram_chat(
+    req: schemas.LinkTelegramRequest,
+    db: Session = Depends(get_db),
+    _superadmin: models.User = Depends(get_current_superadmin),
+):
     """
     Links a phone number to a specific Telegram Chat ID for testing or bot integration.
+    SuperAdmin only: without auth, anyone could redirect another admin's login OTP
+    to their own Telegram chat.
     """
     normalized_phone = normalize_ethiopian_phone(req.phone_number)
     chat_id = req.telegram_chat_id.strip()
@@ -490,11 +494,20 @@ async def handle_telegram_connect_command(chat_id: str, text: str, db: Session) 
 
 
 @app.post("/api/telegram/webhook")
-async def telegram_webhook(payload: dict, db: Session = Depends(get_db)):
+async def telegram_webhook(
+    payload: dict,
+    db: Session = Depends(get_db),
+    x_telegram_bot_api_secret_token: Optional[str] = Header(default=None),
+):
     """
     Incoming webhook from Telegram bot to handle /start connect_<dealership_id>
     and /start link_<phone>.
+    If TELEGRAM_WEBHOOK_SECRET is set, requests must carry the matching
+    X-Telegram-Bot-Api-Secret-Token header (set via setWebhook&secret_token=...).
     """
+    expected_secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip().strip("\"'")
+    if expected_secret and x_telegram_bot_api_secret_token != expected_secret:
+        raise HTTPException(status_code=403, detail="Invalid webhook secret")
     message = payload.get("message", {})
     chat = message.get("chat", {})
     chat_id = str(chat.get("id", ""))

@@ -7,6 +7,8 @@ frontend/.env
 frontend/.env.local
 !.env.example
 !backend/.env.example
+!backend/.env.cpanel.example
+!frontend/.env.production.example
 
 # Local databases & SQLite storage
 *.db

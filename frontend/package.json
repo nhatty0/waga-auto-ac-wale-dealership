@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "build:cpanel": "next build && node scripts/prepare-standalone.js",
+    "start:standalone": "node .next/standalone/server.js"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

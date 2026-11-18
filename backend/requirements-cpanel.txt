@@ -1,0 +1,14 @@
+# Minimal dependencies for Yegara cPanel (Passenger / "Setup Python App").
+# Unpinned on purpose so pip picks versions that have wheels for the server's Python version.
+# Not needed on cPanel: uvicorn, httptools, watchfiles, websockets, psycopg2-binary.
+fastapi
+pydantic
+SQLAlchemy
+python-multipart
+python-dotenv
+httpx
+PyJWT
+pillow
+a2wsgi
+# Only if you set USE_S3_STORAGE=true (Cloudflare R2 / S3):
+# boto3

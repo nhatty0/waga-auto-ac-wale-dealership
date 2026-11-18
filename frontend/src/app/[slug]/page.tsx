@@ -111,7 +111,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     coverImageUrl = `${baseSite}${coverImageUrl}`;
   }
 
-  const showroomUrl = `https://car.wagadelivery.com/${slug}`;
+  const showroomUrl = `${(process.env.NEXT_PUBLIC_SITE_URL || "https://car.wagadelivery.com").replace(/\/+$/, "")}/${slug}`;
 
   return {
     title,

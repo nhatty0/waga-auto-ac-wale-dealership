@@ -189,8 +189,8 @@ AFROMESSAGE_SENDER_NAME=AutoShowroom
 ENABLE_SMS_DISPATCH=true
 
 # Telegram Alert Bot (Platform Default Bot)
-TELEGRAM_BOT_TOKEN=8842269092:AAHpgX-bHSYbshS0k2ncUoDYyrxYR2evpjM
-TELEGRAM_CHAT_ID=371550151
+TELEGRAM_BOT_TOKEN=<your_bot_token_from_BotFather>
+TELEGRAM_CHAT_ID=<your_chat_id>
 TELEGRAM_BOT_USERNAME=EliteMotorsAlert_bot
 
 # Optional Cloudflare R2 / AWS S3 Cloud Storage (leave false for local WebP storage)

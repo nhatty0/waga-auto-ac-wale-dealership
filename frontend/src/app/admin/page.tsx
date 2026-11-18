@@ -3632,7 +3632,7 @@ export default function AdminDashboard() {
                               telegram_bot_token: e.target.value.trim(),
                             })
                           }
-                          placeholder="e.g. 7123456789:AAHpgX-bHSYbshS0k2ncUoDYyrxYR2evpjM"
+                          placeholder="e.g. 7123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                           className="w-full bg-zinc-900 border border-zinc-800 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none font-mono"
                         />
                         <span className="text-[10px] text-zinc-500 mt-1 block">

@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.cpanel.example
 
 # Python virtual environment & cache
 venv/

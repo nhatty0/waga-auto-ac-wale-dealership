@@ -33,6 +33,18 @@ elif DATABASE_URL.startswith("sqlite"):
 else:
     engine = create_engine(DATABASE_URL)
 
+if engine.dialect.name == "sqlite":
+    # Shared hosting (Passenger) may run several worker processes against one SQLite file.
+    # WAL mode + a busy timeout prevents "database is locked" errors under concurrent writes.
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_pragmas(dbapi_connection, _record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

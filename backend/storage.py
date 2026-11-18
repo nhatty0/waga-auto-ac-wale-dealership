@@ -12,12 +12,16 @@ else:
     load_dotenv()
 
 # Upload directories for static file serving & fallback
-STATIC_DIR = Path(__file__).resolve().parent / "static"
+# STATIC_ROOT lets production keep media outside the code folder (e.g. on cPanel:
+# /home/<user>/acwale_data/static) so redeploys never wipe uploaded vehicle photos.
+_static_root_env = os.getenv("STATIC_ROOT", "").strip().strip("\"'")
+STATIC_DIR = Path(_static_root_env) if _static_root_env else Path(__file__).resolve().parent / "static"
 UPLOAD_DIR = STATIC_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Dual-write legacy upload directory for backward compatibility
-LEGACY_UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
+# Dual-write legacy upload directory for backward compatibility.
+# Disabled when STATIC_ROOT is set (it only doubled disk usage; /uploads is served from UPLOAD_DIR).
+LEGACY_UPLOAD_DIR = UPLOAD_DIR if _static_root_env else Path(__file__).resolve().parent / "uploads"
 LEGACY_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Cloud Storage Configuration (Cloudflare R2 / AWS S3)
