@@ -89,7 +89,7 @@ export default function AboutSection({ lang = "am" }: AboutSectionProps) {
     {
       value: "100%",
       label: isAm ? "የተረጋገጡ ዝርዝሮች" : "Verified Fleet",
-      sub: isAm ? "ትክክለኛ የፎቶ እና ቪዲዮ መረጃ" : "Authentic Inspection Specs"
+      sub: isAm ? "ትክክለኛ የፎቶ እና የምርመራ መረጃ" : "Authentic Inspection Specs"
     },
     {
       value: "24/7",

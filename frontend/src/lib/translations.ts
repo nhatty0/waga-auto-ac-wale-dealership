@@ -101,7 +101,7 @@ export const translations = {
     specSheetHeader: "Vehicle Specifications",
     telegramDirect: "Telegram Direct",
     callShowroom: "Call Showroom",
-    bookVisitBtn: "Book In-Person / Video Visit",
+    bookVisitBtn: "Book an In-Person Visit",
 
     // Loan Calculator
     loanTitle: "Bank Loan Calculator",
@@ -112,7 +112,6 @@ export const translations = {
     scheduleTitle: "Schedule Test Drive / Inspection",
     bookingReceivedTitle: "Booking Received",
     inPersonVisit: "Dealership Visit",
-    videoTour: "Live Video Tour",
     yourName: "Your Name",
     namePlaceholder: "e.g. Dawit Bekele",
     phone: "Phone Number",
@@ -305,7 +304,7 @@ export const translations = {
     specSheetHeader: "የመኪናው ሙሉ መረጃ",
     telegramDirect: "በቴሌግራም መልዕክት",
     callShowroom: "በስልክ ይደውሉ",
-    bookVisitBtn: "በአካል ለመመልከት ወይም በቪዲዮ ለመጎብኘት ቀጠሮ ይያዙ",
+    bookVisitBtn: "በአካል ለመመልከት ቀጠሮ ይያዙ",
 
     // Loan Calculator
     loanTitle: "የባንክ ብድር ማስያ (ግምት)",
@@ -326,7 +325,6 @@ export const translations = {
     scheduleTitle: "የመኪና ሙከራ ወይም ጉብኝት ቀጠሮ ይያዙ",
     bookingReceivedTitle: "ቀጠሮዎ በተሳካ ሁኔታ ተመዝግቧል",
     inPersonVisit: "በአካል መጥቶ መጎብኘት",
-    videoTour: "በቀጥታ ቪዲዮ መመልከት",
     yourName: "ሙሉ ስምዎ",
     namePlaceholder: "ለምሳሌ፡ ዳዊት በቀለ",
     phone: "ስልክ ቁጥር",

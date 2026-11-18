@@ -303,10 +303,10 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
       <div className="border-t-2 border-zinc-900 pt-2.5 flex items-center justify-between gap-4">
         <div className="space-y-0.5">
           <p className="text-xs font-black text-black tracking-tight">
-            📱 SCAN QR CODE FOR INSTANT DETAILS & VIDEO TOUR
+            📱 SCAN QR CODE FOR INSTANT DETAILS & BOOKING
           </p>
           <p className="text-[11px] text-zinc-600 leading-snug max-w-sm">
-            Scan QR Code on your phone for full vehicle photo gallery, video tour, or appointment booking with our sales desk.
+            Scan QR Code on your phone for the full vehicle photo gallery, or call our sales desk to book an in-person visit.
           </p>
           <div className="pt-0.5 flex flex-wrap items-center gap-2 text-[10px] font-bold text-zinc-800">
             <span>📞 +251 911 646 628</span>

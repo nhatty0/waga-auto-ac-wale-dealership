@@ -92,7 +92,7 @@ export default function VehicleActionBar({
             <span className="min-w-0 flex flex-col items-start leading-tight">
               <span className="text-sm font-black truncate max-w-full">{am ? "ቀጠሮ ይያዙ" : "Book a Visit"}</span>
               <span className="text-[10px] font-semibold text-black/65 truncate max-w-full">
-                {am ? "በአካል ወይም በቪዲዮ" : "In person or video"}
+                {am ? "በአካል መጥተው ይመልከቱ" : "In-person showroom visit"}
               </span>
             </span>
           </button>

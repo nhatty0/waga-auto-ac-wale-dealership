@@ -7,7 +7,6 @@ import {
   Phone,
   User,
   CheckCircle2,
-  Video,
   Car,
   AlertCircle,
 } from "lucide-react";
@@ -222,40 +221,9 @@ export default function BookingModal({
             onSubmit={handleSubmit}
             className="p-5 overflow-y-auto space-y-4 text-xs"
           >
-            {/* Visit Type Selector */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setFormData({
-                    ...formData,
-                    appointment_type: "In-Person Test Drive",
-                  })
-                }
-                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-bold border transition ${
-                  formData.appointment_type === "In-Person Test Drive"
-                    ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
-                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white"
-                }`}
-              >
-                <Car size={16} /> {t.inPersonVisit}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setFormData({
-                    ...formData,
-                    appointment_type: "Virtual Video Tour",
-                  })
-                }
-                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-bold border transition ${
-                  formData.appointment_type === "Virtual Video Tour"
-                    ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
-                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white"
-                }`}
-              >
-                <Video size={16} /> {t.videoTour}
-              </button>
+            {/* Visit type: bookings are in-person showroom visits only */}
+            <div className="flex items-center gap-2 py-2.5 px-3 rounded-xl font-bold bg-amber-500/10 text-amber-400">
+              <Car size={16} /> {t.inPersonVisit}
             </div>
 
             {/* Customer Name */}
