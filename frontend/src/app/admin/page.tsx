@@ -53,6 +53,7 @@ import HandoverPrintModal from "@/components/HandoverPrintModal";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
 import { compressImage } from "@/lib/compressImage";
+import { getShowroomUrl, PRIMARY_DEALER_NAME, PRIMARY_DEALER_SLUG } from "@/lib/site";
 import { getPlateLabel, getPlateBadgeClasses, getPlateType, extractPlateNumber } from "@/lib/plates";
 
 // Regex for strictly valid Ethiopian mobile formats (09..., 07..., 9..., 7..., 2519..., +2519..., etc.)
@@ -1884,20 +1885,16 @@ export default function AdminDashboard() {
     currentUser?.dealership?.slug ||
     dealership?.slug ||
     dealershipSettings.slug ||
-    "elite-motors";
+    PRIMARY_DEALER_SLUG;
 
   const activeDealerName =
     currentUser?.dealership?.name ||
     dealership?.name ||
     dealershipSettings.name ||
-    "Elite Motors";
+    PRIMARY_DEALER_NAME;
 
-  const siteOrigin =
-    typeof window !== "undefined" && window.location.origin
-      ? window.location.origin
-      : "https://car.wagadelivery.com";
-
-  const showroomUrl = `${siteOrigin}/${activeDealerSlug}`;
+  // Single-tenant mode: the homepage IS the showroom, so link/copy/QR all use the site root.
+  const showroomUrl = getShowroomUrl();
 
   const handleCopyShowroomLink = async () => {
     try {
@@ -3436,12 +3433,11 @@ export default function AdminDashboard() {
                 <ExternalLink size={14} /> Live Public Digital Showroom Link
               </span>
               <p className="text-[11px] text-zinc-400 font-mono break-all">
-                {typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}
-                /?dealer={currentUser?.dealership?.slug || "elite-motors"}
+                {showroomUrl}
               </p>
             </div>
             <a
-              href={`/?dealer=${currentUser?.dealership?.slug || "elite-motors"}`}
+              href="/"
               target="_blank"
               rel="noreferrer"
               className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 whitespace-nowrap self-end sm:self-center"
@@ -3481,7 +3477,7 @@ export default function AdminDashboard() {
                 onChange={(e) =>
                   setDealershipSettings({ ...dealershipSettings, name: e.target.value })
                 }
-                placeholder="e.g. Elite Motors Addis"
+                placeholder="e.g. AC WALE MARKET"
                 className="w-full bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
               />
             </div>

@@ -5,6 +5,7 @@ import { Vehicle } from "@/types";
 import VehicleDetailClient from "./VehicleDetailClient";
 import { resolveImageUrl } from "@/lib/images";
 import { getPlateLabel } from "@/lib/plates";
+import { SITE_URL } from "@/lib/site";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -68,7 +69,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       : "/default-car.webp";
 
   if (coverImageUrl.startsWith("/")) {
-    const baseApi = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_API_URL || "https://car.wagadelivery.com";
+    const baseApi = SITE_URL;
     coverImageUrl = `${baseApi}${coverImageUrl}`;
   }
 

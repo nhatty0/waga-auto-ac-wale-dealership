@@ -31,6 +31,7 @@ import BookingModal from "@/components/BookingModal";
 import TelegramIcon from "@/components/TelegramIcon";
 import VehicleActionBar from "@/components/VehicleActionBar";
 import { SALES_PHONES, TELEGRAM_CHAT_URL, PhoneLine } from "@/lib/contact";
+import { PRIMARY_DEALER_NAME, PRIMARY_DEALER_SLUG } from "@/lib/site";
 import { openTelegramShare, formatTelegramVehicleCaption } from "@/lib/share";
 import { resolveImageUrl } from "@/lib/images";
 import { getPlateLabel, getPlateBadgeClasses } from "@/lib/plates";
@@ -93,8 +94,10 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
         ];
 
   const dealership = vehicle.dealership;
-  const dealerSlug = dealership?.slug || "elite-motors";
-  const dealerName = dealership?.name || "Elite Motors Addis";
+  const dealerSlug = dealership?.slug || PRIMARY_DEALER_SLUG;
+  const dealerName = dealership?.name || PRIMARY_DEALER_NAME;
+  // Single-tenant mode: the homepage is the showroom.
+  const showroomHref = "/";
   const dealerPhone = dealership?.phone_number || "+251 905 445 544";
 
   // AC Wale has two sales lines (+ Telegram); other dealers use their own listed number.
@@ -137,7 +140,7 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
       <header className="sticky top-0 z-40 bg-black/70 backdrop-blur-xl border-b border-white/[0.06] px-4 pt-[env(safe-area-inset-top)]">
         <div className="max-w-5xl mx-auto h-14 flex items-center justify-between gap-3">
           <Link
-            href={`/?dealer=${dealerSlug}`}
+            href={showroomHref}
             className="h-11 -ml-1 px-1 flex items-center gap-2 min-w-0 text-xs sm:text-sm font-semibold text-zinc-300 hover:text-amber-400 transition group"
           >
             <ArrowLeft
@@ -610,7 +613,7 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
         {/* Bottom Back Button Link */}
         <div className="text-center pt-4">
           <Link
-            href={`/?dealer=${dealerSlug}`}
+            href={showroomHref}
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-bold text-amber-400 rounded-xl transition shadow-md"
           >
             <ArrowLeft size={16} />
