@@ -29,6 +29,8 @@ import { Vehicle } from "@/types";
 import { useLanguage } from "@/context/LanguageContext";
 import BookingModal from "@/components/BookingModal";
 import TelegramIcon from "@/components/TelegramIcon";
+import VehicleActionBar from "@/components/VehicleActionBar";
+import { SALES_PHONES, TELEGRAM_CHAT_URL, PhoneLine } from "@/lib/contact";
 import { openTelegramShare, formatTelegramVehicleCaption } from "@/lib/share";
 import { resolveImageUrl } from "@/lib/images";
 import { getPlateLabel, getPlateBadgeClasses } from "@/lib/plates";
@@ -95,6 +97,12 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
   const dealerName = dealership?.name || "Elite Motors Addis";
   const dealerPhone = dealership?.phone_number || "+251 905 445 544";
 
+  // AC Wale has two sales lines (+ Telegram); other dealers use their own listed number.
+  const isAcWale = !dealership || dealerSlug === "ac-wale-cars";
+  const contactPhones: PhoneLine[] = isAcWale
+    ? SALES_PHONES
+    : [{ tel: dealerPhone.replace(/\s+/g, ""), display: dealerPhone, local: dealerPhone }];
+
   const downPaymentVal = vehicle.cash_price ?? vehicle.down_payment;
   const bankLoanVal = vehicle.bank_loan_amount ?? vehicle.bank_loan;
   const plateText = getPlateLabel(vehicle.plate_status || vehicle.plate_code, lang === "am");
@@ -124,25 +132,25 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
   };
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20 selection:bg-amber-500 selection:text-black">
+    <div className="min-h-screen bg-black text-white pb-32 lg:pb-20 selection:bg-amber-500 selection:text-black">
       {/* Top Header / Sticky Navigation */}
-      <header className="sticky top-0 z-40 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80 px-4 py-3">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-40 bg-black/70 backdrop-blur-xl border-b border-white/[0.06] px-4 pt-[env(safe-area-inset-top)]">
+        <div className="max-w-5xl mx-auto h-14 flex items-center justify-between gap-3">
           <Link
             href={`/?dealer=${dealerSlug}`}
-            className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-zinc-300 hover:text-amber-400 transition group"
+            className="h-11 -ml-1 px-1 flex items-center gap-2 min-w-0 text-xs sm:text-sm font-semibold text-zinc-300 hover:text-amber-400 transition group"
           >
             <ArrowLeft
               size={16}
               className="group-hover:-translate-x-1 transition-transform"
             />
-            <span>
+            <span className="truncate">
               {lang === "am" ? "ወደ ሙሉ ሾውሩም ተመለስ" : "Back to Showroom"}
             </span>
           </Link>
 
           {/* Dealership Pill Badge */}
-          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-full">
+          <div className="flex items-center gap-2 min-w-0 shrink bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-full">
             {dealership?.logo_url ? (
               <img
                 src={resolveImageUrl(dealership.logo_url)}
@@ -284,14 +292,14 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
                       <button
                         onClick={prevImage}
                         aria-label="Previous photo"
-                        className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/90 text-white backdrop-blur-md border border-white/10 transition"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 h-11 w-11 flex items-center justify-center rounded-full bg-black/60 hover:bg-black/90 text-white backdrop-blur-md border border-white/10 transition"
                       >
                         <ChevronLeft size={20} />
                       </button>
                       <button
                         onClick={nextImage}
                         aria-label="Next photo"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/90 text-white backdrop-blur-md border border-white/10 transition"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 h-11 w-11 flex items-center justify-center rounded-full bg-black/60 hover:bg-black/90 text-white backdrop-blur-md border border-white/10 transition"
                       >
                         <ChevronRight size={20} />
                       </button>
@@ -299,9 +307,9 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
                   )}
 
                   {/* Badges on Main Photo */}
-                  <div className="absolute top-3 left-3 flex items-center gap-2">
+                  <div className="absolute top-3 left-3 right-3 flex items-center gap-2 min-w-0">
                     <span
-                      className={`text-[11px] font-bold px-3 py-1 rounded-full border shadow-lg backdrop-blur-md ${
+                      className={`min-w-0 truncate text-[11px] font-bold px-3 py-1 rounded-full border shadow-lg backdrop-blur-md ${
                         vehicle.condition === "Brand New"
                           ? "bg-amber-500 text-black border-amber-400"
                           : vehicle.condition === "Slightly Used"
@@ -314,7 +322,7 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
                       ★ {getConditionLabel(vehicle.condition)}
                     </span>
 
-                    <span className="bg-black/80 backdrop-blur-md text-amber-400 border border-amber-500/30 text-[11px] font-bold px-3 py-1 rounded-full shadow-lg">
+                    <span className="shrink-0 bg-black/80 backdrop-blur-md text-amber-400 border border-amber-500/30 text-[11px] font-bold px-3 py-1 rounded-full shadow-lg">
                       🏷️ {plateText}
                     </span>
                   </div>
@@ -384,12 +392,16 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
               <span className="text-xs text-zinc-400 block font-medium">
                 {lang === "am" ? "ዋጋ (ድርድር አለው)" : "Total Price (Negotiable)"}
               </span>
-              <div className="text-3xl font-black text-amber-400 tracking-tight">
-                {vehicle.price != null
-                  ? `${vehicle.price.toLocaleString()} ETB`
-                  : lang === "am"
-                  ? "ዋጋ በስልክ"
-                  : "Call for Price"}
+              <div className="text-[1.65rem] sm:text-3xl font-black text-amber-400 tracking-tight tabular-nums whitespace-nowrap">
+                {vehicle.price != null ? (
+                  <>
+                    {vehicle.price.toLocaleString()} <span className="text-lg sm:text-xl">ETB</span>
+                  </>
+                ) : lang === "am" ? (
+                  "ዋጋ በስልክ"
+                ) : (
+                  "Call for Price"
+                )}
               </div>
 
               {/* Financial Split Box (Upfront Cash vs Bank Loan) */}
@@ -427,9 +439,10 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
 
             {/* Main Action CTAs */}
             <div className="space-y-2.5">
+              {/* On phones the sticky bottom bar carries Book a Visit */}
               <button
                 onClick={() => setIsBookingOpen(true)}
-                className="w-full py-3.5 px-4 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-sm rounded-xl transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+                className="hidden lg:flex w-full py-3.5 px-4 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-sm rounded-xl transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
               >
                 <Calendar size={18} />
                 <span>
@@ -630,6 +643,19 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
           />
         </div>
       )}
+
+      {/* Sticky bottom action bar on phones / tablets */}
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-30 bg-black/85 backdrop-blur-xl border-t border-white/[0.08]">
+        <VehicleActionBar
+          lang={lang}
+          phones={contactPhones}
+          telegramUrl={isAcWale ? TELEGRAM_CHAT_URL : undefined}
+          isSold={vehicle.status === "Sold"}
+          findSimilarLabel={t.findSimilar}
+          onBook={() => setIsBookingOpen(true)}
+          className="max-w-5xl mx-auto"
+        />
+      </div>
 
       {/* Booking Modal */}
       {isBookingOpen && (

@@ -23,6 +23,8 @@ import {
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import TelegramIcon from "@/components/TelegramIcon";
+import VehicleActionBar from "@/components/VehicleActionBar";
+import { SALES_PHONES, TELEGRAM_CHAT_URL } from "@/lib/contact";
 import { openTelegramShare } from "@/lib/share";
 import { Vehicle, Dealership } from "@/types";
 //import { playEngineRev } from "@/lib/audio";
@@ -265,7 +267,7 @@ export default function VehicleModal({
 
       {/* MAIN VEHICLE DETAIL MODAL */}
       <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in">
-        <div className="bg-zinc-950 border border-zinc-800 rounded-t-3xl sm:rounded-3xl w-full max-w-xl h-[88vh] flex flex-col overflow-hidden text-white shadow-2xl relative">
+        <div className="bg-zinc-950 border border-zinc-800 rounded-t-3xl sm:rounded-3xl w-full max-w-xl h-[92dvh] sm:h-[88dvh] flex flex-col overflow-hidden text-white shadow-2xl relative">
           
           {/* ==================================================== */}
           {/* TOP IMAGE CAROUSEL / 3D / 360 SECTION */}
@@ -299,13 +301,15 @@ export default function VehicleModal({
                   <>
                     <button
                       onClick={prevImage}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 p-2 bg-black/65 backdrop-blur-md rounded-full text-white hover:bg-black transition opacity-90 sm:opacity-0 group-hover:opacity-100"
+                      aria-label={lang === "am" ? "ቀዳሚ ፎቶ" : "Previous photo"}
+                      className="absolute left-2 top-[40%] -translate-y-1/2 h-11 w-11 flex items-center justify-center bg-black/65 backdrop-blur-md rounded-full text-white hover:bg-black transition opacity-90 sm:opacity-0 group-hover:opacity-100"
                     >
                       <ChevronLeft size={18} />
                     </button>
                     <button
                       onClick={nextImage}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 bg-black/65 backdrop-blur-md rounded-full text-white hover:bg-black transition opacity-90 sm:opacity-0 group-hover:opacity-100"
+                      aria-label={lang === "am" ? "ቀጣይ ፎቶ" : "Next photo"}
+                      className="absolute right-2 top-[40%] -translate-y-1/2 h-11 w-11 flex items-center justify-center bg-black/65 backdrop-blur-md rounded-full text-white hover:bg-black transition opacity-90 sm:opacity-0 group-hover:opacity-100"
                     >
                       <ChevronRight size={18} />
                     </button>
@@ -367,14 +371,16 @@ export default function VehicleModal({
               <div className="flex items-center gap-2 pointer-events-auto">
                 <button
                   onClick={() => setIsLightboxOpen(true)}
-                  className="p-2 bg-black/65 backdrop-blur-md rounded-full text-white hover:bg-black transition"
+                  className="h-11 w-11 flex items-center justify-center bg-black/65 backdrop-blur-md rounded-full text-white hover:bg-black transition"
                   title="View Fullscreen"
+                  aria-label={lang === "am" ? "ሙሉ ስክሪን" : "View fullscreen"}
                 >
                   <Maximize2 size={16} />
                 </button>
                 <button
                   onClick={onClose}
-                  className="p-2 bg-black/65 backdrop-blur-md rounded-full text-white hover:bg-black transition"
+                  aria-label={lang === "am" ? "ዝጋ" : "Close"}
+                  className="h-11 w-11 flex items-center justify-center bg-black/65 backdrop-blur-md rounded-full text-white hover:bg-black transition"
                 >
                   <X size={16} />
                 </button>
@@ -466,71 +472,74 @@ export default function VehicleModal({
             {/* CURTAIN BODY: SPECS & DETAILS */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               
-              {/* Title & Price Row */}
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <span className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">
-                    {vehicle.make}
+              {/* Title, then price on its own line so it never wraps */}
+              <div className="min-w-0">
+                <span className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">
+                  {vehicle.make}
+                </span>
+                <h2 className="text-xl font-black leading-snug break-words">
+                  {vehicle.year} {vehicle.model}
+                </h2>
+                <p className="text-zinc-400 text-xs mt-1 flex items-center gap-1.5 flex-wrap">
+                  <span>{vehicle.body_type}</span>
+                  <span>•</span>
+                  <span>{getConditionLabel(vehicle.condition)}</span>
+                  <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${getPlateBadgeClasses(vehicle.plate_status)}`}>
+                    🏷️ {getPlateLabel(vehicle.plate_status, lang === "am")}
                   </span>
-                  <h2 className="text-xl font-black">
-                    {vehicle.year} {vehicle.model}
-                  </h2>
-                  <p className="text-zinc-400 text-xs mt-0.5 flex items-center gap-1.5 flex-wrap">
-                    <span>{vehicle.body_type}</span>
-                    <span>•</span>
-                    <span>{getConditionLabel(vehicle.condition)}</span>
-                    <span>•</span>
-                    <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${getPlateBadgeClasses(vehicle.plate_status)}`}>
-                      🏷️ {getPlateLabel(vehicle.plate_status, lang === "am")}
-                    </span>
-                  </p>
-                </div>
-                <div className="text-right">
+                </p>
+                <div className="mt-3 flex items-baseline gap-2 flex-wrap">
                   {vehicle.price != null ? (
                     <>
-                      <span className="text-xl font-black text-amber-400 block">
-                        {vehicle.price.toLocaleString()} ETB
+                      <span className="text-2xl font-black text-amber-400 tabular-nums whitespace-nowrap">
+                        {vehicle.price.toLocaleString()} <span className="text-base">ETB</span>
                       </span>
-                      <span className="text-[10px] text-zinc-500">{t.negotiable}</span>
+                      <span className="text-[11px] font-semibold text-zinc-400 bg-white/[0.05] px-2 py-0.5 rounded-md">
+                        {t.negotiable}
+                      </span>
                     </>
                   ) : (
-                    <span className="text-base font-bold text-amber-400 block">
+                    <span className="text-lg font-bold text-amber-400">
                       {lang === "am" ? "ዋጋ በስልክ" : "Call for Price"}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Share & Copy Action Row */}
-              <div className="flex items-center gap-2">
+              {/* Share / full page / copy: three equal icon buttons with short labels */}
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={handleShareToTelegram}
-                  className="flex-1 py-2 px-3 rounded-xl bg-[#229ED9]/15 hover:bg-[#229ED9]/25 border border-[#229ED9]/30 text-[#45B6ED] hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 shadow-sm"
+                  className="h-11 min-w-0 px-2 rounded-xl bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-[#45B6ED] hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95"
+                  title={lang === "am" ? "በቴሌግራም አጋራ" : "Share on Telegram"}
                 >
-                  <TelegramIcon size={14} />
-                  <span>{lang === "am" ? "በቴሌግራም አጋራ" : "Share Telegram"}</span>
+                  <TelegramIcon size={15} />
+                  <span className="truncate">{lang === "am" ? "አጋራ" : "Share"}</span>
                 </button>
 
                 <Link
                   href={`/vehicles/${vehicle.id}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="py-2 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-amber-400 font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95"
+                  className="h-11 min-w-0 px-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-400 font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95"
                   title="Open Dedicated Vehicle Page"
                 >
-                  <ExternalLink size={14} />
-                  <span className="hidden sm:inline">{lang === "am" ? "ሙሉ ገጽ" : "Page"}</span>
+                  <ExternalLink size={15} />
+                  <span className="truncate">{lang === "am" ? "ሙሉ ገጽ" : "Page"}</span>
                 </Link>
 
                 <button
                   onClick={handleCopySpecs}
-                  className={`py-2 px-3.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 ${
+                  title={t.copySpecs}
+                  className={`h-11 min-w-0 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 ${
                     copied
-                      ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
-                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-300"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300"
                   }`}
                 >
-                  {copied ? <Check size={14} /> : <Copy size={14} />}
-                  <span>{copied ? t.specsCopied : t.copySpecs}</span>
+                  {copied ? <Check size={15} /> : <Copy size={15} />}
+                  <span className="truncate">
+                    {copied ? (lang === "am" ? "ተቀድቷል" : "Copied") : lang === "am" ? "ኮፒ" : "Copy"}
+                  </span>
                 </button>
               </div>
 
@@ -625,42 +634,19 @@ export default function VehicleModal({
 
             </div>
 
-           {/* FIXED BOTTOM ACTION BAR */}
-            <div className="p-4 border-t border-zinc-800 bg-zinc-950 flex gap-2.5 flex-shrink-0">
-              <a
-                href="tel:+251911646628"
-                className="px-4 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-xl transition flex items-center justify-center gap-1.5 text-xs font-bold"
-                title="Call Sales Desk (+251 911 646 628)"
-              >
-                <Phone size={16} /> 0911 646 628
-              </a>
-              <a
-                href="tel:+251900061300"
-                className="px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-emerald-400 rounded-xl transition flex items-center justify-center gap-1.5 text-xs font-bold"
-                title="Call Sales Desk (+251 900 061 300)"
-              >
-                <Phone size={16} /> 0900 061 300
-              </a>
-
-              {vehicle.status === "Sold" ? (
-                <a
-                  href="tel:+251911646628"
-                  className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl text-xs sm:text-sm transition text-center flex items-center justify-center"
-                >
-                  {t.findSimilar}
-                </a>
-              ) : (
-                <button
-                  onClick={() => {
-                    onClose();
-                    onBook();
-                  }}
-                  className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs sm:text-sm transition shadow-lg shadow-amber-500/20"
-                >
-                  {t.bookVisitBtn}
-                </button>
-              )}
-            </div>
+            {/* STICKY BOTTOM ACTION BAR: Call (chooser for 2 lines) + Telegram + Book a Visit */}
+            <VehicleActionBar
+              lang={lang}
+              phones={SALES_PHONES}
+              telegramUrl={TELEGRAM_CHAT_URL}
+              isSold={vehicle.status === "Sold"}
+              findSimilarLabel={t.findSimilar}
+              onBook={() => {
+                onClose();
+                onBook();
+              }}
+              className="border-t border-zinc-800 bg-zinc-950 flex-shrink-0"
+            />
 
           </div>
         </div>
