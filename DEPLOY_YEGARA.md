@@ -4,19 +4,19 @@ Replace these placeholders everywhere below:
 
 | Placeholder | Example | Where to find it |
 |---|---|---|
-| `CPANELUSER` | `acwalet1` | cPanel right sidebar → "Current User" |
-| `acwale.et` | your domain | the domain you bought |
+| `CPANELUSER` | `acwaleba` | cPanel right sidebar → "Current User" |
+| `acwale.et` | `acwalecarmarket.com` | the domain you bought |
 
 **Layout**
 
 | Part | URL | cPanel tool | Folder on server |
 |---|---|---|---|
 | Next.js frontend | `https://acwale.et` | Setup Node.js App | `~/acwale_frontend` |
-| FastAPI backend | `https://api.acwale.et` | Setup Python App | `~/repos/waga-auto-ac-wale-dealership/backend` |
+| FastAPI backend | `https://api.acwale.et/v1` | Setup Python App | `~/repos/waga-auto-ac-wale-dealership/backend` |
 | SQLite DB + photos | – | File Manager | `~/acwale_data` |
 
 The browser only talks to `acwale.et`. Next.js forwards `/api/*`, `/static/*` and `/uploads/*` to the
-backend at `api.acwale.et`, so there is no CORS or mixed-content trouble.
+backend at `api.acwale.et/v1`, so there is no CORS or mixed-content trouble.
 
 ---
 
@@ -61,16 +61,26 @@ upload the `.db` file as `acwale_data/ac_wale_cars.db` and the photos into `acwa
 |---|---|
 | Python version | highest offered (3.11+ preferred, 3.10 minimum) |
 | Application root | `repos/waga-auto-ac-wale-dealership/backend` |
-| Application URL | `api.acwale.et` (path empty) |
+| Application URL | `api.acwale.et` + path `v1` (the root `/` did not work on Yegara) |
 | Application startup file | `passenger_wsgi.py` |
 | Application Entry point | `application` |
 | Passenger log file | `/home/CPANELUSER/logs/acwale-api.log` |
 
 Click **Create**.
 
+**3b-2. Unlock the folders (REQUIRED).** cPanel's Git tool creates `repos/` with permission 700, which
+makes LiteSpeed answer every request with its own 404 without ever starting the app. In Terminal:
+
+```
+chmod 755 ~/repos ~/repos/waga-auto-ac-wale-dealership ~/repos/waga-auto-ac-wale-dealership/backend
+```
+
+If cPanel replaced `backend/passenger_wsgi.py` with its own template (it contains `load_source`), run
+`cd ~/repos/waga-auto-ac-wale-dealership && git checkout -- backend/passenger_wsgi.py`.
+
 **3c. Environment file.** File Manager → `repos/waga-auto-ac-wale-dealership/backend/` →
 copy `.env.cpanel.example` to `.env` → Edit → fill in `CPANELUSER`, domain, `JWT_SECRET_KEY`,
-the **new** Telegram token, AfroMessage token. The app refuses to start without a real `JWT_SECRET_KEY`.
+the **new** Telegram token, AfroMessage token. The app refuses to start without a real `JWT_SECRET_KEY`. Then `chmod 600 .env`.
 
 **3d. Install packages.** Back in Setup Python App → your app → "Configuration files" →
 type `requirements-cpanel.txt` → **Add** → **Run Pip Install**.
@@ -78,15 +88,17 @@ type `requirements-cpanel.txt` → **Add** → **Run Pip Install**.
 (Terminal alternative: copy the `source …/activate` command shown at the top of the app page, then
 `cd ~/repos/waga-auto-ac-wale-dealership/backend && pip install -r requirements-cpanel.txt`)
 
-**3e. Start.** Click **Restart**. Open `https://api.acwale.et/docs` — the Swagger page should load.
+**3e. Start.** In Terminal:
+`cloudlinux-selector restart --json --interpreter python --app-root repos/waga-auto-ac-wale-dealership/backend`
+Open `https://api.acwale.et/v1/docs` — the Swagger page should load; `https://api.acwale.et/v1/api/vehicles` returns JSON.
 The database file `~/acwale_data/ac_wale_cars.db` is created automatically on first request.
-If you get an error page, read `~/logs/acwale-api.log`.
+If you get an error page, read `backend/app_debug.log`.
 
 **3f. Telegram webhook** (replaces the background poller, which cannot run on shared hosting).
 Open this in a browser once, with your NEW token and the `TELEGRAM_WEBHOOK_SECRET` from `.env`:
 
 ```
-https://api.telegram.org/bot<NEW_TOKEN>/setWebhook?url=https://api.acwale.et/api/telegram/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>
+https://api.telegram.org/bot<NEW_TOKEN>/setWebhook?url=https://api.acwale.et/v1/api/telegram/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>
 ```
 
 It should answer `{"ok":true,"result":true,"description":"Webhook was set"}`.
@@ -126,7 +138,7 @@ Environment variables (Add Variable):
 | Name | Value |
 |---|---|
 | `NODE_ENV` | `production` |
-| `INTERNAL_API_URL` | `https://api.acwale.et` |
+| `INTERNAL_API_URL` | `https://api.acwale.et/v1` |
 | `NEXT_PUBLIC_SITE_URL` | `https://acwale.et` |
 
 Click **Create** → **Restart**. **Do NOT click "Run NPM Install"** — the standalone bundle already
@@ -156,7 +168,7 @@ Also download `acwale_data/` to your PC monthly.
 
 ## 7. Updating later
 
-- **Backend:** Git Version Control → Manage → Pull or Deploy → **Update from Remote** → Setup Python App → **Restart**
+- **Backend:** Git Version Control → Manage → Pull or Deploy → **Update from Remote** → re-run the `chmod 755` line from 3b-2 → restart (3e)
   (Run Pip Install again only if `requirements-cpanel.txt` changed.)
 - **Frontend:** on your PC `npm run build:cpanel` → zip → upload & extract over `acwale_frontend/` → **Restart**.
 
@@ -164,9 +176,11 @@ Also download `acwale_data/` to your PC monthly.
 
 | Symptom | Fix |
 |---|---|
-| `JWT_SECRET_KEY is missing…` in log | Fill `JWT_SECRET_KEY` in `backend/.env`, Restart |
+| `JWT_SECRET_KEY is missing…` in `app_debug.log` | Fill `JWT_SECRET_KEY` in `backend/.env`, Restart |
 | `No module named …` | Run Pip Install again; check the Python version |
 | `database is locked` | Should not happen (WAL mode on); make sure only one Python app uses the DB |
 | Photos 404 | Check `STATIC_ROOT` in `.env` and that files are in `acwale_data/static/uploads/` |
+| LiteSpeed black 404 page on every API URL | Folder permissions (3b-2) or cPanel template in `passenger_wsgi.py` |
+| "Request Timeout" 500 | Old `passenger_wsgi.py` without the per-worker bridge; restore it from Git |
 | Frontend 503 / "Incomplete response" | Wrong Node version or out of memory: cPanel → Resource Usage |
 | Telegram /start links do nothing | Re-run setWebhook (3f); check secret matches `.env` |

@@ -24,3 +24,7 @@ static/uploads/
 .idea/
 .DS_Store
 Thumbs.db
+
+# cPanel runtime logs
+app_debug.log
+stderr.log
