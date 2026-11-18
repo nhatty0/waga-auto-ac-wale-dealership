@@ -1,20 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Clock, 
-  Navigation, 
-  ExternalLink, 
-  Copy, 
-  Check, 
-  Send, 
-  Building2, 
-  Compass, 
-  Calendar 
-} from "lucide-react";
+import { MapPin, Phone, Mail, Clock, Navigation, Copy, Check, Send } from "lucide-react";
+import CallChooser from "@/components/CallChooser";
+import {
+  ADDRESS,
+  CONTACT_EMAIL,
+  GOOGLE_MAPS_URL,
+  HOURS,
+  SALES_PHONES,
+  TELEGRAM_CHAT_URL,
+  addressCopyText,
+} from "@/lib/contact";
 
 interface LocationSectionProps {
   lang?: "am" | "en";
@@ -23,17 +20,13 @@ interface LocationSectionProps {
 export default function LocationSection({ lang = "am" }: LocationSectionProps) {
   const isAm = lang === "am";
   const [copied, setCopied] = useState(false);
-
-  const GOOGLE_MAPS_URL = "https://maps.app.goo.gl/v5NbRBzRNaNNZWzQA?g_st=atm";
-
-  const addressText = isAm
-    ? "22 (ሃያ ሁለት) አዋራሪስ ሆቴል ጀርባ፣ አዲስ አበባ (AC WALE MARKET)"
-    : "Hayahulet, Behind Awraris Hotel, Addis Ababa, Ethiopia (AC WALE MARKET)";
+  const [callOpen, setCallOpen] = useState(false);
+  const address = isAm ? ADDRESS.am : ADDRESS.en;
 
   const handleCopyAddress = async () => {
     try {
       if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(addressText);
+        await navigator.clipboard.writeText(addressCopyText(lang));
         setCopied(true);
         setTimeout(() => setCopied(false), 2500);
       }
@@ -42,234 +35,112 @@ export default function LocationSection({ lang = "am" }: LocationSectionProps) {
     }
   };
 
+  const secondaryBtn =
+    "h-11 px-3.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 text-zinc-100 text-[13px] font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 whitespace-nowrap";
+
   return (
-    <section id="showroom-location" className="max-w-4xl mx-auto px-4 py-8 scroll-mt-20">
-      <div className="relative overflow-hidden rounded-3xl bg-zinc-950 border border-zinc-800 p-6 sm:p-10 shadow-2xl">
-        {/* Glow ambient background accents */}
-        <div className="absolute top-0 left-1/3 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 right-10 w-64 h-64 bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
+    <section id="showroom-location" className="max-w-5xl mx-auto px-4 py-6 scroll-mt-20">
+      <div className="rounded-3xl bg-zinc-900/60 ring-1 ring-white/[0.06] p-5 sm:p-8">
+        {/* Header */}
+        <span className="inline-flex items-center gap-1.5 text-emerald-400 text-[11px] font-bold uppercase tracking-wider">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          {isAm ? "ክፍት ነው • ሾውሩሙን ይጎብኙ" : "Open Today • Visit Our Lot"}
+        </span>
+        <h2 className="mt-2 text-xl sm:text-2xl font-black text-white tracking-tight">
+          {isAm ? "ይምጡ እና ይጎብኙን" : "Visit Our Showroom Lot"}
+        </h2>
+        <p className="mt-1 text-xs sm:text-sm text-zinc-400">
+          {isAm
+            ? "በአካል መጥተው ይመርጡ፣ ይሞክሩ፣ በደቂቃዎች ውስጥ ይጨርሱ።"
+            : "Inspect vehicles in person, test drive on our lot, and finalize deals securely."}
+        </p>
 
-        <div className="relative z-10 space-y-8">
-          {/* Header Title */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-6">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>{isAm ? "ክፍት ነው • ሾውሩሙን ይጎብኙ" : "Open Today • Visit Our Lot"}</span>
-                </span>
-                <span className="text-[11px] font-mono text-amber-400 font-semibold">22 አዋራሪስ ሆቴል ጀርባ</span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                {isAm ? "ይምጡ እና ይጎብኙን (Visit Our Showroom Lot)" : "Visit Our Showroom Lot"}
-              </h2>
-              <p className="text-zinc-400 text-xs sm:text-sm mt-1">
-                {isAm 
-                  ? "AC WALE MARKET (ኤሲ ዋለ የመኪና መሸጫ እና ኪራይ) • በአካል መጥተው ይመርጡ፣ ይሞክሩ፣ በደቂቃዎች ውስጥ ይጨርሱ"
-                  : "AC WALE MARKET • Inspect vehicles in person, test drive on our lot, and finalize deals securely."}
-              </p>
-            </div>
+        {/* Address: two lines max */}
+        <div className="mt-5 flex items-start gap-3">
+          <span className="h-10 w-10 shrink-0 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+            <MapPin size={20} />
+          </span>
+          <address className="not-italic min-w-0">
+            <p className="text-[15px] font-bold text-white leading-snug">{address.line1}</p>
+            <p className="text-sm text-zinc-400">{address.line2}</p>
+          </address>
+        </div>
 
-            {/* Quick Map Action */}
-            <a
-              href={GOOGLE_MAPS_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="self-start sm:self-auto py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs transition flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95"
-            >
-              <Navigation size={15} />
-              <span>{isAm ? "📍 አድራሻ በ Google Maps" : "Open in Google Maps"}</span>
+        {/* Actions: Maps / Copy / Call */}
+        <div className="mt-4 grid grid-cols-[1fr_auto_auto] gap-2">
+          <a
+            href={GOOGLE_MAPS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="h-11 min-w-0 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-[13px] font-black flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/15 transition active:scale-95"
+          >
+            <Navigation size={16} className="shrink-0" />
+            <span className="truncate">
+              <span className="sm:hidden">{isAm ? "ካርታ" : "Maps"}</span>
+              <span className="hidden sm:inline">{isAm ? "አድራሻ በ Google Maps" : "Open in Google Maps"}</span>
+            </span>
+          </a>
+          <button type="button" onClick={handleCopyAddress} className={secondaryBtn} aria-live="polite">
+            {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+            <span className={copied ? "text-emerald-400" : ""}>
+              {copied ? (isAm ? "ተገልብጧል" : "Copied") : isAm ? "ኮፒ" : "Copy"}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setCallOpen(true)}
+            className={secondaryBtn}
+            aria-haspopup="dialog"
+          >
+            <Phone size={16} className="text-amber-400" />
+            <span>{isAm ? "ደውል" : "Call"}</span>
+          </button>
+        </div>
+
+        {/* Hours: compact table, international + Ethiopian time */}
+        <div className="mt-6 pt-5 border-t border-white/[0.06]">
+          <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+            <Clock size={13} className="text-amber-400" />
+            {isAm ? "የስራ ሰዓታት" : "Working Hours"}
+          </h3>
+          <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-5 gap-y-2 text-[13px]">
+            <dt className="text-zinc-400">{HOURS.weekdays.label[lang]}</dt>
+            <dd className="text-white font-semibold">
+              <span className="whitespace-nowrap">{isAm ? HOURS.weekdays.local : HOURS.weekdays.intl}</span>
+              <span className="block sm:inline sm:ml-2 text-xs font-normal text-zinc-500 whitespace-nowrap">
+                {isAm ? HOURS.weekdays.intl : HOURS.weekdays.local}
+              </span>
+            </dd>
+            <dt className="text-zinc-400">{HOURS.sunday.label[lang]}</dt>
+            <dd className="text-zinc-300">{HOURS.sunday.text[lang]}</dd>
+          </dl>
+        </div>
+
+        {/* Other ways to reach us */}
+        <div className="mt-5 flex flex-wrap items-center gap-x-1 text-[13px] text-zinc-400">
+          {SALES_PHONES.map((p) => (
+            <a key={p.tel} href={`tel:${p.tel}`} className="h-11 px-2 -ml-2 mr-1 inline-flex items-center gap-1.5 hover:text-amber-400 tabular-nums">
+              <Phone size={13} className="text-zinc-500" />
+              {p.display}
             </a>
-          </div>
-
-          {/* Location & Working Hours Dual Columns */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Column 1: Physical Presence & Address */}
-            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center flex-shrink-0">
-                  <Building2 size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-white uppercase tracking-wide">
-                    {isAm ? "የሾውሩም ዋና አድራሻ" : "Showroom Address"}
-                  </h3>
-                  <p className="text-xs text-amber-400 font-semibold">
-                    AC WALE MARKET (ኤሲ ዋለ የመኪና መሸጫ)
-                  </p>
-                </div>
-              </div>
-
-              {/* Address Box */}
-              <div className="bg-black/70 border border-zinc-800 rounded-xl p-3.5 space-y-2">
-                <div className="flex items-start gap-2.5">
-                  <MapPin size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 text-xs text-zinc-200 leading-relaxed">
-                    <p className="font-bold text-white text-sm">
-                      {isAm 
-                        ? "22 (ሃያ ሁለት) አዋራሪስ ሆቴል ጀርባ፣ አዲስ አበባ" 
-                        : "Hayahulet, Behind Awraris Hotel, Addis Ababa, Ethiopia"}
-                    </p>
-                    <p className="text-amber-400/90 font-medium text-[11px] mt-0.5">
-                      {isAm 
-                        ? "22 አዋራሪስ ሆቴል ጀርባ • ዋና የመኪና መሸጫ እና ኪራይ ማዕከል" 
-                        : "Behind Awraris Hotel, 22 Mazoria Area • Primary Showroom Lot"}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleCopyAddress}
-                  className="w-full mt-2 py-1.5 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-[11px] font-semibold border border-zinc-700/60 transition flex items-center justify-center gap-1.5"
-                >
-                  {copied ? (
-                    <>
-                      <Check size={13} className="text-emerald-400" />
-                      <span className="text-emerald-400">{isAm ? "አድራሻው ተገልብጧል!" : "Address Copied!"}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={13} />
-                      <span>{isAm ? "አድራሻውን ኮፒ አድርግ (Copy Address)" : "Copy Showroom Address"}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Map Preview Simulated Frame */}
-              <div className="rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 p-3 text-center relative group">
-                <div className="flex items-center justify-between text-xs text-zinc-400 mb-2">
-                  <span className="flex items-center gap-1 font-mono text-[11px]">
-                    <Compass size={13} className="text-amber-400" /> 22 Awraris Hotel Pin
-                  </span>
-                  <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded font-semibold">
-                    Hayahulet Lot
-                  </span>
-                </div>
-                <div className="h-28 rounded-lg bg-gradient-to-tr from-zinc-900 via-zinc-900 to-zinc-800 border border-zinc-800/80 flex flex-col items-center justify-center gap-2 p-3 group-hover:border-amber-500/40 transition">
-                  <MapPin size={28} className="text-amber-400 animate-bounce" />
-                  <span className="text-xs font-bold text-white">
-                    {isAm ? "22 አዋራሪስ ሆቴል ጀርባ በቀላሉ ያገኙናል" : "Located Behind Awraris Hotel, 22"}
-                  </span>
-                  <a
-                    href={GOOGLE_MAPS_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] text-amber-400 hover:underline flex items-center gap-1 font-semibold"
-                  >
-                    <span>{isAm ? "አድራሻ በካርታ ይመልከቱ (Google Maps Pin)" : "Open Exact Google Maps Pin"}</span>
-                    <ExternalLink size={11} />
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* Column 2: Working Hours & Instant Hotlines */}
-            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 space-y-5 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center flex-shrink-0">
-                    <Clock size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-white uppercase tracking-wide">
-                      {isAm ? "የስራ ሰዓታት (Working Hours)" : "Business Working Hours"}
-                    </h3>
-                    <p className="text-xs text-zinc-400">
-                      {isAm ? "በቀጥታ መጥተው መኪኖችን መመልከት ይችላሉ" : "Walk-ins & Test Drives Welcome"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Hours Table */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-black/60 border border-zinc-800 text-xs">
-                    <div className="flex items-center gap-2 font-bold text-white">
-                      <Calendar size={14} className="text-amber-400" />
-                      <span>{isAm ? "ሰኞ - ቅዳሜ (Mon - Sat)" : "Monday - Saturday"}</span>
-                    </div>
-                    <span className="font-mono text-amber-400 font-bold">
-                      2:30 ጠዋት - 12:30 ማታ (8:30 AM - 6:30 PM)
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-black/40 border border-zinc-800 text-xs">
-                    <div className="flex items-center gap-2 font-medium text-zinc-300">
-                      <Calendar size={14} className="text-zinc-500" />
-                      <span>{isAm ? "እሁድ (Sunday)" : "Sunday"}</span>
-                    </div>
-                    <span className="font-mono text-zinc-400">
-                      {isAm ? "በከፊል ክፍት / በቀጠሮ (Half Day / Appointment)" : "Half Day / By Appointment"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Hotlines Grid */}
-                <div className="mt-5 pt-4 border-t border-zinc-800 space-y-2">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                    {isAm ? "የቀጥታ ስልክ መስመሮች (Hotlines)" : "Direct Hotlines & Support"}
-                  </p>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <a
-                      href="tel:+251911646628"
-                      className="p-2.5 rounded-xl bg-black/80 border border-amber-500/20 hover:border-amber-500 hover:bg-amber-500/10 text-white font-mono text-xs transition flex items-center gap-2 group"
-                    >
-                      <Phone size={14} className="text-amber-400 group-hover:scale-110 transition" />
-                      <div>
-                        <span className="block text-[10px] text-zinc-400 uppercase font-sans">
-                          {isAm ? "ሽያጭ እና ኪራይ 1" : "Sales Hotline 1"}
-                        </span>
-                        <span className="font-bold text-amber-300">+251 911 646 628</span>
-                      </div>
-                    </a>
-
-                    <a
-                      href="tel:+251900061300"
-                      className="p-2.5 rounded-xl bg-black/80 border border-amber-500/20 hover:border-amber-500 hover:bg-amber-500/10 text-white font-mono text-xs transition flex items-center gap-2 group"
-                    >
-                      <Phone size={14} className="text-amber-400 group-hover:scale-110 transition" />
-                      <div>
-                        <span className="block text-[10px] text-zinc-400 uppercase font-sans">
-                          {isAm ? "ሽያጭ እና ኪራይ 2" : "Sales Hotline 2"}
-                        </span>
-                        <span className="font-bold text-amber-300">+251 900 061 300</span>
-                      </div>
-                    </a>
-                  </div>
-
-                  <div className="pt-1 flex items-center gap-2 text-xs text-zinc-400">
-                    <Mail size={13} className="text-zinc-500" />
-                    <span>acwalecarmarket@gmail.com</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Contact Action Row */}
-              <div className="grid grid-cols-2 gap-3 pt-3">
-                <a
-                  href="tel:+251911646628"
-                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20"
-                >
-                  <Phone size={14} />
-                  <span>{isAm ? "ቀጥታ ይደውሉ" : "Call Now"}</span>
-                </a>
-
-                <a
-                  href="https://t.me/+251911646628"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-sky-600/20"
-                >
-                  <Send size={14} />
-                  <span>{isAm ? "በቴሌግራም ያነጋግሩን" : "Telegram Chat"}</span>
-                </a>
-              </div>
-            </div>
-          </div>
+          ))}
+          <a
+            href={TELEGRAM_CHAT_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="h-11 px-2 -ml-2 mr-1 inline-flex items-center gap-1.5 hover:text-sky-400"
+          >
+            <Send size={13} className="text-zinc-500" />
+            {isAm ? "በቴሌግራም ያነጋግሩን" : "Telegram Chat"}
+          </a>
+          <a href={`mailto:${CONTACT_EMAIL}`} className="h-11 px-2 -ml-2 inline-flex items-center gap-1.5 hover:text-zinc-200 break-all">
+            <Mail size={13} className="text-zinc-500" />
+            {CONTACT_EMAIL}
+          </a>
         </div>
       </div>
+
+      <CallChooser open={callOpen} onClose={() => setCallOpen(false)} phones={SALES_PHONES} lang={lang} />
     </section>
   );
 }

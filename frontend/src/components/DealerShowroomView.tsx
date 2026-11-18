@@ -19,6 +19,7 @@ import {
   Car,
   MapPin,
   Clock,
+  Mail,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Vehicle, Dealership } from "@/types";
@@ -39,6 +40,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useCompare } from "@/context/CompareContext";
 import { resolveImageUrl } from "@/lib/images";
 import { getPlateLabel, getPlateBadgeClasses, isNewSeriesPlate, getPlateType } from "@/lib/plates";
+import { ADDRESS, CONTACT_EMAIL, GOOGLE_MAPS_URL, HOURS, SALES_PHONES } from "@/lib/contact";
 
 interface DealerShowroomViewProps {
   dealerSlug: string;
@@ -363,7 +365,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
   };
 
   return (
-    <main className="min-h-screen bg-black text-white pb-32">
+    <main className="min-h-screen bg-black text-white">
       {/* Dealership-Specific Mobile-First Header */}
       <header className="sticky top-0 z-40 bg-black/70 backdrop-blur-xl border-b border-white/[0.06] pt-[env(safe-area-inset-top)]">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center gap-2">
@@ -896,15 +898,21 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
       />
 
       {/* OFFICIAL AC WALE MARKET FOOTER */}
-      <footer className="mt-20 border-t border-zinc-800/80 bg-zinc-950 py-12 px-4 text-center">
-        <div className="max-w-4xl mx-auto flex flex-col items-center gap-6">
+      <footer
+        className={`mt-12 border-t border-white/[0.06] bg-zinc-950 px-4 pt-8 ${
+          selectedVehicles.length > 0 || isAdminSession
+            ? "pb-36" // keep content clear of the floating compare dock / admin button
+            : "pb-[max(2rem,env(safe-area-inset-bottom))]"
+        }`}
+      >
+        <div className="max-w-5xl mx-auto flex flex-col gap-5 text-xs text-zinc-400">
           <div className="flex items-center gap-3">
             <img
               src="/ac-wale-logo.png"
               alt="AC WALE MARKET"
               className="h-10 w-10 rounded-lg object-contain bg-black border border-zinc-800"
             />
-            <div className="text-left">
+            <div className="min-w-0">
               <span className="font-black text-sm tracking-wider text-amber-400 block uppercase">
                 AC WALE MARKET
               </span>
@@ -914,65 +922,43 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
             </div>
           </div>
 
-          {/* Showroom Address & Hours in Footer */}
-          <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 sm:p-5 w-full max-w-2xl text-left grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="space-y-1.5">
-              <span className="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5 text-amber-400">
-                <MapPin size={13} /> {lang === "am" ? "የሾውሩም አድራሻ" : "Showroom Address"}
+          <div className="grid gap-3 sm:grid-cols-3 sm:gap-6">
+            <a
+              href={GOOGLE_MAPS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-2 hover:text-amber-400 transition"
+            >
+              <MapPin size={14} className="mt-0.5 shrink-0 text-amber-400" />
+              <span>
+                {lang === "am"
+                  ? `${ADDRESS.am.line1}፣ ${ADDRESS.am.line2}`
+                  : `${ADDRESS.en.line1}, ${ADDRESS.en.line2}`}
               </span>
-              <p className="text-zinc-200 leading-relaxed font-semibold">
-                {lang === "am" 
-                  ? "22 (ሃያ ሁለት) አዋራሪስ ሆቴል ጀርባ፣ አዲስ አበባ" 
-                  : "Hayahulet, Behind Awraris Hotel, Addis Ababa, Ethiopia"}
-              </p>
-              <a
-                href="https://maps.app.goo.gl/v5NbRBzRNaNNZWzQA?g_st=atm"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 hover:underline pt-1"
-              >
-                <span>{lang === "am" ? "📍 በ Google Maps ይመልከቱ (Awraris Hotel Pin)" : "📍 View on Google Maps (Behind Awraris Hotel)"}</span>
+            </a>
+            <p className="flex items-start gap-2">
+              <Clock size={14} className="mt-0.5 shrink-0 text-amber-400" />
+              <span>
+                {HOURS.weekdays.label[lang]}: {HOURS.weekdays.local} ({HOURS.weekdays.intl})
+                <br />
+                {HOURS.sunday.label[lang]}: {HOURS.sunday.text[lang]}
+              </span>
+            </p>
+            <div className="flex flex-col">
+              {SALES_PHONES.map((p) => (
+                <a key={p.tel} href={`tel:${p.tel}`} className="min-h-8 inline-flex items-center gap-2 hover:text-amber-400 tabular-nums">
+                  <Phone size={14} className="shrink-0 text-amber-400" />
+                  {p.display}
+                </a>
+              ))}
+              <a href={`mailto:${CONTACT_EMAIL}`} className="min-h-8 inline-flex items-center gap-2 hover:text-zinc-200 break-all">
+                <Mail size={14} className="shrink-0 text-amber-400" />
+                {CONTACT_EMAIL}
               </a>
             </div>
-
-            <div className="space-y-1.5 border-t sm:border-t-0 sm:border-l border-zinc-800 pt-3 sm:pt-0 sm:pl-4">
-              <span className="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5 text-amber-400">
-                <Clock size={13} /> {lang === "am" ? "የስራ ሰዓታት" : "Working Hours"}
-              </span>
-              <p className="text-zinc-300 font-mono text-[11px]">
-                {lang === "am" ? "ሰኞ - ቅዳሜ:" : "Mon - Sat:"} 2:30 ጠዋት - 12:30 ማታ (8:30 AM - 6:30 PM)
-              </p>
-              <p className="text-zinc-400 text-[11px]">
-                {lang === "am" ? "እሁድ: በከፊል ክፍት / በቀጠሮ" : "Sun: Half Day / By Appointment"}
-              </p>
-            </div>
           </div>
 
-          {/* Contact Direct Hotlines */}
-          <div className="flex flex-wrap justify-center items-center gap-3 text-xs font-semibold">
-            <a
-              href="tel:+251911646628"
-              className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition bg-amber-500/10 border border-amber-500/20 px-3.5 py-1.5 rounded-full"
-            >
-              <Phone size={13} />
-              <span>+251 911 646 628</span>
-            </a>
-            <a
-              href="tel:+251900061300"
-              className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition bg-amber-500/10 border border-amber-500/20 px-3.5 py-1.5 rounded-full"
-            >
-              <Phone size={13} />
-              <span>+251 900 061 300</span>
-            </a>
-            <a
-              href="mailto:acwalecarmarket@gmail.com"
-              className="text-zinc-400 hover:text-zinc-200 transition py-1 px-2"
-            >
-              acwalecarmarket@gmail.com
-            </a>
-          </div>
-
-          <p className="text-xs text-zinc-500 font-medium pt-2">
+          <p className="pt-4 border-t border-white/[0.06] text-[11px] text-zinc-500">
             © 2026 AC WALE MARKET. All rights reserved. Addis Ababa, Ethiopia
           </p>
         </div>
