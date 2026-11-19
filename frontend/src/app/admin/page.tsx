@@ -53,6 +53,7 @@ import HandoverPrintModal from "@/components/HandoverPrintModal";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
 import { compressImage } from "@/lib/compressImage";
+import { runPool, uploadWithRetry, UploadError } from "@/lib/uploadPhotos";
 import { getShowroomUrl, PRIMARY_DEALER_NAME, PRIMARY_DEALER_SLUG } from "@/lib/site";
 import { getPlateLabel, getPlateBadgeClasses, getPlateType, extractPlateNumber } from "@/lib/plates";
 
@@ -339,6 +340,9 @@ export default function AdminDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
+  const [uploadNote, setUploadNote] = useState("");
+  const [failedUploads, setFailedUploads] = useState<{ file: File; reason: string }[]>([]);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [editingVehicleId, setEditingVehicleId] = useState<number | null>(null);
   const [printingVehicle, setPrintingVehicle] = useState<Vehicle | null>(null);
@@ -400,6 +404,7 @@ export default function AdminDashboard() {
       with_driver_only: false,
     });
     setUploadedImages([]);
+    setFailedUploads([]);
     setEditingVehicleId(null);
   };
 
@@ -1373,52 +1378,86 @@ export default function AdminDashboard() {
     }
   };
 
+  // Uploads photos one per request (small bodies for shared hosting), two at a time,
+  // in selection order. Each photo is retried on transient errors; photos that still
+  // fail go to `failedUploads` so they can be retried with one tap.
+  const uploadPhotoBatch = async (files: File[]) => {
+    if (files.length === 0) return;
+    setUploading(true);
+    setUploadNote("");
+    setUploadProgress({ done: 0, total: files.length });
+
+    const endpoint = `${getApiBaseUrl()}/api/admin/upload-images`;
+    const batchUrls: (string[] | null)[] = files.map(() => null);
+    const failed: { index: number; file: File; reason: string }[] = [];
+    let unauthorized = false;
+
+    // Show each thumbnail as soon as it succeeds, but keep selection order even
+    // though two uploads run at once (and even if the user removed a photo meanwhile).
+    const insertInOrder = (i: number, urls: string[]) =>
+      setUploadedImages((prev) => {
+        for (let j = i - 1; j >= 0; j--) {
+          const prevUrls = batchUrls[j];
+          const pos = prevUrls ? prev.lastIndexOf(prevUrls[prevUrls.length - 1]) : -1;
+          if (pos >= 0) return [...prev.slice(0, pos + 1), ...urls, ...prev.slice(pos + 1)];
+        }
+        for (let j = i + 1; j < batchUrls.length; j++) {
+          const nextUrls = batchUrls[j];
+          const pos = nextUrls ? prev.indexOf(nextUrls[0]) : -1;
+          if (pos >= 0) return [...prev.slice(0, pos), ...urls, ...prev.slice(pos)];
+        }
+        return [...prev, ...urls];
+      });
+
+    try {
+      await runPool(files, 2, async (original, i) => {
+        if (unauthorized) return;
+        let file = original;
+        try {
+          file = await compressImage(original, 1600, 0.85);
+          const urls = await uploadWithRetry(endpoint, file, getAuthHeaders, {
+            onRetry: (attempt, err) =>
+              setUploadNote(`Retrying ${original.name} (${attempt}/3) after ${err.message}…`),
+          });
+          const normalized = urls.map((u) => resolveImageUrl(u));
+          batchUrls[i] = normalized;
+          insertInOrder(i, normalized);
+        } catch (err) {
+          if (err instanceof UploadError && err.status === 401) {
+            unauthorized = true;
+            return;
+          }
+          failed.push({ index: i, file, reason: err instanceof Error ? err.message : "upload failed" });
+        } finally {
+          setUploadProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
+        }
+      });
+
+      if (unauthorized) {
+        handleUnauthorized();
+        return;
+      }
+      failed.sort((a, b) => a.index - b.index);
+      setFailedUploads((prev) => [...prev, ...failed.map(({ file, reason }) => ({ file, reason }))]);
+    } finally {
+      setUploading(false);
+      setUploadProgress(null);
+      setUploadNote("");
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const input = e.target;
     const files = Array.from(input.files!);
-    setUploading(true);
+    input.value = "";
+    await uploadPhotoBatch(files);
+  };
 
-    const baseApi = getApiBaseUrl();
-    const failed: string[] = [];
-
-    try {
-      // One photo per request keeps each body small enough for shared hosting limits.
-      for (const original of files) {
-        try {
-          const file = await compressImage(original, 1600, 0.85);
-          const data = new FormData();
-          data.append("files", file);
-          const res = await fetch(`${baseApi}/api/admin/upload-images`, {
-            method: "POST",
-            headers: getAuthHeaders(),
-            body: data,
-          });
-          if (res.status === 401) {
-            handleUnauthorized();
-            return;
-          }
-          if (!res.ok) {
-            failed.push(`${original.name} (HTTP ${res.status})`);
-            continue;
-          }
-          const urls: string[] = await res.json();
-          const normalizedUrls = urls.map((u) => resolveImageUrl(u));
-          setUploadedImages((prev) => [...prev, ...normalizedUrls]);
-        } catch {
-          failed.push(`${original.name} (network error)`);
-        }
-      }
-
-      if (failed.length > 0) {
-        alert(
-          `${failed.length} of ${files.length} photo(s) failed to upload:\n` + failed.join("\n")
-        );
-      }
-    } finally {
-      setUploading(false);
-      input.value = "";
-    }
+  const retryFailedUploads = async () => {
+    const toRetry = failedUploads.map((f) => f.file);
+    setFailedUploads([]);
+    await uploadPhotoBatch(toRetry);
   };
 
   const removeUploadedImage = (indexToRemove: number) => {
@@ -1431,6 +1470,7 @@ export default function AdminDashboard() {
     setEditingVehicleId(v.id);
     const existingImages = v.images?.map((img) => resolveImageUrl(img.image_url)) || [];
     setUploadedImages(existingImages);
+    setFailedUploads([]);
 
     const standardBodies = ["Sedan", "SUV", "Hatchback", "Crossover", "Pickup"];
     const isCustom = !standardBodies.includes(v.body_type);
@@ -4351,8 +4391,21 @@ export default function AdminDashboard() {
                 <label className="border-2 border-dashed border-zinc-800 hover:border-amber-500/60 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition bg-zinc-950">
                   <UploadCloud size={20} className="text-zinc-400 mb-1" />
                   <span className="text-[11px] text-zinc-300 font-medium">
-                    {uploading ? "Uploading images..." : "Click to Upload Photos"}
+                    {uploading && uploadProgress
+                      ? `Uploading ${Math.min(uploadProgress.done + 1, uploadProgress.total)}/${uploadProgress.total}…`
+                      : "Click to Upload Photos"}
                   </span>
+                  {uploading && uploadProgress && (
+                    <span className="mt-2 block w-full max-w-[220px] h-1.5 rounded-full bg-zinc-800 overflow-hidden" aria-hidden="true">
+                      <span
+                        className="block h-full bg-amber-500 transition-all"
+                        style={{ width: `${Math.round((uploadProgress.done / uploadProgress.total) * 100)}%` }}
+                      />
+                    </span>
+                  )}
+                  {uploadNote && (
+                    <span className="mt-1 text-[11px] text-amber-400/90 text-center break-words max-w-full">{uploadNote}</span>
+                  )}
                   <input
                     type="file"
                     multiple
@@ -4388,6 +4441,39 @@ export default function AdminDashboard() {
                         </button>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {failedUploads.length > 0 && (
+                  <div role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 space-y-2">
+                    <p className="text-xs font-bold text-red-300">
+                      {failedUploads.length} photo{failedUploads.length > 1 ? "s" : ""} failed to upload
+                    </p>
+                    <ul className="space-y-1 text-[11px] text-red-200/90">
+                      {failedUploads.map((f, idx) => (
+                        <li key={idx} className="break-words">
+                          <span className="font-semibold">{f.file.name}</span> — {f.reason}
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={retryFailedUploads}
+                        disabled={uploading}
+                        className="flex-1 min-h-[44px] px-3 rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-50 text-white text-sm font-bold transition"
+                      >
+                        Retry failed photos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFailedUploads([])}
+                        disabled={uploading}
+                        className="min-h-[44px] px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold transition"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
