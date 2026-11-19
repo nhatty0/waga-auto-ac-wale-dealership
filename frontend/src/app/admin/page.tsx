@@ -2705,7 +2705,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setLotStatusFilter("in_lot")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                className={`min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   lotStatusFilter === "in_lot"
                     ? "bg-amber-500 text-black shadow-sm"
                     : "bg-zinc-800 text-zinc-400 hover:text-white"
@@ -2716,7 +2716,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setLotStatusFilter("all")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                className={`min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   lotStatusFilter === "all"
                     ? "bg-amber-500 text-black shadow-sm"
                     : "bg-zinc-800 text-zinc-400 hover:text-white"
@@ -2727,7 +2727,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setLotStatusFilter("released")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                className={`min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   lotStatusFilter === "released"
                     ? "bg-amber-500 text-black shadow-sm"
                     : "bg-zinc-800 text-zinc-400 hover:text-white"
@@ -2747,7 +2747,7 @@ export default function AdminDashboard() {
                       setSelectedLotIntakeIds(inLotCars.map((c) => c.id));
                     }
                   }}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-amber-400 hover:text-white border border-zinc-700 transition flex items-center gap-1"
+                  className="min-h-[44px] sm:min-h-0 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-amber-400 hover:text-white border border-zinc-700 transition flex items-center gap-1"
                   title="Select up to 4 in-lot cars for batch release printing"
                 >
                   <Printer size={12} />
@@ -2778,7 +2778,8 @@ export default function AdminDashboard() {
                 type="button"
                 onClick={fetchLotIntakes}
                 disabled={loadingLotIntakes}
-                className="p-2 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition disabled:opacity-50"
+                className="p-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center shrink-0 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition disabled:opacity-50"
+                aria-label="Refresh lot intakes"
                 title="Refresh lot intakes"
               >
                 <RefreshCw size={14} className={loadingLotIntakes ? "animate-spin" : ""} />
@@ -2856,9 +2857,10 @@ export default function AdminDashboard() {
                           {/* Left: Vehicle Title, Plate, and Status */}
                           <div className="flex items-start gap-3 sm:gap-3.5 min-w-0 w-full lg:w-auto lg:min-w-[260px]">
                             {item.is_in_lot && (
-                              <div className="pt-3 flex items-center shrink-0">
+                              <label className="-ml-2 -mt-1 sm:ml-0 sm:mt-0 sm:pt-3 w-11 h-11 sm:w-auto sm:h-auto flex items-center justify-center shrink-0 cursor-pointer">
                                 <input
                                   type="checkbox"
+                                  aria-label={`Select ${item.vehicle_name} ${item.plate_number} for batch release`}
                                   title="ይምረጡ (Select for batch release - up to 4)"
                                   checked={selectedLotIntakeIds.includes(item.id)}
                                   onChange={(e) => {
@@ -2876,9 +2878,9 @@ export default function AdminDashboard() {
                                       );
                                     }
                                   }}
-                                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-400 focus:ring-offset-zinc-900 cursor-pointer"
+                                  className="w-5 h-5 sm:w-4 sm:h-4 rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-400 focus:ring-offset-zinc-900 cursor-pointer"
                                 />
-                              </div>
+                              </label>
                             )}
 
                             <div
@@ -2989,7 +2991,7 @@ export default function AdminDashboard() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenReleaseModal(item)}
-                                className="w-full sm:w-auto px-4 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 active:scale-95"
+                                className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 active:scale-95"
                               >
                                 <DoorOpen size={16} />
                                 <span>🚪 መኪና መውጫ (Release Pass)</span>
@@ -2998,7 +3000,7 @@ export default function AdminDashboard() {
                               <button
                                 type="button"
                                 onClick={() => handleViewExistingGatePass(item)}
-                                className="w-full sm:w-auto px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                                className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-sm sm:text-xs font-bold transition flex items-center justify-center gap-1.5"
                               >
                                 <FileText size={14} className="text-amber-400" />
                                 <span>📄 ደረሰኝ እይ (View Slip)</span>
@@ -3032,7 +3034,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => fetchHandovers()}
-                className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                className="min-h-[44px] px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
                 title="Refresh contracts"
               >
                 <RefreshCw size={14} className={loadingHandovers ? "animate-spin text-amber-400" : "text-amber-400"} />
@@ -3041,7 +3043,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setShowHandoverFormModal(true)}
-                className="flex-1 sm:flex-none px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95"
+                className="flex-1 sm:flex-none min-h-[44px] px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95"
               >
                 <Plus size={16} />
                 <span>+ አዲስ የመኪና መረከቢያ ፎርም (New Contract)</span>
@@ -3119,7 +3121,8 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => setHandoverSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+                  aria-label="Clear search"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center text-zinc-500 hover:text-white"
                 >
                   <X size={13} />
                 </button>
@@ -4012,7 +4015,7 @@ export default function AdminDashboard() {
 
               {/* BANK LOAN / TRANSFER TOGGLE */}
               <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-3 space-y-3">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+                <label className="flex items-center gap-2 min-h-[44px] cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={formData.has_bank_loan}
@@ -4130,7 +4133,7 @@ export default function AdminDashboard() {
 
                 {(formData.listing_type === "rent" || formData.listing_type === "both") && (
                   <div className="flex flex-wrap gap-4 pt-1">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <label className="flex items-center gap-2 min-h-[44px] cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={formData.with_driver_only}
@@ -4144,7 +4147,7 @@ export default function AdminDashboard() {
                       </span>
                     </label>
 
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <label className="flex items-center gap-2 min-h-[44px] cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={formData.rental_available}
@@ -5166,12 +5169,12 @@ export default function AdminDashboard() {
       {/* OFFICIAL AC WALE MARKET FOOTER */}
       <footer className="mt-16 border-t border-zinc-900 py-6 text-center text-xs text-zinc-500">
         <p>© 2026 AC WALE MARKET. All rights reserved. 22 አዋራሪስ ሆቴል ጀርባ፣ Addis Ababa, Ethiopia</p>
-        <div className="flex justify-center items-center gap-3 mt-2 font-mono text-[11px] text-zinc-400">
-          <a href="tel:+251911646628" className="hover:text-amber-400 transition">📞 +251 911 646 628</a>
-          <span>•</span>
-          <a href="tel:+251900061300" className="hover:text-amber-400 transition">📞 +251 900 061 300</a>
-          <span>•</span>
-          <a href="mailto:acwalecarmarket@gmail.com" className="hover:text-amber-400 transition">acwalecarmarket@gmail.com</a>
+        <div className="flex flex-wrap justify-center items-center gap-x-3 mt-2 font-mono text-[11px] text-zinc-400">
+          <a href="tel:+251911646628" className="inline-flex items-center min-h-[44px] sm:min-h-0 whitespace-nowrap hover:text-amber-400 transition">📞 +251 911 646 628</a>
+          <span className="hidden sm:inline">•</span>
+          <a href="tel:+251900061300" className="inline-flex items-center min-h-[44px] sm:min-h-0 whitespace-nowrap hover:text-amber-400 transition">📞 +251 900 061 300</a>
+          <span className="hidden sm:inline">•</span>
+          <a href="mailto:acwalecarmarket@gmail.com" className="inline-flex items-center min-h-[44px] sm:min-h-0 hover:text-amber-400 transition">acwalecarmarket@gmail.com</a>
         </div>
       </footer>
 
