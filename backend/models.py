@@ -53,7 +53,7 @@ class Vehicle(Base):
     model = Column(String(100), nullable=False, index=True)
     year = Column(Integer, nullable=False)
     price = Column(Float, nullable=True)
-    mileage = Column(Integer, nullable=True, default=0)
+    mileage = Column(Integer, nullable=True)  # NULL = not entered
     condition = Column(String(50), default="Slightly Used")
     fuel_type = Column(String(50), nullable=False)
     transmission = Column(String(50), default="Automatic")

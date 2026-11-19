@@ -51,7 +51,7 @@ class VehicleBase(BaseModel):
     model: str
     year: int
     price: Optional[float] = None
-    mileage: Optional[int] = 0
+    mileage: Optional[int] = None  # None = not entered (shown as blank, not "0 km")
     condition: Optional[str] = "Slightly Used"
     fuel_type: str = "Gasoline"
     transmission: str = "Automatic"

@@ -1,4 +1,5 @@
 "use client";
+import { formatMileage } from "@/lib/mileage";
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Printer, Phone } from "lucide-react";
@@ -234,14 +235,17 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
 
       {/* KEY SPECS GRID */}
       <div className="grid grid-cols-3 gap-2 mb-3 text-center">
-        <div className="bg-zinc-100 border border-zinc-300 rounded-xl p-2">
-          <span className="text-[10px] font-bold text-zinc-500 uppercase block">
-            Mileage / የተጓዘው
-          </span>
-          <span className="text-sm font-black text-black mt-0.5 block">
-            {(vehicle.mileage ?? 0).toLocaleString()} km
-          </span>
-        </div>
+        {/* Mileage tile only when the admin entered a value (0 included) */}
+        {formatMileage(vehicle.mileage) && (
+          <div className="bg-zinc-100 border border-zinc-300 rounded-xl p-2">
+            <span className="text-[10px] font-bold text-zinc-500 uppercase block">
+              Mileage / የተጓዘው
+            </span>
+            <span className="text-sm font-black text-black mt-0.5 block">
+              {formatMileage(vehicle.mileage)}
+            </span>
+          </div>
+        )}
 
         <div className="bg-zinc-100 border border-zinc-300 rounded-xl p-2">
           <span className="text-[10px] font-bold text-zinc-500 uppercase block">

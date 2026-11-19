@@ -1,5 +1,6 @@
 "use client";
 
+import { formatMileage } from "@/lib/mileage";
 import { useState } from "react";
 import Link from "next/link";
 import {
@@ -513,15 +514,17 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
           </h3>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div className="bg-zinc-900/70 border border-zinc-800 p-3 rounded-xl">
-              <span className="text-zinc-500 block mb-1">
-                {lang === "am" ? "የተጓዘው ርቀት" : "Mileage"}
-              </span>
-              <span className="font-bold text-white flex items-center gap-1.5">
-                <Gauge size={14} className="text-amber-400" />
-                {(vehicle.mileage ?? 0).toLocaleString()} km
-              </span>
-            </div>
+            {formatMileage(vehicle.mileage) && (
+              <div className="bg-zinc-900/70 border border-zinc-800 p-3 rounded-xl">
+                <span className="text-zinc-500 block mb-1">
+                  {lang === "am" ? "የተጓዘው ርቀት" : "Mileage"}
+                </span>
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  <Gauge size={14} className="text-amber-400" />
+                  {formatMileage(vehicle.mileage)}
+                </span>
+              </div>
+            )}
 
             <div className="bg-zinc-900/70 border border-zinc-800 p-3 rounded-xl">
               <span className="text-zinc-500 block mb-1">

@@ -53,6 +53,7 @@ import HandoverPrintModal from "@/components/HandoverPrintModal";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
 import { compressImage } from "@/lib/compressImage";
+import { formatMileage, parseMileageInput } from "@/lib/mileage";
 import { runPool, uploadWithRetry, UploadError } from "@/lib/uploadPhotos";
 import { getShowroomUrl, PRIMARY_DEALER_NAME, PRIMARY_DEALER_SLUG } from "@/lib/site";
 import { getPlateLabel, getPlateBadgeClasses, getPlateType, extractPlateNumber } from "@/lib/plates";
@@ -1543,7 +1544,7 @@ export default function AdminDashboard() {
         model: formData.model,
         year: Number(formData.year),
         price: formData.price ? parseFloat(formData.price) : null,
-        mileage: formData.mileage ? parseInt(formData.mileage) : 0,
+        mileage: parseMileageInput(formData.mileage),
         condition: formData.condition,
         fuel_type: formData.fuel_type,
         transmission: formData.transmission,
@@ -2271,7 +2272,7 @@ export default function AdminDashboard() {
                     </h3>
                     <p className="text-xs text-zinc-400">
                       {v.price != null ? `${v.price.toLocaleString()} ETB` : "Call for Price"} •{" "}
-                      {(v.mileage ?? 0).toLocaleString()} km •{" "}
+                      {formatMileage(v.mileage) && <>{formatMileage(v.mileage)} •{" "}</>}
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${getPlateBadgeClasses(v.plate_status)}`}>
                         🏷️ {getPlateLabel(v.plate_status, false)}
                       </span>

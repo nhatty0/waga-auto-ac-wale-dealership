@@ -1,4 +1,5 @@
 "use client";
+import { formatMileage } from "@/lib/mileage";
 import { useState, useRef } from "react";
 import {
   X,
@@ -94,7 +95,7 @@ export default function VehicleModal({
       (prev) => (prev - 1 + allImages.length) % allImages.length,
     );
   };
-  const safeMileage = vehicle.mileage ?? 0;
+  const mileageLabel = formatMileage(vehicle.mileage);
 
   // const handleAudio = (e: React.MouseEvent) => {
   //   e.stopPropagation();
@@ -121,9 +122,8 @@ export default function VehicleModal({
       ? `${vehicle.price.toLocaleString()} ETB (${t.negotiable})`
       : isAm ? "ዋጋ በስልክ" : "Call for Price";
 
-    const mileageText = vehicle.mileage != null
-      ? `${vehicle.mileage.toLocaleString()} km`
-      : "0 km";
+    // No mileage entered → leave the line out entirely.
+    const mileageText = formatMileage(vehicle.mileage);
 
     const loanSplitText =
       vehicle.has_bank_loan && vehicle.cash_price && vehicle.bank_loan_amount
@@ -142,7 +142,7 @@ export default function VehicleModal({
         loanSplitText +
         `📊 *ሁኔታ:* ${conditionText}\n` +
         `🏷️ *ሰሌዳ:* ${plateText}\n` +
-        `🛣️ *የተጓዘው:* ${mileageText}\n` +
+        (mileageText ? `🛣️ *የተጓዘው:* ${mileageText}\n` : "") +
         `⛽ *ነዳጅ:* ${vehicle.fuel_type} | ⚙️ *ማርሽ:* ${vehicle.transmission}\n` +
         `🚙 *የቦዲ ዓይነት:* ${vehicle.body_type} | 🏎️ *ድራይቭ:* ${vehicle.drive_train || "FWD"}\n\n` +
         `📍 *ኤሲ ዋለ የመኪና መሸጫ (AC WALE MARKET) - 22 አዋራሪስ ሆቴል ጀርባ፣ አዲስ አበባ*\n` +
@@ -158,7 +158,7 @@ export default function VehicleModal({
       loanSplitText +
       `📊 *Condition:* ${conditionText}\n` +
       `🏷️ *Plate:* ${plateText}\n` +
-      `🛣️ *Mileage:* ${mileageText}\n` +
+      (mileageText ? `🛣️ *Mileage:* ${mileageText}\n` : "") +
       `⛽ *Fuel:* ${vehicle.fuel_type} | ⚙️ *Transmission:* ${vehicle.transmission}\n` +
       `🚙 *Body Type:* ${vehicle.body_type} | 🏎️ *Drivetrain:* ${vehicle.drive_train || "FWD"}\n\n` +
       `📍 *AC WALE MARKET (ኤሲ ዋለ የመኪና መሸጫ) - 22 Behind Awraris Hotel, Addis Ababa*\n` +
@@ -559,14 +559,14 @@ export default function VehicleModal({
               )}
 
               {/* Quick Specs Matrix */}
-              <div className="grid grid-cols-4 gap-2 py-3 px-3 bg-zinc-900/60 rounded-2xl border border-zinc-800/80 text-center">
-                <div className="flex flex-col items-center">
-                  <Gauge size={15} className="text-zinc-400 mb-1" />
-                  <span className="text-[10px] text-zinc-500">{t.mileage}</span>
-                  <span className="text-xs font-bold text-zinc-200">
-                    {safeMileage.toLocaleString()} km
-                  </span>
-                </div>
+              <div className={`grid ${mileageLabel ? "grid-cols-4" : "grid-cols-3"} gap-2 py-3 px-3 bg-zinc-900/60 rounded-2xl border border-zinc-800/80 text-center`}>
+                {mileageLabel && (
+                  <div className="flex flex-col items-center">
+                    <Gauge size={15} className="text-zinc-400 mb-1" />
+                    <span className="text-[10px] text-zinc-500">{t.mileage}</span>
+                    <span className="text-xs font-bold text-zinc-200">{mileageLabel}</span>
+                  </div>
+                )}
                 <div className="flex flex-col items-center">
                   <Fuel size={15} className="text-zinc-400 mb-1" />
                   <span className="text-[10px] text-zinc-500">{t.fuel}</span>

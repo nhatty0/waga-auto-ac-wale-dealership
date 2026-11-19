@@ -1,4 +1,5 @@
 "use client";
+import { formatMileage } from "@/lib/mileage";
 import React from "react";
 import {
   X,
@@ -118,7 +119,7 @@ export default function CompareModal({
       label: t.mileageRow,
       render: (v: Vehicle) => (
         <span className="text-xs sm:text-sm font-bold text-zinc-200">
-          {(v.mileage ?? 0).toLocaleString()} km
+          {formatMileage(v.mileage) ?? "—"}
         </span>
       ),
     },

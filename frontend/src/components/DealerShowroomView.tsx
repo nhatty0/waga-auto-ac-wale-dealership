@@ -1,5 +1,6 @@
 "use client";
 
+import { formatMileage } from "@/lib/mileage";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -666,10 +667,12 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
 
                     {/* Key specs as small inline chips */}
                     <ul className="flex flex-wrap gap-1.5 text-[11px] text-zinc-300">
-                      <li className="inline-flex items-center gap-1 h-6 px-2 rounded-md bg-white/[0.05]">
-                        <Gauge size={12} className="text-zinc-500" />
-                        {(car.mileage ?? 0).toLocaleString()} km
-                      </li>
+                      {formatMileage(car.mileage) && (
+                        <li className="inline-flex items-center gap-1 h-6 px-2 rounded-md bg-white/[0.05]">
+                          <Gauge size={12} className="text-zinc-500" />
+                          {formatMileage(car.mileage)}
+                        </li>
+                      )}
                       {car.fuel_type && (
                         <li className="inline-flex items-center gap-1 h-6 px-2 rounded-md bg-white/[0.05]">
                           <Fuel size={12} className="text-zinc-500" />
