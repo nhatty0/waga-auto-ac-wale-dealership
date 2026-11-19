@@ -32,6 +32,15 @@ import { User, ExecutiveStats, StaffUser, RentalBooking } from "@/types";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
 
+const RENTAL_STATUS_COLORS: Record<string, string> = {
+  pending: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  confirmed: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  driver_assigned: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  delivered: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+  completed: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  cancelled: "bg-zinc-800 text-zinc-400 border-zinc-700",
+};
+
 export default function ExecutiveOwnerDashboard() {
   const router = useRouter();
 
@@ -308,7 +317,7 @@ export default function ExecutiveOwnerDashboard() {
           <div className="flex items-center gap-4">
             <Link
               href="/admin"
-              className="p-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-400 hover:text-white transition"
+              className="p-2 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-400 hover:text-white transition"
               title="Return to Dealer Showroom Admin"
             >
               <ArrowLeft size={18} />
@@ -334,7 +343,7 @@ export default function ExecutiveOwnerDashboard() {
               href={telegramConnectUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3.5 py-2 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 font-semibold text-xs flex items-center gap-1.5 transition"
+              className="min-h-[44px] md:min-h-0 px-3.5 py-2 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 font-semibold text-xs flex items-center gap-1.5 transition"
               title="Connect Official Notification Bot"
             >
               <Send size={14} /> ቴሌግራም አገናኝ (Connect Bot)
@@ -344,7 +353,7 @@ export default function ExecutiveOwnerDashboard() {
             <button
               onClick={fetchDashboardData}
               disabled={loading}
-              className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition disabled:opacity-50"
+              className="p-2 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center rounded-xl bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition disabled:opacity-50"
               title="Refresh Business Metrics"
             >
               <RotateCw size={16} className={loading ? "animate-spin text-amber-400" : ""} />
@@ -354,7 +363,7 @@ export default function ExecutiveOwnerDashboard() {
             <Link
               href="/"
               target="_blank"
-              className="px-3.5 py-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-medium text-xs flex items-center gap-1.5 transition"
+              className="min-h-[44px] md:min-h-0 px-3.5 py-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-medium text-xs flex items-center gap-1.5 transition"
             >
               <span>ሾውሩም ጎብኝ (Showroom)</span>
               <ExternalLink size={12} />
@@ -363,7 +372,7 @@ export default function ExecutiveOwnerDashboard() {
             {/* Admin Operations */}
             <Link
               href="/admin"
-              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition"
+              className="min-h-[44px] md:min-h-0 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition"
             >
               <span>የስራ አስተዳደር (Operations)</span>
               <ChevronRight size={14} />
@@ -478,7 +487,7 @@ export default function ExecutiveOwnerDashboard() {
             </div>
             <Link
               href="/admin"
-              className="text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 transition self-start sm:self-auto"
+              className="min-h-[44px] sm:min-h-0 text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 transition self-start sm:self-auto"
             >
               <span>ሁሉንም ኪራዮች አስተዳድር (Manage Rentals)</span>
               <ChevronRight size={14} />
@@ -500,7 +509,50 @@ export default function ExecutiveOwnerDashboard() {
                 </p>
               </div>
             ) : (
-              <table className="w-full text-left text-sm text-zinc-300">
+              <>
+              {/* Phones: stacked cards */}
+              <ul className="sm:hidden divide-y divide-zinc-800/60">
+                {rentals.slice(0, 8).map((booking) => (
+                  <li key={booking.id} className="p-4 space-y-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-bold text-white text-sm break-words">
+                          {booking.vehicle ? `${booking.vehicle.year} ${booking.vehicle.make} ${booking.vehicle.model}` : `Vehicle #${booking.vehicle_id}`}
+                        </div>
+                        <div className="text-xs text-zinc-400">Booking #{booking.id} · {booking.total_days} ቀን (Days) · {new Date(booking.start_date).toLocaleDateString()}</div>
+                      </div>
+                      <span className={`shrink-0 px-2 py-1 rounded-full text-[11px] font-bold border uppercase ${RENTAL_STATUS_COLORS[booking.status] || "bg-zinc-800 text-zinc-300 border-zinc-700"}`}>
+                        {booking.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-zinc-200 truncate">{booking.customer_name}</div>
+                        <a href={`tel:${booking.customer_phone}`} className="inline-flex items-center gap-1.5 min-h-[44px] text-sm text-amber-400">
+                          <Phone size={14} /> {booking.customer_phone}
+                        </a>
+                      </div>
+                      <div className="shrink-0 font-mono font-bold text-white text-sm">{booking.total_price.toLocaleString()} ETB</div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className={`px-2 py-1 rounded font-bold ${booking.delivery_type === "doorstep_delivery" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "bg-zinc-800 text-zinc-300"}`}>
+                        {booking.delivery_type === "doorstep_delivery" ? "🚚 ያሉበት ድረስ" : "🏢 ከሾውሩም"}
+                      </span>
+                      {booking.assigned_driver ? (
+                        <span className="flex items-center gap-1 text-white font-semibold">
+                          <UserCheck size={13} className="text-emerald-400" /> {booking.assigned_driver.full_name}
+                        </span>
+                      ) : (
+                        <span className="text-amber-400/80 italic flex items-center gap-1"><Clock size={12} /> አልተመደበም (Unassigned)</span>
+                      )}
+                    </div>
+                    {booking.delivery_address && (
+                      <div className="text-xs text-zinc-400 break-words">📍 {booking.delivery_address}</div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <table className="hidden sm:table w-full text-left text-sm text-zinc-300">
                 <thead className="bg-zinc-950/60 border-b border-zinc-800 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                   <tr>
                     <th className="px-6 py-3.5">መኪና (Vehicle)</th>
@@ -514,14 +566,7 @@ export default function ExecutiveOwnerDashboard() {
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60">
                   {rentals.slice(0, 8).map((booking) => {
-                    const statusColors: Record<string, string> = {
-                      pending: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-                      confirmed: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-                      driver_assigned: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-                      delivered: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-                      completed: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-                      cancelled: "bg-zinc-800 text-zinc-400 border-zinc-700",
-                    };
+                    const statusColors = RENTAL_STATUS_COLORS;
 
                     return (
                       <tr key={booking.id} className="hover:bg-zinc-800/40 transition">
@@ -600,6 +645,7 @@ export default function ExecutiveOwnerDashboard() {
                   })}
                 </tbody>
               </table>
+              </>
             )}
           </div>
         </section>
@@ -623,7 +669,7 @@ export default function ExecutiveOwnerDashboard() {
 
             <button
               onClick={() => setIsStaffModalOpen(true)}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition self-start sm:self-auto"
+              className="min-h-[44px] sm:min-h-0 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition self-start sm:self-auto"
             >
               <UserPlus size={15} />
               <span>+ ሰራተኛ ጨምር (Invite Staff)</span>
@@ -641,7 +687,62 @@ export default function ExecutiveOwnerDashboard() {
                 No staff members recorded.
               </div>
             ) : (
-              <table className="w-full text-left text-sm text-zinc-300">
+              <>
+              {/* Phones: stacked cards */}
+              <ul className="sm:hidden divide-y divide-zinc-800/60">
+                {staffList.map((staff) => {
+                  const isSuperAdmin = staff.role === "superadmin" || staff.phone_number.includes("251918032065");
+                  return (
+                    <li key={staff.id} className="p-4 space-y-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-bold text-white text-sm flex items-center gap-2 break-words">
+                            {isSuperAdmin && <ShieldCheck size={14} className="shrink-0 text-amber-400" />}
+                            {staff.full_name || "AC Wale Staff Member"}
+                          </div>
+                          <div className="text-xs text-zinc-400 font-mono">+{staff.phone_number.replace(/^\+/, "")}</div>
+                          <div className="text-xs text-zinc-500">ID #{staff.id} · {new Date(staff.created_at).toLocaleDateString()}</div>
+                        </div>
+                        <span className={`shrink-0 px-2 py-1 rounded text-[11px] font-bold ${staff.is_active ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"}`}>
+                          {staff.is_active ? "✓ Active" : "✕ Suspended"}
+                        </span>
+                      </div>
+                      <div>
+                        {isSuperAdmin ? (
+                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-black uppercase bg-amber-500/10 text-amber-400 border border-amber-500/30">👑 Executive Owner</span>
+                        ) : staff.role === "subadmin" ? (
+                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold uppercase bg-sky-500/10 text-sky-400 border border-sky-500/20">🛡️ Sub-Admin</span>
+                        ) : (
+                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">👤 Sales Agent</span>
+                        )}
+                      </div>
+                      {isSuperAdmin ? (
+                        <p className="text-xs text-zinc-500 italic">Protected Master Account</p>
+                      ) : (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleToggleStaffStatus(staff)}
+                            disabled={actionLoadingId === staff.id}
+                            className={`flex-1 min-h-[44px] px-3 rounded-xl text-sm font-bold transition ${staff.is_active ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"}`}
+                          >
+                            {staff.is_active ? "አግድ (Suspend)" : "አንቃ (Activate)"}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteStaff(staff.id, staff.full_name || staff.phone_number)}
+                            disabled={actionLoadingId === staff.id}
+                            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-zinc-800 text-zinc-400 hover:text-rose-400 transition"
+                            aria-label="Delete Staff Member"
+                            title="Delete Staff Member"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <table className="hidden sm:table w-full text-left text-sm text-zinc-300">
                 <thead className="bg-zinc-950/60 border-b border-zinc-800 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                   <tr>
                     <th className="px-6 py-3.5">ሰራተኛ (Staff Member)</th>
@@ -733,6 +834,7 @@ export default function ExecutiveOwnerDashboard() {
                   })}
                 </tbody>
               </table>
+              </>
             )}
           </div>
         </section>
