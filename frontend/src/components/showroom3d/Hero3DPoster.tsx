@@ -17,7 +17,7 @@ export default function Hero3DPoster({
   isLowEnd = false,
   lowEndReason,
   isLoading = false,
-  dealerName = "AutoShowroom Ethiopia",
+  dealerName = "AC WALE MARKET",
   lang = "en",
 }: Hero3DPosterProps) {
   return (

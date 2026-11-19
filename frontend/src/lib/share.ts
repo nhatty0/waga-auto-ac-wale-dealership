@@ -1,5 +1,6 @@
 import { Vehicle } from "@/types";
 import { getPlateLabel } from "./plates";
+import { SITE_URL } from "./site";
 
 export function formatTelegramVehicleCaption(
   vehicle: Vehicle,
@@ -44,7 +45,7 @@ export function getVehicleShareUrl(vehicleId: number, baseOrigin?: string): stri
     baseOrigin ||
     (typeof window !== "undefined" && window.location.origin
       ? window.location.origin
-      : "https://autoshowroom.et");
+      : SITE_URL);
   return `${origin}/vehicles/${vehicleId}`;
 }
 

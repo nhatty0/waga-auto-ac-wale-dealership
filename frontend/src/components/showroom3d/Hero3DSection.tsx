@@ -65,7 +65,7 @@ export default function Hero3DSection({ dealership }: Hero3DSectionProps) {
   const shouldRenderWebGL =
     Boolean(perfProfile && (!perfProfile.isLowEnd || forceLoad3D) && isNearViewport);
 
-  const dealerName = dealership?.name || "AutoShowroom Ethiopia";
+  const dealerName = dealership?.name || "AC WALE MARKET";
 
   return (
     <section ref={sectionRef} className="relative w-full mb-8 pt-2">

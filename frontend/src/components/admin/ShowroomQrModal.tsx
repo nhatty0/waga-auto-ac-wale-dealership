@@ -15,6 +15,9 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { resolveImageUrl } from "@/lib/images";
+import { SITE_URL } from "@/lib/site";
+
+const SITE_HOST = SITE_URL.replace(/^https?:\/\//, "");
 
 interface ShowroomQrModalProps {
   isOpen: boolean;
@@ -237,7 +240,7 @@ export default function ShowroomQrModal({
           </div>
 
           <div class="footer">
-            Powered by AutoShowroom Ethiopia (car.wagadelivery.com)
+            Powered by AC WALE MARKET (${SITE_HOST})
           </div>
         </body>
       </html>

@@ -40,12 +40,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!vehicle) {
     return {
-      title: "Vehicle Not Found | AutoShowroom Ethiopia",
+      title: "Vehicle Not Found | AC WALE MARKET",
       description: "The requested vehicle is no longer available or does not exist.",
     };
   }
 
-  const dealershipName = vehicle.dealership?.name || "AutoShowroom";
+  const dealershipName = vehicle.dealership?.name || "AC WALE MARKET";
   const title = `${vehicle.year} ${vehicle.make} ${vehicle.model} - ${dealershipName}`;
 
   const downPaymentVal = vehicle.cash_price ?? vehicle.down_payment;
@@ -80,7 +80,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title,
       description,
       type: "website",
-      siteName: vehicle.dealership?.name || "AutoShowroom Ethiopia",
+      siteName: vehicle.dealership?.name || "AC WALE MARKET",
       images: [
         {
           url: coverImageUrl,
