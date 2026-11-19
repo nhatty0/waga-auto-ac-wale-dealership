@@ -495,7 +495,7 @@ export default function HandoverFormModal({
                     key={idx}
                     type="button"
                     onClick={() => handleChipClick(chip)}
-                    className="min-h-10 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-amber-500/60 text-zinc-300 hover:text-white text-[11px] font-semibold transition active:scale-95 flex items-center gap-1"
+                    className="min-h-11 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-amber-500/60 text-zinc-300 hover:text-white text-[11px] font-semibold transition active:scale-95 flex items-center gap-1"
                   >
                     <span>+</span>
                     <span>{chip.name}</span>

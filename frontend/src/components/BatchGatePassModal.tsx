@@ -414,7 +414,7 @@ export default function BatchGatePassModal({
                   type="button"
                   onClick={onClose}
                   disabled={submitting}
-                  className="h-11 px-4 text-xs font-medium text-zinc-400 hover:text-white rounded-xl bg-zinc-900 border border-zinc-800 transition"
+                  className="h-11 shrink-0 px-4 text-xs font-medium text-zinc-400 hover:text-white rounded-xl bg-zinc-900 border border-zinc-800 transition"
                 >
                   ሰርዝ (Cancel)
                 </button>
@@ -422,7 +422,7 @@ export default function BatchGatePassModal({
                   type="submit"
                   form="batch-gate-pass-form"
                   disabled={submitting}
-                  className="h-11 flex-1 sm:flex-none px-4 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 disabled:opacity-50 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95"
+                  className="h-11 flex-1 min-w-0 sm:flex-none px-4 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 disabled:opacity-50 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95"
                 >
                   {submitting ? (
                     <>
@@ -432,7 +432,8 @@ export default function BatchGatePassModal({
                   ) : (
                     <>
                       <Printer size={15} className="shrink-0" />
-                      <span className="truncate">ፈቃዶችን አዘጋጅና አትም (Generate & Print A4 Grid)</span>
+                      <span className="truncate sm:hidden">አዘጋጅና አትም (Generate & Print)</span>
+                      <span className="truncate hidden sm:inline">ፈቃዶችን አዘጋጅና አትም (Generate & Print A4 Grid)</span>
                     </>
                   )}
                 </button>

@@ -1977,12 +1977,13 @@ export default function AdminDashboard() {
           {currentUser?.role === "superadmin" && (
             <Link
               href="/superadmin"
-              className="h-11 px-2.5 sm:px-3.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:border-purple-400 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shrink-0"
+              className="h-11 min-w-11 justify-center px-2.5 sm:px-3.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:border-purple-400 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shrink-0"
               title="SuperAdmin Master Platform Control"
+              aria-label="SuperAdmin Portal"
             >
-              <ShieldCheck size={14} className="text-purple-400" />
+              <ShieldCheck size={16} className="text-purple-400" />
               <span className="hidden md:inline">SuperAdmin Portal</span>
-              <span className="md:hidden">SuperAdmin</span>
+              <span className="hidden sm:inline md:hidden">SuperAdmin</span>
             </Link>
           )}
 
@@ -1991,7 +1992,7 @@ export default function AdminDashboard() {
             href={showroomUrl}
             target="_blank"
             rel="noreferrer"
-            className="flex-1 sm:flex-initial h-11 px-3 sm:px-3.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:border-amber-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm shrink-0"
+            className="flex-1 sm:flex-initial min-w-0 h-11 px-3 sm:px-3.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:border-amber-400 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm sm:shrink-0"
             title="Preview Public Digital Showroom in a new tab"
           >
             <ExternalLink size={14} />
@@ -2003,7 +2004,7 @@ export default function AdminDashboard() {
               resetForm();
               setShowAddModal(true);
             }}
-            className="flex-1 sm:flex-initial h-11 bg-amber-500 hover:bg-amber-400 text-black px-3 sm:px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 shrink-0 whitespace-nowrap"
+            className="flex-1 sm:flex-initial min-w-0 h-11 bg-amber-500 hover:bg-amber-400 text-black px-3 sm:px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 sm:shrink-0 whitespace-nowrap"
           >
             <Plus size={16} />
             <span>Add Vehicle</span>
@@ -2612,7 +2613,7 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => setShowBatchGatePassModal(true)}
-                  className="flex-1 sm:flex-none px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 animate-pulse"
+                  className="flex-1 sm:flex-none min-h-[44px] px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 animate-pulse"
                 >
                   <Printer size={15} />
                   <span>🖨️ የጅምላ መውጫ ፈቃድ (Batch Release: {selectedLotIntakeIds.length} Selected)</span>
@@ -2621,7 +2622,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setShowReceivingSheetPrint(true)}
-                className="flex-1 sm:flex-none px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
+                className="flex-1 sm:flex-none min-h-[44px] px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
               >
                 <FileSpreadsheet size={15} className="text-amber-400" />
                 <span>🖨️ የዕለቱ ርክክብ ሰነድ (Print Sheet)</span>
@@ -2629,7 +2630,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={handleOpenIntakeModal}
-                className="flex-1 sm:flex-none px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95"
+                className="flex-1 sm:flex-none min-h-[44px] px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95"
               >
                 <Plus size={16} />
                 <span>+ አዲስ መኪና ተረከብ (New Intake)</span>
@@ -2825,7 +2826,7 @@ export default function AdminDashboard() {
                     <button
                       type="button"
                       onClick={handleOpenIntakeModal}
-                      className="mt-4 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs transition inline-flex items-center gap-1.5"
+                      className="mt-4 min-h-[44px] px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs transition inline-flex items-center gap-1.5"
                     >
                       <Plus size={14} />
                       <span>+ አዲስ መኪና ተረከብ (New Intake)</span>
@@ -4556,14 +4557,14 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => setShowDriverModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
+                  className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
                 >
                   ይቅር (Cancel)
                 </button>
                 <button
                   type="submit"
                   disabled={savingDriver}
-                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black text-xs shadow-md shadow-amber-500/20"
+                  className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black text-xs shadow-md shadow-amber-500/20"
                 >
                   {savingDriver ? "በመመዝገብ ላይ..." : "መዝግብ (Save Driver)"}
                 </button>
@@ -4915,15 +4916,15 @@ export default function AdminDashboard() {
               )}
 
               {/* Target Vehicle Preview Banner */}
-              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-white text-sm">{releasingIntake.vehicle_name}</p>
+              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-bold text-white text-sm break-words">{releasingIntake.vehicle_name}</p>
                   <p className="text-zinc-400 text-[11px]">
                     ባለቤት: {releasingIntake.owner_name} ({releasingIntake.owner_phone})
                   </p>
                 </div>
-                <div className="text-right">
-                  <span className="font-mono font-black text-xs text-amber-400 bg-black px-2 py-1 rounded border border-zinc-700">
+                <div className="text-right shrink-0">
+                  <span className="font-mono font-black text-xs text-amber-400 bg-black px-2 py-1 rounded border border-zinc-700 whitespace-nowrap">
                     {releasingIntake.plate_number}
                   </span>
                 </div>
@@ -4948,8 +4949,8 @@ export default function AdminDashboard() {
                 {/* Quick Driver Selection from registered fleet roster */}
                 {drivers.filter((d) => d.is_active).length > 0 && (
                   <div className="mt-2">
-                    <p className="text-[10px] text-zinc-500 mb-1">ወይም ከተመዘገቡ አሽከርካሪዎች ይምረጡ:</p>
-                    <div className="flex flex-wrap gap-1">
+                    <p className="text-[11px] text-zinc-500 mb-1">ወይም ከተመዘገቡ አሽከርካሪዎች ይምረጡ:</p>
+                    <div className="flex flex-wrap gap-1.5">
                       {drivers
                         .filter((d) => d.is_active)
                         .map((d) => (
@@ -4959,7 +4960,7 @@ export default function AdminDashboard() {
                             onClick={() =>
                               setReleaseFormData({ ...releaseFormData, driver_name: d.full_name })
                             }
-                            className={`px-2 py-0.5 rounded text-[10px] font-medium transition ${
+                            className={`min-h-[44px] sm:min-h-0 px-3 sm:px-2 py-0.5 rounded-lg sm:rounded text-xs sm:text-[10px] font-medium transition ${
                               releaseFormData.driver_name === d.full_name
                                 ? "bg-amber-500 text-black font-bold"
                                 : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
