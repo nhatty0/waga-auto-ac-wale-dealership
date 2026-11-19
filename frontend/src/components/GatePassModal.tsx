@@ -229,8 +229,8 @@ export default function GatePassModal({ pass, vehicleName, onClose }: GatePassMo
       <PrintModalShell
         title={
           <>
-            <span className="sm:hidden">መኪና መውጫ ፈቃድ</span>
-            <span className="hidden sm:inline">መኪና መውጫ ፈቃድ (Gate Pass)</span>
+            <span className="sm:hidden">መውጫ ፓስ</span>
+            <span className="hidden sm:inline">መውጫ ፓስ (Release Pass)</span>
           </>
         }
         badge={
@@ -238,7 +238,7 @@ export default function GatePassModal({ pass, vehicleName, onClose }: GatePassMo
             {pass.slip_number}
           </span>
         }
-        description="ተሽከርካሪው በሰላም ከግቢ እንዲወጣ የተሰጠ ይፋዊ ደረሰኝ"
+        description="ተሽከርካሪው በሰላም ከግቢ እንዲወጣ የተሰጠ ይፋዊ መውጫ ፓስ"
         icon={
           <img
             src="/ac-wale-logo.png"
@@ -248,7 +248,7 @@ export default function GatePassModal({ pass, vehicleName, onClose }: GatePassMo
         }
         onClose={onClose}
         onPrint={handlePrint}
-        printTitle="ደረሰኝ አትም (Print Slip)"
+        printTitle="መውጫ ፓስ አትም (Print Release Pass)"
         maxWidthClass="sm:max-w-md"
         footer={
           <button
@@ -256,7 +256,7 @@ export default function GatePassModal({ pass, vehicleName, onClose }: GatePassMo
             className="h-11 w-full sm:w-auto text-xs text-zinc-300 hover:text-white flex items-center justify-center gap-1.5 px-3 rounded-xl bg-zinc-900 border border-zinc-800 transition"
           >
             {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-            <span>{copied ? "የደረሰኝ ቁጥር ተቀድቷል" : `የደረሰኝ ቁጥር ቅዳ (Copy #${pass.slip_number})`}</span>
+            <span>{copied ? "የፓስ ቁጥር ተቀድቷል" : `የፓስ ቁጥር ቅዳ (Copy #${pass.slip_number})`}</span>
           </button>
         }
       >

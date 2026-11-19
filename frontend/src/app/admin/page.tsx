@@ -1155,7 +1155,7 @@ export default function AdminDashboard() {
       const gatePassData: GatePass = await res.json();
       setShowReleaseModal(false);
       await fetchLotIntakes();
-      showToast(`የመውጫ ደረሰኝ ${gatePassData.slip_number} ተዘጋጅቷል!`);
+      showToast(`መውጫ ፓስ ${gatePassData.slip_number} ተዘጋጅቷል!`);
 
       // Open printable gate pass modal
       setActiveGatePass(gatePassData);
@@ -1168,12 +1168,15 @@ export default function AdminDashboard() {
     }
   };
 
+  // Reopens (and reprints) the saved release pass for a car that already left the lot.
   const handleViewExistingGatePass = (intake: LotIntake) => {
     if (intake.gate_passes && intake.gate_passes.length > 0) {
       const latestPass = intake.gate_passes[intake.gate_passes.length - 1];
       setActiveGatePass(latestPass);
       setGatePassVehicleName(intake.vehicle_name);
       setShowGatePassSlip(true);
+    } else {
+      showToast("ለዚህ መኪና የተቀመጠ መውጫ ፓስ አልተገኘም (No saved release pass)");
     }
   };
 
@@ -3036,16 +3039,17 @@ export default function AdminDashboard() {
                                 className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 active:scale-95"
                               >
                                 <DoorOpen size={16} />
-                                <span>🚪 መኪና መውጫ (Release Pass)</span>
+                                <span>🚪 መውጫ ፓስ (Release Pass)</span>
                               </button>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => handleViewExistingGatePass(item)}
+                                title="Open and reprint the saved release pass"
                                 className="w-full sm:w-auto min-h-[44px] px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-sm sm:text-xs font-bold transition flex items-center justify-center gap-1.5"
                               >
-                                <FileText size={14} className="text-amber-400" />
-                                <span>📄 ደረሰኝ እይ (View Slip)</span>
+                                <Printer size={14} className="text-amber-400" />
+                                <span>መውጫ ፓስ (Release Pass)</span>
                               </button>
                             )}
                           </div>
@@ -4976,10 +4980,10 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <h3 className="font-extrabold text-white text-sm sm:text-base">
-                    መኪና መውጫ ፈቃድ (Generate Gate Pass)
+                    መውጫ ፓስ (Release Pass)
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    ህጋዊ የመውጫ ደረሰኝ (Form 2) አዘጋጅተው ያትሙ
+                    ህጋዊ መውጫ ፓስ (Form 2) አዘጋጅተው ያትሙ
                   </p>
                 </div>
               </div>
@@ -5157,7 +5161,7 @@ export default function AdminDashboard() {
                   ) : (
                     <>
                       <DoorOpen size={16} />
-                      <span>ይፍቀዱ እና ደረሰኝ አትሙ (Authorize & Print)</span>
+                      <span>ይፍቀዱ እና መውጫ ፓስ አትሙ (Authorize & Print)</span>
                     </>
                   )}
                 </button>
