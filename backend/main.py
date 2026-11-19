@@ -766,15 +766,18 @@ def update_vehicle(
 
 
 @app.post("/api/admin/upload-images", response_model=List[str])
-async def upload_car_images(
+def upload_car_images(
     files: List[UploadFile] = File(...),
     current_user: models.User = Depends(get_current_admin)
 ):
+    # Plain `def` on purpose: FastAPI runs it in a worker thread, so the blocking
+    # Pillow WebP encode, S3 put_object and disk write don't stall the event loop
+    # (under a2wsgi each worker has a single loop shared by every request).
     saved_urls = []
     dealer_prefix = f"car_{current_user.dealership_id or 'anon'}"
-    
+
     for file in files:
-        file_bytes = await file.read()
+        file_bytes = file.file.read()
         url = upload_media_file(file_bytes, prefix=dealer_prefix, max_width=1600, quality=80)
         saved_urls.append(url)
 
