@@ -46,28 +46,46 @@ interface DealerShowroomViewProps {
   dealerSlug: string;
 }
 
-type QuickChipKey = "all" | "brand_new" | "slightly_used" | "good_condition" | "gas";
+type QuickChipKey = "all" | "brand_new" | "slightly_used" | "used" | "electric" | "gas";
 
-// Quick filter row. "Slightly Used" and "Excellent Condition" are one merged chip
-// (matchesConditionFilter already treats them as the same group). New Series plates
-// remain available under Plate in the Filters drawer.
+// Quick filter row. "Slightly Used" is that exact condition only; "Used" groups
+// Excellent + Good. Electric/Gas match on fuel_type. The Filters drawer still
+// offers every exact condition.
 const QUICK_CHIPS: { key: QuickChipKey; am: string; en: string }[] = [
   { key: "all", am: "ሁሉም", en: "All" },
-  { key: "brand_new", am: "አዲስ", en: "Brand New" },
-  { key: "slightly_used", am: "በጣም ጥሩ ይዞታ (Slightly Used)", en: "በጣም ጥሩ ይዞታ (Slightly Used)" },
-  { key: "good_condition", am: "ጥሩ ይዞታ", en: "Good" },
+  { key: "brand_new", am: "አዲስ", en: "New" },
+  { key: "slightly_used", am: "በጥቂቱ ያገለገለ", en: "Slightly Used" },
+  { key: "used", am: "ያገለገለ", en: "Used" },
+  { key: "electric", am: "ኤሌክትሪክ", en: "Electric" },
   { key: "gas", am: "ቤንዚን", en: "Gas" },
 ];
 
+const normFuel = (fuel?: string | null) => (fuel || "").toLowerCase().trim();
 const isGasoline = (fuel?: string | null) =>
-  ["gasoline", "petrol", "gas", "benzine"].includes((fuel || "").toLowerCase().trim());
+  ["gasoline", "petrol", "gas", "benzine"].includes(normFuel(fuel));
+const isElectric = (fuel?: string | null) =>
+  ["electric", "ev", "ኤሌክትሪክ"].includes(normFuel(fuel));
 
-// Short, single-language condition badge text for cards (exact condition, not the merged chip).
+// Short, single-language condition badge text for cards (exact condition).
 const CONDITION_BADGE: Record<string, { am: string; en: string }> = {
   "brand new": { am: "አዲስ", en: "Brand New" },
   "slightly used": { am: "በጥቂቱ ያገለገለ", en: "Slightly Used" },
   "excellent condition": { am: "በጣም ጥሩ ይዞታ", en: "Excellent" },
   "good condition": { am: "ጥሩ ይዞታ", en: "Good" },
+};
+
+type ConditionKey = "brand_new" | "slightly_used" | "excellent" | "good";
+
+// Map an English or Amharic condition string to one canonical key.
+// "በጣም ጥሩ" (excellent) is checked before "ጥሩ" (good) because it contains it.
+const toConditionKey = (raw: string | undefined | null): ConditionKey | null => {
+  const c = (raw || "").toLowerCase().trim().replace(/_/g, " ");
+  if (!c) return null;
+  if (c === "brand new" || c.includes("አዲስ")) return "brand_new";
+  if (c === "slightly used" || c.includes("በጥቂቱ")) return "slightly_used";
+  if (c === "excellent condition" || c === "excellent" || c.includes("በጣም ጥሩ")) return "excellent";
+  if (c === "good condition" || c === "good" || c.includes("ጥሩ")) return "good";
+  return null;
 };
 
 export const matchesConditionFilter = (
@@ -77,53 +95,12 @@ export const matchesConditionFilter = (
   if (!targetCondition || targetCondition === "All" || targetCondition === "all") {
     return true;
   }
-
-  const vCond = (vehicleCondition || "").toLowerCase().trim();
-  const tCond = targetCondition.toLowerCase().trim();
-
-  // 1. BRAND NEW
-  if (
-    tCond === "brand new" ||
-    tCond === "brand_new" ||
-    tCond.includes("አዲስ")
-  ) {
-    return vCond === "brand new" || vCond.includes("አዲስ");
-  }
-
-  // 2. SLIGHTLY USED or EXCELLENT CONDITION (OR overlap across both categories)
-  if (
-    tCond === "slightly used" ||
-    tCond === "slightly_used" ||
-    tCond === "excellent condition" ||
-    tCond === "excellent_condition" ||
-    tCond.includes("በጥቂቱ") ||
-    tCond.includes("በጣም ጥሩ")
-  ) {
-    return (
-      vCond === "slightly used" ||
-      vCond === "excellent condition" ||
-      vCond.includes("በጥቂቱ") ||
-      vCond.includes("በጣም ጥሩ")
-    );
-  }
-
-  // 3. GOOD CONDITION (includes Slightly Used, Excellent Condition, and Good Condition)
-  if (
-    tCond === "good condition" ||
-    tCond === "good_condition" ||
-    tCond.includes("ጥሩ ይዞታ")
-  ) {
-    return (
-      vCond === "slightly used" ||
-      vCond === "excellent condition" ||
-      vCond === "good condition" ||
-      vCond.includes("በጥቂቱ") ||
-      vCond.includes("በጣም ጥሩ") ||
-      vCond.includes("ጥሩ")
-    );
-  }
-
-  return vCond === tCond;
+  const v = toConditionKey(vehicleCondition);
+  // "Used" quick chip = Excellent + Good
+  if (targetCondition === "used") return v === "excellent" || v === "good";
+  const t = toConditionKey(targetCondition);
+  if (t) return v === t;
+  return (vehicleCondition || "").toLowerCase().trim() === targetCondition.toLowerCase().trim();
 };
 
 export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewProps) {
@@ -306,8 +283,10 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
 
     if (selectedCategoryKey === "gas") {
       if (!isGasoline(v.fuel_type)) return false;
+    } else if (selectedCategoryKey === "electric") {
+      if (!isElectric(v.fuel_type)) return false;
     } else if (selectedCategoryKey !== "all") {
-      // Condition chips (Slightly Used chip also matches Excellent Condition)
+      // Condition chips: exact condition, or Excellent + Good for "Used"
       if (!matchesConditionFilter(v.condition, selectedCategoryKey)) return false;
     }
 
