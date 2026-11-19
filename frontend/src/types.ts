@@ -224,6 +224,8 @@ export interface LotIntake {
   published_vehicle_id?: number | null;
   dealership_id?: number | null;
   created_at?: string;
+  archived_at?: string | null;
+  archived_by?: string | null;
   gate_passes?: GatePass[];
 }
 
@@ -280,6 +282,8 @@ export interface VehicleHandover {
   vehicle_id?: number | null;
   dealership_id?: number | null;
   created_at?: string;
+  archived_at?: string | null;
+  archived_by?: string | null;
 }
 
 export interface VehicleHandoverPayload {

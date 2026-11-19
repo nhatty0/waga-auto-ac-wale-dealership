@@ -10,16 +10,19 @@ interface ReceivingSheetPrintProps {
   intakes: LotIntake[];
   onClose: () => void;
   dealershipName?: string;
+  /** YYYY-MM-DD sheet to open (reprint from the Documents archive). Defaults to today. */
+  initialDate?: string;
 }
 
 export default function ReceivingSheetPrint({
   intakes,
   onClose,
   dealershipName = "AC WALE MARKET",
+  initialDate,
 }: ReceivingSheetPrintProps) {
   const [mounted, setMounted] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    return new Date().toISOString().split("T")[0];
+    return initialDate || new Date().toISOString().split("T")[0];
   });
   const [showAllDates, setShowAllDates] = useState(false);
 

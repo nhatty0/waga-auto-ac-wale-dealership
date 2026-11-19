@@ -48,6 +48,16 @@ import ShowroomQrModal from "@/components/admin/ShowroomQrModal";
 import GatePassModal from "@/components/GatePassModal";
 import BatchGatePassModal from "@/components/BatchGatePassModal";
 import ReceivingSheetPrint from "@/components/ReceivingSheetPrint";
+import DocumentsArchive from "@/components/admin/DocumentsArchive";
+import { Archive as ArchiveIcon } from "lucide-react";
+import {
+  findHandoverForIntake,
+  findHandoverForVehicle,
+  findIntakeForVehicle,
+  isSuperadminUser,
+  latestGatePass,
+  receivingSheetDayKey,
+} from "@/lib/documents";
 import HandoverFormModal from "@/components/HandoverFormModal";
 import HandoverPrintModal from "@/components/HandoverPrintModal";
 import { getApiBaseUrl } from "@/lib/api";
@@ -217,7 +227,7 @@ export default function AdminDashboard() {
 
   // Dashboard states
   const [activeTab, setActiveTab] = useState<
-    "inventory" | "appointments" | "rentals" | "lot_operations" | "drivers" | "settings"
+    "inventory" | "appointments" | "rentals" | "lot_operations" | "drivers" | "documents" | "settings"
   >("inventory");
 
   // Phones: keep the selected tab fully visible in the horizontally scrolling tab row.
@@ -270,6 +280,13 @@ export default function AdminDashboard() {
   const [gatePassVehicleName, setGatePassVehicleName] = useState<string | undefined>(undefined);
   const [showGatePassSlip, setShowGatePassSlip] = useState(false);
   const [showReceivingSheetPrint, setShowReceivingSheetPrint] = useState(false);
+  // Reprint from the Documents archive: which sheet (day) and which rows to show.
+  const [receivingSheetDate, setReceivingSheetDate] = useState<string | undefined>(undefined);
+  const [receivingSheetIntakes, setReceivingSheetIntakes] = useState<LotIntake[] | null>(null);
+  // Documents tab: superadmin can include soft-archived records.
+  const [docsShowArchived, setDocsShowArchived] = useState(false);
+  const [archivedDocs, setArchivedDocs] = useState<{ intakes: LotIntake[]; handovers: VehicleHandover[] } | null>(null);
+  const [loadingDocs, setLoadingDocs] = useState(false);
   const [selectedLotIntakeIds, setSelectedLotIntakeIds] = useState<number[]>([]);
   const [showBatchGatePassModal, setShowBatchGatePassModal] = useState(false);
 
@@ -1003,8 +1020,78 @@ export default function AdminDashboard() {
     }
   };
 
+  // Legal documents are never deleted: DELETE on the API soft-archives (superadmin only).
+  const fetchArchivedDocs = async () => {
+    try {
+      setLoadingDocs(true);
+      const baseApi = getApiBaseUrl();
+      const headers = getAuthHeaders();
+      const [iRes, hRes] = await Promise.all([
+        fetch(`${baseApi}/api/admin/lot-intakes?include_archived=true`, { headers }),
+        fetch(`${baseApi}/api/admin/handovers?include_archived=true`, { headers }),
+      ]);
+      setArchivedDocs({
+        intakes: iRes.ok ? await iRes.json() : [],
+        handovers: hRes.ok ? await hRes.json() : [],
+      });
+    } catch (e) {
+      console.error("Failed to fetch archived documents:", e);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
+
+  const refreshDocuments = async () => {
+    await Promise.all([fetchLotIntakes(), fetchHandovers(), docsShowArchived ? fetchArchivedDocs() : Promise.resolve()]);
+  };
+
+  const handleArchiveDocument = async (kind: "intake" | "handover", id: number, label: string) => {
+    if (!window.confirm(`${label} ማህደር ውስጥ ይቀመጥ? (Archive: hidden from lists, never deleted. A superadmin can restore it.)`)) return;
+    const path = kind === "intake" ? `lot-intakes/${id}` : `handovers/${id}`;
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/admin/${path}`, { method: "DELETE", headers: getAuthHeaders() });
+      if (!res.ok) {
+        alert(res.status === 403 ? "Only the superadmin can archive documents." : `Archive failed (HTTP ${res.status}).`);
+        return;
+      }
+      showToast(`${label} ወደ ማህደር ተወስዷል (archived)`);
+      await refreshDocuments();
+    } catch {
+      alert("ስህተት ተከስቷል። እባክዎ እንደገና ይሞክሩ።");
+    }
+  };
+
+  const handleRestoreDocument = async (kind: "intake" | "handover", id: number) => {
+    const path = kind === "intake" ? `lot-intakes/${id}` : `handovers/${id}`;
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/admin/${path}/restore`, { method: "POST", headers: getAuthHeaders() });
+      if (!res.ok) {
+        alert(`Restore failed (HTTP ${res.status}).`);
+        return;
+      }
+      showToast("ሰነዱ ተመልሷል (restored)");
+      await refreshDocuments();
+    } catch {
+      alert("ስህተት ተከስቷል። እባክዎ እንደገና ይሞክሩ።");
+    }
+  };
+
+  // Reprint Form 1 exactly as generated: the daily receiving sheet for that intake's day.
+  const printIntakeRecord = (intake: LotIntake) => {
+    const pool = archivedDocs && docsShowArchived ? archivedDocs.intakes : lotIntakes;
+    setReceivingSheetIntakes(pool.some((i) => i.id === intake.id) ? pool : [...pool, intake]);
+    setReceivingSheetDate(receivingSheetDayKey(intake));
+    setShowReceivingSheetPrint(true);
+  };
+
+  const printGatePass = (pass: GatePass, vehicleName: string) => {
+    setActiveGatePass(pass);
+    setGatePassVehicleName(vehicleName);
+    setShowGatePassSlip(true);
+  };
+
   const handleDeleteHandover = async (id: number, contractNumber: string) => {
-    if (!window.confirm(`እርግጠኛ ነዎት የመኪና መረከቢያ ውል ${contractNumber} መሰረዝ ይፈልጋሉ?`)) return;
+    if (!window.confirm(`የመረከቢያ ውል ${contractNumber} ማህደር ውስጥ ይቀመጥ? (Archive: hidden from lists, never deleted.)`)) return;
     try {
       setDeletingHandoverId(id);
       const token = getAuthToken();
@@ -1016,9 +1103,9 @@ export default function AdminDashboard() {
       });
       if (res.ok) {
         setHandovers((prev) => prev.filter((h) => h.id !== id));
-        showToast(`የመረከቢያ ውል ${contractNumber} በተሳካ ሁኔታ ተሰርዟል!`);
+        showToast(`የመረከቢያ ውል ${contractNumber} ወደ ማህደር ተወስዷል (archived)`);
       } else {
-        alert("የመረከቢያ ውሉን መሰረዝ አልተቻለም።");
+        alert(res.status === 403 ? "Only the superadmin can archive contracts." : "የመረከቢያ ውሉን ማስቀመጥ አልተቻለም።");
       }
     } catch (err) {
       console.error("Failed to delete handover:", err);
@@ -2153,7 +2240,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Tabs */}
-      <div role="tablist" aria-label="Dashboard sections" className="sticky top-0 z-30 -mx-4 px-4 py-2 mb-4 bg-black/85 backdrop-blur-md flex gap-2 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-4 sm:static sm:mx-0 sm:px-0 sm:py-0 sm:mb-6 sm:bg-transparent sm:backdrop-blur-none sm:grid sm:grid-cols-3 lg:grid-cols-6 sm:overflow-visible">
+      <div role="tablist" aria-label="Dashboard sections" className="sticky top-0 z-30 -mx-4 px-4 py-2 mb-4 bg-black/85 backdrop-blur-md flex gap-2 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-4 sm:static sm:mx-0 sm:px-0 sm:py-0 sm:mb-6 sm:bg-transparent sm:backdrop-blur-none sm:grid sm:grid-cols-4 lg:grid-cols-7 sm:overflow-visible">
         <button
           onClick={() => setActiveTab("inventory")}
           role="tab"
@@ -2225,6 +2312,20 @@ export default function AdminDashboard() {
           <span className="truncate">Drivers ({drivers.length})</span>
         </button>
         <button
+          onClick={() => setActiveTab("documents")}
+          role="tab"
+          aria-selected={activeTab === "documents"}
+          data-admin-tab="documents"
+          className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
+            activeTab === "documents"
+              ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+              : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+          }`}
+        >
+          <ArchiveIcon size={14} className="shrink-0" />
+          <span className="truncate">ሰነዶች (Documents)</span>
+        </button>
+        <button
           onClick={() => setActiveTab("settings")}
           role="tab"
           aria-selected={activeTab === "settings"}
@@ -2285,6 +2386,34 @@ export default function AdminDashboard() {
                         🏦 Loan: {(v as any).cash_price?.toLocaleString()} ETB Cash + {(v as any).bank_loan_amount?.toLocaleString()} ETB Bank
                       </span>
                     )}
+                    {(() => {
+                      const intake = findIntakeForVehicle(v, lotIntakes);
+                      const contract = findHandoverForVehicle(v, handovers, intake);
+                      const pass = latestGatePass(intake);
+                      if (!contract && !pass) return null;
+                      return (
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {contract && (
+                            <button
+                              type="button"
+                              onClick={() => setActivePrintHandover(contract)}
+                              className="min-h-[44px] sm:min-h-8 px-3 rounded-lg bg-zinc-950 border border-zinc-700 text-xs font-semibold text-amber-300 hover:border-amber-500/60 inline-flex items-center gap-1.5"
+                            >
+                              <FileText size={13} /> ውል (Contract) {contract.contract_number}
+                            </button>
+                          )}
+                          {pass && intake && (
+                            <button
+                              type="button"
+                              onClick={() => printGatePass(pass, intake.vehicle_name)}
+                              className="min-h-[44px] sm:min-h-8 px-3 rounded-lg bg-zinc-950 border border-zinc-700 text-xs font-semibold text-amber-300 hover:border-amber-500/60 inline-flex items-center gap-1.5"
+                            >
+                              <Printer size={13} /> መውጫ ፓስ {pass.slip_number}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -3052,6 +3181,21 @@ export default function AdminDashboard() {
                                 <span>መውጫ ፓስ (Release Pass)</span>
                               </button>
                             )}
+                            {(() => {
+                              const contract = findHandoverForIntake(item, handovers);
+                              if (!contract) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => setActivePrintHandover(contract)}
+                                  title={`Open handover contract ${contract.contract_number}`}
+                                  className="shrink-0 min-h-[44px] px-3 bg-zinc-950 hover:bg-zinc-800 text-amber-300 border border-zinc-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                                >
+                                  <FileText size={14} />
+                                  <span>ውል (Contract)</span>
+                                </button>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -3351,20 +3495,22 @@ export default function AdminDashboard() {
                             <Printer size={15} />
                             <span>🖨️ ውል አትም (Print)</span>
                           </button>
-                          <button
-                            type="button"
-                            disabled={deletingHandoverId === item.id}
-                            onClick={() => handleDeleteHandover(item.id, item.contract_number)}
-                            className="p-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-zinc-400 hover:text-red-400 bg-zinc-800 sm:bg-transparent hover:bg-red-500/10 rounded-xl transition border border-transparent hover:border-red-500/20"
-                            aria-label="Delete contract"
-                            title="ውሉን ሰርዝ (Delete contract)"
-                          >
-                            {deletingHandoverId === item.id ? (
-                              <Loader2 size={16} className="animate-spin text-red-400" />
-                            ) : (
-                              <Trash2 size={16} />
-                            )}
-                          </button>
+                          {isSuperadminUser(currentUser) && (
+                            <button
+                              type="button"
+                              disabled={deletingHandoverId === item.id}
+                              onClick={() => handleDeleteHandover(item.id, item.contract_number)}
+                              className="p-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-zinc-400 hover:text-white bg-zinc-800 sm:bg-transparent hover:bg-zinc-800 rounded-xl transition border border-transparent hover:border-zinc-700"
+                              aria-label="Archive contract (superadmin)"
+                              title="ማህደር (Archive: hidden from lists, never deleted)"
+                            >
+                              {deletingHandoverId === item.id ? (
+                                <Loader2 size={16} className="animate-spin" />
+                              ) : (
+                                <ArchiveIcon size={16} />
+                              )}
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -3491,6 +3637,27 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
+      )}
+
+      {/* DOCUMENTS ARCHIVE TAB CONTENT */}
+      {activeTab === "documents" && (
+        <DocumentsArchive
+          intakes={docsShowArchived && archivedDocs ? archivedDocs.intakes : lotIntakes}
+          handovers={docsShowArchived && archivedDocs ? archivedDocs.handovers : handovers}
+          loading={loadingLotIntakes || loadingHandovers || loadingDocs}
+          isSuperadmin={isSuperadminUser(currentUser)}
+          showArchived={docsShowArchived}
+          onToggleArchived={(v) => {
+            setDocsShowArchived(v);
+            if (v) fetchArchivedDocs();
+          }}
+          onRefresh={refreshDocuments}
+          onPrintIntake={printIntakeRecord}
+          onPrintGatePass={printGatePass}
+          onPrintHandover={(h) => setActivePrintHandover(h)}
+          onArchive={handleArchiveDocument}
+          onRestore={handleRestoreDocument}
+        />
       )}
 
       {/* SETTINGS TAB CONTENT */}
@@ -5200,8 +5367,13 @@ export default function AdminDashboard() {
       {/* PRINTABLE VEHICLE RECEIVING SHEET (FORM 1 MODAL) */}
       {showReceivingSheetPrint && (
         <ReceivingSheetPrint
-          intakes={lotIntakes}
-          onClose={() => setShowReceivingSheetPrint(false)}
+          intakes={receivingSheetIntakes ?? lotIntakes}
+          initialDate={receivingSheetDate}
+          onClose={() => {
+            setShowReceivingSheetPrint(false);
+            setReceivingSheetIntakes(null);
+            setReceivingSheetDate(undefined);
+          }}
           dealershipName={dealershipSettings.name || "AC WALE MARKET"}
         />
       )}

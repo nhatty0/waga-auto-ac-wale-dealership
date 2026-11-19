@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from database import engine, SessionLocal
 import models
 
@@ -18,6 +18,30 @@ PRIMARY_DEALERSHIP_PHONE = os.getenv("PRIMARY_DEALERSHIP_PHONE", "+251911646628"
 SUPERADMIN_PHONE = os.getenv("SUPERADMIN_PHONE", "251911646628").strip().strip("\"'").lstrip("+")
 
 
+# (table, column, sqlite type, postgres type) — all nullable, no defaults.
+ADDITIVE_COLUMNS = [
+    ("lot_intakes", "archived_at", "DATETIME", "TIMESTAMP"),
+    ("lot_intakes", "archived_by", "VARCHAR(150)", "VARCHAR(150)"),
+    ("vehicle_handovers", "archived_at", "DATETIME", "TIMESTAMP"),
+    ("vehicle_handovers", "archived_by", "VARCHAR(150)", "VARCHAR(150)"),
+]
+
+
+def _ensure_nullable_columns(is_sqlite: bool):
+    insp = inspect(engine)
+    existing_tables = set(insp.get_table_names())
+    with engine.begin() as conn:
+        for table, column, sqlite_type, pg_type in ADDITIVE_COLUMNS:
+            if table not in existing_tables:
+                continue
+            cols = {c["name"] for c in insp.get_columns(table)}
+            if column in cols:
+                continue
+            col_type = sqlite_type if is_sqlite else pg_type
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+            print(f"🧩 Added nullable column {table}.{column} ({col_type})")
+
+
 def run_migrations():
     """
     Safely applies database schema updates for single-tenant AC Wale Cars,
@@ -28,6 +52,11 @@ def run_migrations():
     models.Base.metadata.create_all(bind=engine)
 
     is_sqlite = engine.url.drivername.startswith("sqlite")
+
+    # Additive, nullable columns on existing tables (both SQLite and PostgreSQL).
+    # create_all() only creates missing tables, so existing production tables need
+    # an explicit ADD COLUMN. Never drops or rewrites anything.
+    _ensure_nullable_columns(is_sqlite)
 
     if not is_sqlite:
         with engine.connect() as conn:

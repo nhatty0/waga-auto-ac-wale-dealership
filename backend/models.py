@@ -210,6 +210,9 @@ class LotIntake(Base):
     published_vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True)
     dealership_id = Column(Integer, ForeignKey("dealerships.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Soft archive (legal record: never hard-deleted from the UI). NULL = active.
+    archived_at = Column(DateTime, nullable=True)
+    archived_by = Column(String(150), nullable=True)
 
     dealership = relationship("Dealership", back_populates="lot_intakes")
     published_vehicle = relationship("Vehicle")
@@ -258,6 +261,9 @@ class VehicleHandover(Base):
     vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True)       # Optional link to showroom vehicle
     dealership_id = Column(Integer, ForeignKey("dealerships.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Soft archive (legal record: never hard-deleted from the UI). NULL = active.
+    archived_at = Column(DateTime, nullable=True)
+    archived_by = Column(String(150), nullable=True)
 
     vehicle = relationship("Vehicle")
     dealership = relationship("Dealership", back_populates="handovers")

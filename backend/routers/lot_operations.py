@@ -11,7 +11,7 @@ from database import get_db
 import models
 import schemas
 from settings import settings
-from auth import get_current_admin
+from auth import get_current_admin, get_current_superadmin
 
 logger = logging.getLogger(__name__)
 
@@ -29,20 +29,37 @@ def get_target_dealership_id(db: Session, user: models.User) -> Optional[int]:
     return dealer.id if dealer else 1
 
 
+def _ensure_same_dealership(db: Session, user: models.User, record_dealership_id: Optional[int], label: str):
+    """Tenant check for single-record reads: admins only see their own dealership's documents."""
+    if user.is_superadmin:
+        return
+    if record_dealership_id is not None and record_dealership_id != get_target_dealership_id(db, user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{label} not found.")
+
+
+def _archiver_name(user: models.User) -> str:
+    return (user.full_name or user.phone_number or f"user #{user.id}")[:150]
+
+
 @router.get("/lot-intakes", response_model=List[schemas.LotIntakeOut])
 def list_lot_intakes(
     in_lot: Optional[bool] = Query(None, description="Filter by currently in-lot (True) or released (False)"),
+    include_archived: bool = Query(False, description="Superadmin only: include soft-archived records"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_admin)
 ):
     """
     Get list of received cars (filter by currently in-lot vs past/released).
+    Archived records are hidden unless a superadmin asks for them.
     """
     dealership_id = get_target_dealership_id(db, current_user)
     query = db.query(models.LotIntake).options(joinedload(models.LotIntake.gate_passes))
 
     if dealership_id and not current_user.is_superadmin:
         query = query.filter(models.LotIntake.dealership_id == dealership_id)
+
+    if not (include_archived and current_user.is_superadmin):
+        query = query.filter(models.LotIntake.archived_at.is_(None))
 
     if in_lot is not None:
         query = query.filter(models.LotIntake.is_in_lot == in_lot)
@@ -68,6 +85,7 @@ def get_lot_intake(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Lot intake record #{intake_id} not found."
         )
+    _ensure_same_dealership(db, current_user, intake.dealership_id, f"Lot intake record #{intake_id}")
     return intake
 
 
@@ -245,10 +263,13 @@ def list_gate_passes(
     List all generated gate passes (መኪና መውጫዎች) for audits and records.
     """
     dealership_id = get_target_dealership_id(db, current_user)
-    query = db.query(models.GatePass)
+    query = db.query(models.GatePass).outerjoin(models.LotIntake, models.GatePass.lot_intake_id == models.LotIntake.id)
 
     if dealership_id and not current_user.is_superadmin:
         query = query.filter(models.GatePass.dealership_id == dealership_id)
+
+    # Passes of an archived intake are archived with it.
+    query = query.filter(models.LotIntake.archived_at.is_(None))
 
     return query.order_by(models.GatePass.date.desc(), models.GatePass.id.desc()).all()
 
@@ -257,10 +278,11 @@ def list_gate_passes(
 def delete_lot_intake(
     intake_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
-    Delete a lot intake record.
+    Soft-archive a lot intake record (superadmin only). The intake and its gate passes
+    are legal records: they are hidden from lists but never removed from the database.
     """
     intake = db.query(models.LotIntake).filter(models.LotIntake.id == intake_id).first()
     if not intake:
@@ -269,9 +291,29 @@ def delete_lot_intake(
             detail=f"Lot intake record #{intake_id} not found."
         )
 
-    db.delete(intake)
-    db.commit()
+    if intake.archived_at is None:
+        intake.archived_at = datetime.utcnow()
+        intake.archived_by = _archiver_name(current_user)
+        db.commit()
+        logger.info(f"🗄️ Archived lot intake #{intake.id} ({intake.plate_number}) by {intake.archived_by}")
     return None
+
+
+@router.post("/lot-intakes/{intake_id}/restore", response_model=schemas.LotIntakeOut)
+def restore_lot_intake(
+    intake_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin)
+):
+    """Undo a soft-archive (superadmin only)."""
+    intake = db.query(models.LotIntake).filter(models.LotIntake.id == intake_id).first()
+    if not intake:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Lot intake record #{intake_id} not found.")
+    intake.archived_at = None
+    intake.archived_by = None
+    db.commit()
+    db.refresh(intake)
+    return intake
 
 
 # ==========================================
@@ -281,6 +323,7 @@ def delete_lot_intake(
 @router.get("/handovers", response_model=List[schemas.VehicleHandoverOut])
 def list_handovers(
     q: Optional[str] = Query(None, description="Search by plate, owner name, vehicle type, or contract number"),
+    include_archived: bool = Query(False, description="Superadmin only: include soft-archived contracts"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_admin)
 ):
@@ -292,6 +335,9 @@ def list_handovers(
 
     if dealership_id and not current_user.is_superadmin:
         query = query.filter(models.VehicleHandover.dealership_id == dealership_id)
+
+    if not (include_archived and current_user.is_superadmin):
+        query = query.filter(models.VehicleHandover.archived_at.is_(None))
 
     if q and q.strip():
         term = f"%{q.strip()}%"
@@ -323,6 +369,7 @@ def get_handover(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Vehicle handover record #{handover_id} not found."
         )
+    _ensure_same_dealership(db, current_user, handover.dealership_id, f"Vehicle handover record #{handover_id}")
     return handover
 
 
@@ -396,10 +443,11 @@ def create_handover(
 def delete_handover(
     handover_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
-    Delete a handover record if needed.
+    Soft-archive a handover contract (superadmin only). It is a legal record: hidden
+    from lists but never removed from the database.
     """
     handover = db.query(models.VehicleHandover).filter(models.VehicleHandover.id == handover_id).first()
     if not handover:
@@ -408,7 +456,27 @@ def delete_handover(
             detail=f"Handover record #{handover_id} not found."
         )
 
-    db.delete(handover)
-    db.commit()
+    if handover.archived_at is None:
+        handover.archived_at = datetime.utcnow()
+        handover.archived_by = _archiver_name(current_user)
+        db.commit()
+        logger.info(f"🗄️ Archived handover {handover.contract_number} by {handover.archived_by}")
     return None
+
+
+@router.post("/handovers/{handover_id}/restore", response_model=schemas.VehicleHandoverOut)
+def restore_handover(
+    handover_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin)
+):
+    """Undo a soft-archive (superadmin only)."""
+    handover = db.query(models.VehicleHandover).filter(models.VehicleHandover.id == handover_id).first()
+    if not handover:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Handover record #{handover_id} not found.")
+    handover.archived_at = None
+    handover.archived_by = None
+    db.commit()
+    db.refresh(handover)
+    return handover
 

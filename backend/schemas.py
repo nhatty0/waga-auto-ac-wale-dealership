@@ -488,6 +488,8 @@ class LotIntakeOut(LotIntakeBase):
     is_in_lot: bool
     published_vehicle_id: Optional[int] = None
     created_at: Optional[datetime] = None
+    archived_at: Optional[datetime] = None
+    archived_by: Optional[str] = None
     gate_passes: List[GatePassOut] = []
 
     class Config:
@@ -534,6 +536,8 @@ class VehicleHandoverOut(VehicleHandoverBase):
     contract_number: str
     date: datetime
     created_at: Optional[datetime] = None
+    archived_at: Optional[datetime] = None
+    archived_by: Optional[str] = None
 
     class Config:
         from_attributes = True
