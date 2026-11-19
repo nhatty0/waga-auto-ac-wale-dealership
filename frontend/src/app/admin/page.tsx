@@ -2208,7 +2208,7 @@ export default function AdminDashboard() {
                 key={v.id}
                 className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
               >
-                <div className="flex items-center gap-3.5">
+                <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">
                   <div className="w-16 h-16 rounded-xl bg-zinc-950 overflow-hidden flex-shrink-0">
                     <img
                       src={
@@ -2221,11 +2221,11 @@ export default function AdminDashboard() {
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-amber-500 uppercase">
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-bold text-amber-500 uppercase">
                       {v.make}
                     </span>
-                    <h3 className="font-bold text-sm text-white">
+                    <h3 className="font-bold text-sm text-white break-words">
                       {v.year} {v.model}
                     </h3>
                     <p className="text-xs text-zinc-400">
@@ -2248,7 +2248,7 @@ export default function AdminDashboard() {
                   <select
                     value={v.status}
                     onChange={(e) => handleStatusChange(v.id, e.target.value)}
-                    className="bg-zinc-950 border border-zinc-800 text-zinc-300 text-xs py-1.5 px-3 rounded-lg focus:outline-none focus:border-amber-500"
+                    className="flex-1 sm:flex-none min-w-0 bg-zinc-950 border border-zinc-800 text-zinc-300 text-xs py-1.5 px-3 rounded-lg focus:outline-none focus:border-amber-500"
                   >
                     <option value="Available">Available</option>
                     <option value="Reserved">Reserved</option>
@@ -2258,7 +2258,8 @@ export default function AdminDashboard() {
 
                   <button
                     onClick={() => setPrintingVehicle(v)}
-                    className="p-2 text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg transition flex items-center gap-1.5 text-xs font-semibold"
+                    className="p-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 justify-center text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg transition flex items-center gap-1.5 text-xs font-semibold"
+                    aria-label="Print flyer"
                     title="Print Window Spec Sheet (A4)"
                   >
                     <Printer size={16} className="text-amber-400" />
@@ -2267,7 +2268,8 @@ export default function AdminDashboard() {
 
                   <button
                     onClick={() => openEditModal(v)}
-                    className="p-2 text-amber-400 hover:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg transition"
+                    className="p-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-amber-400 hover:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg transition"
+                    aria-label="Edit vehicle"
                     title="Edit Vehicle Details & Photos"
                   >
                     <Pencil size={16} />
@@ -2275,7 +2277,8 @@ export default function AdminDashboard() {
 
                   <button
                     onClick={() => handleDelete(v.id)}
-                    className="p-2 text-red-400 hover:text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg transition"
+                    className="p-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-red-400 hover:text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg transition"
+                    aria-label="Delete vehicle"
                     title="Delete Vehicle"
                   >
                     <Trash2 size={16} />
@@ -2311,32 +2314,32 @@ export default function AdminDashboard() {
                   className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2.5"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-sm text-white">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3 className="font-bold text-sm text-white break-words min-w-0">
                           {a.customer_name}
                         </h3>
                         <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">
                           #{a.id}
                         </span>
                       </div>
-                      <p className="text-xs text-amber-400 font-medium flex items-center gap-2">
-                        <span>📞 {a.phone_number}</span>
+                      <p className="text-sm sm:text-xs text-amber-400 font-medium flex flex-wrap items-center gap-x-2">
+                        <a href={`tel:${a.phone_number}`} className="inline-flex items-center min-h-[44px] sm:min-h-0">📞 {a.phone_number}</a>
                         <span className="text-zinc-500">•</span>
                         <span className="text-zinc-300 font-normal">
                           {a.preferred_channel}
                         </span>
                       </p>
-                      <div className="flex items-center gap-1.5 text-xs text-amber-300 font-semibold bg-black/40 border border-zinc-800/80 px-2 py-1 rounded-lg w-fit mt-1">
+                      <div className="flex items-center gap-1.5 text-xs text-amber-300 font-semibold bg-black/40 border border-zinc-800/80 px-2 py-1 rounded-lg w-fit max-w-full mt-1">
                         <Car size={13} className="text-amber-400 shrink-0" />
-                        <span>{vehicleDisplay}</span>
+                        <span className="break-words min-w-0">{vehicleDisplay}</span>
                       </div>
                     </div>
                     <span className="text-[11px] font-semibold bg-zinc-800 border border-zinc-700/60 px-2.5 py-1 rounded-lg text-zinc-300 shrink-0 self-start">
                       {a.appointment_type}
                     </span>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-zinc-400 pt-2 border-t border-zinc-800/60">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400 pt-2 border-t border-zinc-800/60">
                     <span className="flex items-center gap-1.5">
                       <Calendar size={13} className="text-amber-400" /> {a.date}
                     </span>
@@ -2345,7 +2348,7 @@ export default function AdminDashboard() {
                     </span>
                   </div>
                   {a.notes && (
-                    <p className="text-xs text-zinc-400 italic bg-zinc-950/60 p-2 rounded-lg border border-zinc-800/40">
+                    <p className="text-xs text-zinc-400 italic bg-zinc-950/60 p-2 rounded-lg border border-zinc-800/40 break-words">
                       "{a.notes}"
                     </p>
                   )}
@@ -2361,7 +2364,7 @@ export default function AdminDashboard() {
         <div className="space-y-4">
           {/* Top Controls: Status Filters & Summary */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-900 border border-zinc-800 p-3 rounded-2xl">
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex gap-1.5 w-full sm:w-auto overflow-x-auto no-scrollbar sm:flex-wrap sm:overflow-visible">
               {[
                 { key: "all", label: "All (ሁሉንም)" },
                 { key: "pending", label: "Pending (በመጠባበቅ)" },
@@ -2372,7 +2375,7 @@ export default function AdminDashboard() {
                 <button
                   key={pill.key}
                   onClick={() => setRentalStatusFilter(pill.key)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                  className={`shrink-0 whitespace-nowrap min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
                     rentalStatusFilter === pill.key
                       ? "bg-amber-500 text-black font-black shadow-sm"
                       : "bg-zinc-800 text-zinc-400 hover:text-white"
@@ -2417,24 +2420,24 @@ export default function AdminDashboard() {
                     >
                       {/* Booking Top Info */}
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-black text-sm text-white">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <h3 className="font-black text-sm text-white break-words min-w-0">
                               {booking.customer_name}
                             </h3>
-                            <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">
+                            <span className="shrink-0 text-[10px] font-mono text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">
                               Booking #{booking.id}
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-xs">
                             <a
                               href={`tel:${booking.customer_phone}`}
-                              className="text-amber-400 font-bold hover:underline"
+                              className="inline-flex items-center min-h-[44px] sm:min-h-0 text-sm sm:text-xs text-amber-400 font-bold hover:underline"
                             >
                               📞 {booking.customer_phone}
                             </a>
                             <span className="text-zinc-600">•</span>
-                            <span className="text-zinc-400">
+                            <span className="text-zinc-400 break-words min-w-0">
                               {booking.delivery_type === "doorstep_delivery"
                                 ? `🚚 ያሉበት ድረስ (${booking.delivery_address || "Addis Ababa"})`
                                 : "🏢 ከሾውሩም መረከብ (Showroom Pickup)"}
@@ -2466,8 +2469,8 @@ export default function AdminDashboard() {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-zinc-800/80 text-xs">
                         <div className="bg-zinc-950/80 p-2.5 rounded-xl border border-zinc-800/60">
                           <span className="text-[10px] text-zinc-500 block">የተከራዩት መኪና</span>
-                          <span className="font-bold text-white flex items-center gap-1.5 mt-0.5">
-                            <Car size={13} className="text-amber-400" />
+                          <span className="font-bold text-white flex items-center gap-1.5 mt-0.5 break-words">
+                            <Car size={13} className="text-amber-400 shrink-0" />
                             {carTitle}
                           </span>
                         </div>
@@ -2489,10 +2492,10 @@ export default function AdminDashboard() {
 
                       {/* Driver Assignment & Management Section */}
                       <div className="pt-2 border-t border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
                           <span className="text-xs text-zinc-400 font-medium">የተመደበው አሽከርካሪ:</span>
                           {booking.assigned_driver ? (
-                            <span className="text-xs font-bold text-sky-400 bg-sky-500/10 border border-sky-500/30 px-2 py-0.5 rounded-lg flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-sky-400 bg-sky-500/10 border border-sky-500/30 px-2 py-0.5 rounded-lg flex items-center gap-1.5 break-words min-w-0">
                               <UserCheck size={13} />
                               {booking.assigned_driver.full_name} ({booking.assigned_driver.phone_number})
                             </span>
@@ -2503,14 +2506,14 @@ export default function AdminDashboard() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                           <button
                             type="button"
                             onClick={() => {
                               setAssigningBooking(booking);
                               setSelectedDriverId(booking.assigned_driver_id || "");
                             }}
-                            className="px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 active:scale-95"
+                            className="flex-1 sm:flex-none justify-center min-h-[44px] sm:min-h-0 px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 rounded-xl text-sm sm:text-xs font-bold transition flex items-center gap-1.5 active:scale-95"
                           >
                             <Truck size={13} />
                             <span>{booking.assigned_driver ? "አሽከርካሪ ቀይር" : "አሽከርካሪ መድብ"}</span>
@@ -2520,7 +2523,7 @@ export default function AdminDashboard() {
                           <select
                             value={booking.status}
                             onChange={(e) => handleUpdateRentalStatus(booking.id, e.target.value)}
-                            className="bg-zinc-800 border border-zinc-700 text-xs text-zinc-200 rounded-xl px-2.5 py-1.5 font-semibold focus:outline-none focus:border-amber-500"
+                            className="flex-1 sm:flex-none min-w-0 bg-zinc-800 border border-zinc-700 text-xs text-zinc-200 rounded-xl px-2.5 py-1.5 font-semibold focus:outline-none focus:border-amber-500"
                           >
                             <option value="pending">Pending</option>
                             <option value="driver_assigned">Driver Assigned</option>
@@ -2851,7 +2854,7 @@ export default function AdminDashboard() {
                       >
                         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
                           {/* Left: Vehicle Title, Plate, and Status */}
-                          <div className="flex items-start gap-3.5 min-w-[260px]">
+                          <div className="flex items-start gap-3 sm:gap-3.5 min-w-0 w-full lg:w-auto lg:min-w-[260px]">
                             {item.is_in_lot && (
                               <div className="pt-3 flex items-center shrink-0">
                                 <input
@@ -2890,9 +2893,9 @@ export default function AdminDashboard() {
                               🚗
                             </div>
 
-                            <div className="space-y-1">
+                            <div className="space-y-1 min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-extrabold text-white text-sm sm:text-base">
+                                <h4 className="font-extrabold text-white text-sm sm:text-base break-words min-w-0">
                                   {item.vehicle_name}
                                 </h4>
                                 {item.year_of_production && (
@@ -2933,18 +2936,18 @@ export default function AdminDashboard() {
                               <p className="text-[10px] text-zinc-400 uppercase font-semibold">
                                 የዋጋ ሁኔታ (Price Details)
                               </p>
-                              <div className="flex justify-between items-center text-zinc-300">
+                              <div className="flex flex-wrap justify-between items-center gap-x-2 text-zinc-300">
                                 <span>መነሻ (Primary):</span>
-                                <span className="font-mono font-bold text-zinc-200">
+                                <span className="font-mono font-bold text-zinc-200 text-right">
                                   {(item.primary_cash_price || 0).toLocaleString()} በእጅ{" "}
                                   {item.primary_bank_price
                                     ? `+ ${item.primary_bank_price.toLocaleString()} ባንክ`
                                     : ""}
                                 </span>
                               </div>
-                              <div className="flex justify-between items-center text-zinc-300">
+                              <div className="flex flex-wrap justify-between items-center gap-x-2 text-zinc-300">
                                 <span className="text-amber-400 font-semibold">የመጨረሻ (Final):</span>
-                                <span className="font-mono font-black text-amber-400">
+                                <span className="font-mono font-black text-amber-400 text-right">
                                   {(item.final_cash_price || 0).toLocaleString()} በእጅ{" "}
                                   {item.final_bank_price
                                     ? `+ ${item.final_bank_price.toLocaleString()} ባንክ`
@@ -2958,13 +2961,13 @@ export default function AdminDashboard() {
                               <p className="text-[10px] text-zinc-400 uppercase font-semibold">
                                 የባለቤት መረጃ (Owner & Remark)
                               </p>
-                              <div className="flex justify-between items-center text-zinc-300">
-                                <span className="font-medium text-white">{item.owner_name}</span>
+                              <div className="flex flex-wrap justify-between items-center gap-x-2 text-zinc-300">
+                                <span className="font-medium text-white break-words min-w-0">{item.owner_name}</span>
                                 <a
                                   href={`tel:${item.owner_phone}`}
-                                  className="font-mono text-amber-400 hover:underline flex items-center gap-1"
+                                  className="font-mono text-sm sm:text-xs text-amber-400 hover:underline flex items-center gap-1 min-h-[44px] sm:min-h-0"
                                 >
-                                  <Phone size={11} />
+                                  <Phone size={12} />
                                   <span>{item.owner_phone}</span>
                                 </a>
                               </div>
@@ -3212,7 +3215,7 @@ export default function AdminDashboard() {
                               <span className="font-mono font-black text-xs px-2 py-0.5 bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-md">
                                 {item.contract_number}
                               </span>
-                              <h4 className="font-bold text-sm text-white truncate">
+                              <h4 className="font-bold text-sm text-white break-words min-w-0">
                                 {item.vehicle_type}{" "}
                                 {item.manufacture_year ? `(${item.manufacture_year})` : ""}
                               </h4>
@@ -3273,13 +3276,13 @@ export default function AdminDashboard() {
                             <p className="text-[10px] text-zinc-400 uppercase font-semibold">
                               የአስረካቢ (ባለቤት) መረጃ
                             </p>
-                            <div className="flex justify-between items-center text-zinc-300">
-                              <span className="font-medium text-white truncate max-w-[130px]">{item.owner_full_name}</span>
+                            <div className="flex flex-wrap justify-between items-center gap-x-2 text-zinc-300">
+                              <span className="font-medium text-white break-words min-w-0">{item.owner_full_name}</span>
                               <a
                                 href={`tel:${item.owner_phone}`}
-                                className="font-mono text-amber-400 hover:underline flex items-center gap-1 shrink-0"
+                                className="font-mono text-sm sm:text-xs text-amber-400 hover:underline flex items-center gap-1 shrink-0 min-h-[44px] sm:min-h-0"
                               >
-                                <Phone size={11} />
+                                <Phone size={12} />
                                 <span>{item.owner_phone}</span>
                               </a>
                             </div>
@@ -3294,7 +3297,7 @@ export default function AdminDashboard() {
                           <button
                             type="button"
                             onClick={() => setActivePrintHandover(item)}
-                            className="flex-1 sm:flex-none px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95"
+                            className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold text-sm sm:text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95"
                           >
                             <Printer size={15} />
                             <span>🖨️ ውል አትም (Print)</span>
@@ -3303,7 +3306,8 @@ export default function AdminDashboard() {
                             type="button"
                             disabled={deletingHandoverId === item.id}
                             onClick={() => handleDeleteHandover(item.id, item.contract_number)}
-                            className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition border border-transparent hover:border-red-500/20"
+                            className="p-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-zinc-400 hover:text-red-400 bg-zinc-800 sm:bg-transparent hover:bg-red-500/10 rounded-xl transition border border-transparent hover:border-red-500/20"
+                            aria-label="Delete contract"
                             title="ውሉን ሰርዝ (Delete contract)"
                           >
                             {deletingHandoverId === item.id ? (
@@ -3350,10 +3354,10 @@ export default function AdminDashboard() {
       {/* DRIVERS ROSTER TAB CONTENT */}
       {activeTab === "drivers" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 p-4 rounded-2xl">
-            <div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-900 border border-zinc-800 p-4 rounded-2xl">
+            <div className="min-w-0">
               <h3 className="font-black text-sm text-white flex items-center gap-2">
-                <UserCheck size={18} className="text-amber-400" />
+                <UserCheck size={18} className="text-amber-400 shrink-0" />
                 <span>የ AC Wale Cars አሽከርካሪዎች ስምሪት (Driver Roster)</span>
               </h3>
               <p className="text-xs text-zinc-400 mt-0.5">
@@ -3364,7 +3368,7 @@ export default function AdminDashboard() {
             <button
               type="button"
               onClick={() => setShowDriverModal(true)}
-              className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition"
+              className="min-h-[44px] py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-black font-black text-sm sm:text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition shrink-0"
             >
               <Plus size={15} />
               <span>አዲስ አሽከርካሪ መዝግብ</span>
@@ -3392,12 +3396,12 @@ export default function AdminDashboard() {
                   key={d.id}
                   className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3 shadow-md flex flex-col justify-between"
                 >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-bold text-sm text-white">{d.full_name}</h4>
-                      <div className="flex items-center gap-2 text-xs text-amber-400 mt-1 font-mono">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-sm text-white break-words">{d.full_name}</h4>
+                      <div className="flex items-center gap-2 text-sm sm:text-xs text-amber-400 font-mono">
                         <Phone size={12} />
-                        <a href={`tel:${d.phone_number}`} className="hover:underline">
+                        <a href={`tel:${d.phone_number}`} className="hover:underline inline-flex items-center min-h-[44px] sm:min-h-0 sm:mt-1">
                           {d.phone_number}
                         </a>
                       </div>
@@ -3409,7 +3413,7 @@ export default function AdminDashboard() {
                     </div>
 
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
                         d.is_active
                           ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
                           : "bg-zinc-800 text-zinc-500 border-zinc-700"
@@ -3419,12 +3423,12 @@ export default function AdminDashboard() {
                     </span>
                   </div>
 
-                  <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between">
-                    <span className="text-[10px] text-zinc-500 font-mono">ID: #{d.id}</span>
+                  <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-zinc-500 font-mono">ID: #{d.id}</span>
                     <button
                       type="button"
                       onClick={() => handleToggleDriverStatus(d)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                      className={`min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-xl text-sm sm:text-xs font-semibold border transition ${
                         d.is_active
                           ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700"
                           : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border-emerald-500/30 font-bold"
