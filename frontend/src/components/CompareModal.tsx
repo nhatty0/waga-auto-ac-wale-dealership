@@ -17,6 +17,8 @@ import {
 import { Vehicle, Dealership } from "@/types";
 import { useLanguage } from "@/context/LanguageContext";
 import { resolveImageUrl } from "@/lib/images";
+import { getPriceInfo } from "@/lib/price";
+import PriceSplit from "@/components/PriceSplit";
 import { getPlateLabel, getPlateBadgeClasses } from "@/lib/plates";
 
 interface CompareModalProps {
@@ -51,9 +53,13 @@ export default function CompareModal({
       id: "price",
       icon: Banknote,
       label: t.priceRow,
-      render: (v: Vehicle) => (
+      render: (v: Vehicle) => {
+        const info = getPriceInfo(v);
+        return (
         <div>
-          {v.price != null ? (
+          {info.kind === "split" ? (
+            <PriceSplit cash={info.cash} bank={info.bank} total={info.total} size="sm" stacked />
+          ) : v.price != null ? (
             <div>
               <span className="text-base sm:text-lg font-black text-amber-400 block">
                 {v.price.toLocaleString()} ETB
@@ -66,7 +72,8 @@ export default function CompareModal({
             </span>
           )}
         </div>
-      ),
+        );
+      },
     },
     {
       id: "loan",

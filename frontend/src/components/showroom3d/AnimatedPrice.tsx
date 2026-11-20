@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Landmark, Banknote } from "lucide-react";
+import PriceSplit from "@/components/PriceSplit";
 
 interface AnimatedPriceProps {
   price?: number | null;
@@ -58,6 +59,19 @@ export default function AnimatedPrice({
   }, [price, shouldReduceMotion]);
 
   if (!price) {
+    const cash = cashPrice != null && cashPrice > 0 ? cashPrice : null;
+    const bank = bankLoanAmount != null && bankLoanAmount > 0 ? bankLoanAmount : null;
+    if (cash != null || bank != null) {
+      return (
+        <PriceSplit
+          cash={cash}
+          bank={bank}
+          total={cash != null && bank != null ? cash + bank : null}
+          bankName={bankName}
+          size={size}
+        />
+      );
+    }
     return (
       <span className="text-sm font-bold text-amber-400 block py-1">
         {lang === "am" ? "ዋጋ በስልክ" : "Call for Price"}

@@ -9,6 +9,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { Vehicle } from "@/types";
 import { resolveImageUrl } from "@/lib/images";
 import { getFlyerPlateSpec, isNewSeriesPlate } from "@/lib/plates";
+import { getPriceInfo, getSplitParts } from "@/lib/price";
 
 interface PrintFlyerModalProps {
   vehicle: Vehicle;
@@ -31,6 +32,8 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
     : "tel:+251911646628";
 
   const plateSpec = getFlyerPlateSpec(vehicle.plate_status);
+  const priceInfo = getPriceInfo(vehicle);
+  const { cash: splitCash, bank: splitBank } = getSplitParts(vehicle);
 
   useEffect(() => {
     setMounted(true);
@@ -183,7 +186,7 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
 
       {/* BIG FINANCIAL HIGHLIGHTS */}
       <div className="mb-3">
-        {vehicle.has_bank_loan && vehicle.cash_price && vehicle.bank_loan_amount ? (
+        {(vehicle.has_bank_loan && vehicle.cash_price && vehicle.bank_loan_amount) || priceInfo.kind === "split" ? (
           <div className="border-2 border-black rounded-xl p-3 bg-zinc-50 space-y-2">
             <div className="flex items-center justify-between border-b border-zinc-300 pb-1">
               <span className="text-xs font-black tracking-wider uppercase text-black">
@@ -195,24 +198,33 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
                 </span>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className={`grid ${splitCash != null && splitBank != null ? "grid-cols-2" : "grid-cols-1"} gap-3 pt-1`}>
+              {splitCash != null && (
               <div className="bg-white border-2 border-emerald-600 rounded-lg p-2 text-center">
                 <span className="text-[10px] font-bold text-zinc-600 block uppercase">
                   CASH UPFRONT / በእጅ የሚከፈል
                 </span>
                 <span className="text-xl sm:text-2xl font-black text-emerald-700 block mt-0.5">
-                  {vehicle.cash_price.toLocaleString()} ETB
+                  {splitCash.toLocaleString("en-US")} ETB
                 </span>
               </div>
+              )}
+              {splitBank != null && (
               <div className="bg-white border-2 border-sky-600 rounded-lg p-2 text-center">
                 <span className="text-[10px] font-bold text-zinc-600 block uppercase">
                   REMAINING LOAN / የባንክ ዕዳ
                 </span>
                 <span className="text-xl sm:text-2xl font-black text-sky-700 block mt-0.5">
-                  {vehicle.bank_loan_amount.toLocaleString()} ETB
+                  {splitBank.toLocaleString("en-US")} ETB
                 </span>
               </div>
+              )}
             </div>
+            {priceInfo.kind === "split" && priceInfo.total != null && (
+              <div className="text-center text-xs font-bold text-zinc-700 pt-0.5">
+                Total ≈ {priceInfo.total.toLocaleString("en-US")} ETB / ጠቅላላ
+              </div>
+            )}
           </div>
         ) : (
           <div className="border-2 border-black rounded-xl p-3 bg-zinc-50 flex items-center justify-between">

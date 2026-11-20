@@ -27,6 +27,8 @@ import TelegramIcon from "@/components/TelegramIcon";
 import VehicleActionBar from "@/components/VehicleActionBar";
 import { SALES_PHONES, TELEGRAM_CHAT_URL } from "@/lib/contact";
 import { openTelegramShare } from "@/lib/share";
+import { getPriceInfo, priceText as buildPriceText, CALL_FOR_PRICE } from "@/lib/price";
+import PriceSplit from "@/components/PriceSplit";
 import { Vehicle, Dealership } from "@/types";
 //import { playEngineRev } from "@/lib/audio";
 import { useLanguage } from "@/context/LanguageContext";
@@ -114,19 +116,19 @@ export default function VehicleModal({
     return t.conditionGood;
   };
 
+  const priceInfo = getPriceInfo(vehicle);
+
   const generateFlyerText = () => {
     const isAm = lang === "am";
     const conditionText = getConditionLabel(vehicle.condition);
 
-    const priceText = vehicle.price != null
-      ? `${vehicle.price.toLocaleString()} ETB (${t.negotiable})`
-      : isAm ? "ዋጋ በስልክ" : "Call for Price";
+    const priceText = buildPriceText(vehicle, isAm ? CALL_FOR_PRICE.am : CALL_FOR_PRICE.en, t.negotiable);
 
     // No mileage entered → leave the line out entirely.
     const mileageText = formatMileage(vehicle.mileage);
 
     const loanSplitText =
-      vehicle.has_bank_loan && vehicle.cash_price && vehicle.bank_loan_amount
+      vehicle.price != null && vehicle.has_bank_loan && vehicle.cash_price && vehicle.bank_loan_amount
         ? isAm
           ? `\n🏦 *የክፍያ አማራጭ:* በእጅ ${vehicle.cash_price.toLocaleString()} ETB + ${vehicle.bank_loan_amount.toLocaleString()} ETB ባንክ (${vehicle.bank_name || "ባንክ"})\n`
           : `\n🏦 *Payment Split:* ${vehicle.cash_price.toLocaleString()} ETB Cash + ${vehicle.bank_loan_amount.toLocaleString()} ETB Bank Loan (${vehicle.bank_name || "Bank"})\n`
@@ -489,10 +491,20 @@ export default function VehicleModal({
                   </span>
                 </p>
                 <div className="mt-3 flex items-baseline gap-2 flex-wrap">
-                  {vehicle.price != null ? (
+                  {priceInfo.kind === "split" ? (
+                    <div className="w-full max-w-sm">
+                      <PriceSplit
+                        cash={priceInfo.cash}
+                        bank={priceInfo.bank}
+                        total={priceInfo.total}
+                        bankName={vehicle.bank_name}
+                        size="lg"
+                      />
+                    </div>
+                  ) : priceInfo.kind === "full" ? (
                     <>
                       <span className="text-2xl font-black text-amber-400 tabular-nums whitespace-nowrap">
-                        {vehicle.price.toLocaleString()} <span className="text-base">ETB</span>
+                        {priceInfo.price.toLocaleString()} <span className="text-base">ETB</span>
                       </span>
                       <span className="text-[11px] font-semibold text-zinc-400 bg-white/[0.05] px-2 py-0.5 rounded-md">
                         {t.negotiable}

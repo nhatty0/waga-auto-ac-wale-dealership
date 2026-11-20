@@ -1,6 +1,7 @@
 import { Vehicle } from "@/types";
 import { getPlateLabel } from "./plates";
 import { SITE_URL } from "./site";
+import { getPriceInfo, priceText } from "./price";
 
 export function formatTelegramVehicleCaption(
   vehicle: Vehicle,
@@ -11,10 +12,7 @@ export function formatTelegramVehicleCaption(
     vehicle.dealership?.name ||
     "AC WALE MARKET";
 
-  const formattedPrice =
-    vehicle.price != null
-      ? `${vehicle.price.toLocaleString()} ETB`
-      : "ዋጋ በስልክ (Call for Price)";
+  const formattedPrice = priceText(vehicle, "ዋጋ በስልክ (Call for Price)");
 
   const downPaymentVal = vehicle.cash_price ?? vehicle.down_payment;
   const downPaymentText =
@@ -30,11 +28,18 @@ export function formatTelegramVehicleCaption(
 
   const plateCodeText = getPlateLabel(vehicle.plate_status || vehicle.plate_code, true);
 
+  // With no full price the split is already the price line — don't repeat it.
+  const splitIsPrice = getPriceInfo(vehicle).kind === "split";
+
   return [
     `🚘 *${vehicle.year} ${vehicle.make} ${vehicle.model}*`,
     `💰 ዋጋ: ${formattedPrice}`,
-    `💵 በእጅ የሚከፈል (Down Payment): ${downPaymentText}`,
-    `🏦 የባንክ ዕዳ: ${bankLoanText}`,
+    ...(splitIsPrice
+      ? []
+      : [
+          `💵 በእጅ የሚከፈል (Down Payment): ${downPaymentText}`,
+          `🏦 የባንክ ዕዳ: ${bankLoanText}`,
+        ]),
     `🏷️ ሰሌዳ: ${plateCodeText}`,
     `📍 የቀረበው በ: ${dealerName}`,
   ].join("\n");

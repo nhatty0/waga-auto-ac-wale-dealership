@@ -5,6 +5,7 @@ import { Vehicle } from "@/types";
 import VehicleDetailClient from "./VehicleDetailClient";
 import { resolveImageUrl } from "@/lib/images";
 import { getPlateLabel } from "@/lib/plates";
+import { priceText } from "@/lib/price";
 import { SITE_URL } from "@/lib/site";
 
 interface PageProps {
@@ -55,12 +56,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       : "ሙሉ ክፍያ";
 
   const plateText = getPlateLabel(vehicle.plate_status || vehicle.plate_code, true);
-  const priceFormatted =
-    vehicle.price != null
-      ? `${vehicle.price.toLocaleString()} ETB`
-      : "ዋጋ በስልክ (Call for Price)";
+  const priceFormatted = priceText(vehicle, "ዋጋ በስልክ (Call for Price)");
 
-  const description = `ዋጋ: ${priceFormatted} | በቅድሚያ/በእጅ: ${downPaymentText} | ሰሌዳ: ${plateText}`;
+  const description =
+    vehicle.price != null
+      ? `ዋጋ: ${priceFormatted} | በቅድሚያ/በእጅ: ${downPaymentText} | ሰሌዳ: ${plateText}`
+      : `ዋጋ: ${priceFormatted} | ሰሌዳ: ${plateText}`;
 
   // Resolve absolute image URL for Telegram, WhatsApp, and social link unfurling
   let coverImageUrl =

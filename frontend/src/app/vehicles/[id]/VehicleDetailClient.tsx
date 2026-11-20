@@ -34,6 +34,8 @@ import VehicleActionBar from "@/components/VehicleActionBar";
 import { SALES_PHONES, TELEGRAM_CHAT_URL, PhoneLine } from "@/lib/contact";
 import { PRIMARY_DEALER_NAME, PRIMARY_DEALER_SLUG } from "@/lib/site";
 import { openTelegramShare, formatTelegramVehicleCaption } from "@/lib/share";
+import { getPriceInfo } from "@/lib/price";
+import PriceSplit from "@/components/PriceSplit";
 import { resolveImageUrl } from "@/lib/images";
 import { getPlateLabel, getPlateBadgeClasses } from "@/lib/plates";
 
@@ -107,6 +109,7 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
     ? SALES_PHONES
     : [{ tel: dealerPhone.replace(/\s+/g, ""), display: dealerPhone, local: dealerPhone }];
 
+  const priceInfo = getPriceInfo(vehicle);
   const downPaymentVal = vehicle.cash_price ?? vehicle.down_payment;
   const bankLoanVal = vehicle.bank_loan_amount ?? vehicle.bank_loan;
   const plateText = getPlateLabel(vehicle.plate_status || vehicle.plate_code, lang === "am");
@@ -394,12 +397,23 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
             {/* Price Card */}
             <div className="p-4 rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 space-y-3">
               <span className="text-xs text-zinc-400 block font-medium">
-                {lang === "am" ? "ዋጋ (ድርድር አለው)" : "Total Price (Negotiable)"}
+                {priceInfo.kind === "split"
+                  ? lang === "am" ? "የክፍያ ክፍፍል" : "Payment Split"
+                  : lang === "am" ? "ዋጋ (ድርድር አለው)" : "Total Price (Negotiable)"}
               </span>
+              {priceInfo.kind === "split" ? (
+                <PriceSplit
+                  cash={priceInfo.cash}
+                  bank={priceInfo.bank}
+                  total={priceInfo.total}
+                  bankName={vehicle.bank_name}
+                  size="lg"
+                />
+              ) : (
               <div className="text-[1.65rem] sm:text-3xl font-black text-amber-400 tracking-tight tabular-nums whitespace-nowrap">
-                {vehicle.price != null ? (
+                {priceInfo.kind === "full" ? (
                   <>
-                    {vehicle.price.toLocaleString()} <span className="text-lg sm:text-xl">ETB</span>
+                    {priceInfo.price.toLocaleString()} <span className="text-lg sm:text-xl">ETB</span>
                   </>
                 ) : lang === "am" ? (
                   "ዋጋ በስልክ"
@@ -407,9 +421,10 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
                   "Call for Price"
                 )}
               </div>
+              )}
 
-              {/* Financial Split Box (Upfront Cash vs Bank Loan) */}
-              {vehicle.has_bank_loan && (
+              {/* Financial Split Box (Upfront Cash vs Bank Loan) — skipped when the split is already the headline */}
+              {vehicle.has_bank_loan && priceInfo.kind === "full" && (
                 <div className="pt-3 border-t border-zinc-800/80 grid grid-cols-2 gap-3">
                   <div className="bg-black/60 rounded-xl p-2.5 border border-zinc-800">
                     <span className="text-[10px] text-zinc-400 block uppercase font-semibold">
