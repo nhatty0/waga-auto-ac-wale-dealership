@@ -83,6 +83,8 @@ export interface Dealership {
   slug: string;
   phone_number?: string | null;
   phone_number_2?: string | null;
+  /** Printed on document letterheads (Settings). */
+  email?: string | null;
   logo_url?: string | null;
   telegram_bot_token?: string | null;
   telegram_chat_id?: string | null;
