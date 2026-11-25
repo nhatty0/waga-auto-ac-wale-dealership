@@ -39,7 +39,39 @@ ADDITIVE_COLUMNS = [
     ("gate_passes", "archived_at", "DATETIME", "TIMESTAMP"),
     ("gate_passes", "archived_by", "VARCHAR(150)", "VARCHAR(150)"),
     ("vehicle_handovers", "doc_status", "VARCHAR(20)", "VARCHAR(20)"),
+    # Telegram gate pass (remote release)
+    ("gate_passes", "verify_token", "VARCHAR(64)", "VARCHAR(64)"),
+    ("gate_passes", "valid_until", "DATETIME", "TIMESTAMP"),
+    ("gate_passes", "color", "VARCHAR(50)", "VARCHAR(50)"),
+    ("gate_passes", "driver_phone", "VARCHAR(50)", "VARCHAR(50)"),
+    ("gate_passes", "driver_chat_id", "VARCHAR(50)", "VARCHAR(50)"),
+    ("gate_passes", "issued_by", "VARCHAR(150)", "VARCHAR(150)"),
+    ("gate_passes", "sent_at", "DATETIME", "TIMESTAMP"),
+    ("gate_passes", "telegram_messages", "TEXT", "TEXT"),
+    ("gate_passes", "exited_at", "DATETIME", "TIMESTAMP"),
+    ("gate_passes", "confirmed_by", "VARCHAR(150)", "VARCHAR(150)"),
+    ("gate_passes", "rejected_at", "DATETIME", "TIMESTAMP"),
+    ("gate_passes", "rejected_by", "VARCHAR(150)", "VARCHAR(150)"),
+    ("gate_passes", "reject_note", "TEXT", "TEXT"),
+    ("gate_passes", "cancelled_at", "DATETIME", "TIMESTAMP"),
+    ("gate_passes", "cancelled_by", "VARCHAR(150)", "VARCHAR(150)"),
 ]
+
+
+def _backfill_gate_pass_tokens(db):
+    """Every pass gets a random verify token and a validity end (23:59 Addis time on its date)."""
+    from gate_pass import new_token, default_valid_until
+    rows = db.query(models.GatePass).filter(
+        (models.GatePass.verify_token.is_(None)) | (models.GatePass.valid_until.is_(None))
+    ).all()
+    for gp in rows:
+        gp.verify_token = gp.verify_token or new_token()
+        gp.valid_until = gp.valid_until or default_valid_until(gp.date or gp.created_at)
+    if rows:
+        db.commit()
+        print(f"🎫 Gate passes: {len(rows)} given a verify token / validity window.")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_gate_passes_verify_token ON gate_passes (verify_token)"))
 
 
 def _backfill_document_fields(db):
@@ -77,7 +109,8 @@ def _backfill_staff_permissions(db):
     for u in rows:
         if u.is_superadmin:
             continue
-        u.permissions_json = models.encode_permissions(models.STAFF_PERMISSIONS)
+        # The three original sections only; "gate" is never granted implicitly.
+        u.permissions_json = models.encode_permissions(("vehicles", "appointments", "rentals"))
         changed += 1
         print(f"🔑 Staff user #{u.id} ('{u.phone_number}') given all permissions (pre-existing account, active={u.is_active}).")
     if changed:
@@ -249,6 +282,7 @@ def run_migrations():
         _sync_superadmins(db, primary_dealer.id)
         _backfill_staff_permissions(db)
         _backfill_document_fields(db)
+        _backfill_gate_pass_tokens(db)
 
         # 3. Seed active delivery personnel roster if empty
         driver_count = db.query(models.Driver).count()

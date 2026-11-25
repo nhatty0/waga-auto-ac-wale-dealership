@@ -89,45 +89,28 @@ def test_telegram_deeplink_and_multichannel():
         assert "ቴሌግራም ገና አልተገናኘም" in res_test_unconnected.json()["detail"] or "Telegram is not connected" in res_test_unconnected.json()["detail"]
         print("✓ Returns HTTP 400 with helpful amharic/english instruction to use 1-click connect")
 
-        print("\n--- [TEST 3: Webhook receives /start connect_<dealership_id>] ---")
+        print("\n--- [TEST 3: /start connect_<dealership_id> is refused (forgeable)] ---")
         fake_telegram_chat_id = "554433221"
         res_webhook = client.post(
             "/api/telegram/webhook",
-            json={
-                "message": {
-                    "chat": {"id": int(fake_telegram_chat_id)},
-                    "text": f"/start connect_{test_dealer.id}"
-                }
-            }
+            json={"message": {"chat": {"id": int(fake_telegram_chat_id)}, "text": f"/start connect_{test_dealer.id}"}}
         )
         assert res_webhook.status_code == 200
-        res_json = res_webhook.json()
-        assert res_json.get("ok") is True or res_json.get("status") == "ok"
-
         db.refresh(test_dealer)
         db.refresh(test_user)
-        assert test_dealer.telegram_chat_id == fake_telegram_chat_id, (
-            f"Expected {fake_telegram_chat_id}, got {test_dealer.telegram_chat_id}"
-        )
-        assert test_user.telegram_chat_id == fake_telegram_chat_id, (
-            f"Expected {fake_telegram_chat_id}, got {test_user.telegram_chat_id}"
-        )
-        print(f"✓ Webhook automatically linked Dealership {test_dealer.id} & Admin User to Chat ID {fake_telegram_chat_id}")
+        assert test_dealer.telegram_chat_id != fake_telegram_chat_id, "a dealership id alone must not link a chat"
+        assert test_user.telegram_chat_id != fake_telegram_chat_id
+        print("✓ connect_<id> no longer links (owners use the one-time Connect Bot link)")
 
-        print("\n--- [TEST 4: Backward Compatibility - Webhook with /start link_<phone>] ---")
+        print("\n--- [TEST 4: /start link_<phone> is refused (account takeover)] ---")
         res_link = client.post(
             "/api/telegram/webhook",
-            json={
-                "message": {
-                    "chat": {"id": 88776655},
-                    "text": f"/start link_{test_user_phone}"
-                }
-            }
+            json={"message": {"chat": {"id": 88776655}, "text": f"/start link_{test_user_phone}"}}
         )
         assert res_link.status_code == 200
         db.refresh(test_user)
-        assert test_user.telegram_chat_id == "88776655"
-        print("✓ /start link_<phone> remains fully backwards-compatible for OTP flow")
+        assert test_user.telegram_chat_id != "88776655"
+        print("✓ link_<phone> no longer links a chat or sends a login code")
 
         print("\n--- [TEST 5: Multi-Channel Lead Dispatch Priority 1 (Telegram)] ---")
         # Restore dealer chat_id

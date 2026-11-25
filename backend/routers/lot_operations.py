@@ -12,6 +12,7 @@ import models
 import schemas
 from settings import settings
 from auth import get_current_superadmin
+import gate_pass as gate_pass_core
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,9 @@ def issue_gate_pass(db: Session, user: models.User, intake: Optional[models.LotI
                     driver_name: str, plate_number: str, release_reason: str, authorized_by: str,
                     when: Optional[datetime] = None, slip_number: Optional[str] = None,
                     vehicle_name: Optional[str] = None, vehicle_id: Optional[int] = None,
-                    doc_status: str = "final", commit: bool = True) -> models.GatePass:
+                    doc_status: str = "final", commit: bool = True,
+                    driver_phone: Optional[str] = None, color: Optional[str] = None,
+                    valid_until: Optional[datetime] = None) -> models.GatePass:
     """
     Create a gate pass. A FINAL pass releases the intake (is_in_lot = False); a draft does not.
     The pass stores the vehicle name and link itself, so it stays readable and findable on its
@@ -106,7 +109,12 @@ def issue_gate_pass(db: Session, user: models.User, intake: Optional[models.LotI
         vehicle_id=vehicle_id or (intake.published_vehicle_id if intake else None),
         doc_status=doc_status,
         created_at=datetime.utcnow(),
+        driver_phone=(driver_phone or "").strip() or None,
+        color=(color or "").strip() or None,
+        valid_until=valid_until,
+        issued_by=(user.full_name or user.phone_number or "Owner")[:150],
     )
+    gate_pass_core.ensure_pass_fields(gp)
     if intake is not None and doc_status == "final":
         intake.is_in_lot = False
         if intake.published_vehicle_id and "የተሸጠ" in gp.release_reason:

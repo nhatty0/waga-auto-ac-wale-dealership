@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 import models
 from auth import get_current_superadmin
 from database import get_db
+import gate_pass as gp_core
 from routers.lot_operations import (
     get_target_dealership_id,
     _archiver_name,
@@ -162,7 +163,8 @@ def _item(doc_type: str, rec) -> Dict[str, Any]:
             "vehicle_id": rec.published_vehicle_id,
             "archived_at": _iso(rec.archived_at), "archived_by": rec.archived_by,
             "created_at": _iso(rec.created_at),
-            "extra": {"is_in_lot": rec.is_in_lot, "gate_pass_count": len(rec.gate_passes or [])},
+            "extra": {"is_in_lot": rec.is_in_lot, "gate_pass_count": len(rec.gate_passes or []),
+                      "exited_at": _iso(max((p.exited_at for p in rec.gate_passes or [] if p.exited_at), default=None))},
         }
     if doc_type == "gatepass":
         intake = rec.lot_intake
@@ -177,7 +179,12 @@ def _item(doc_type: str, rec) -> Dict[str, Any]:
             "archived_at": _iso(rec.archived_at), "archived_by": rec.archived_by,
             "created_at": _iso(rec.created_at),
             "extra": {"release_reason": rec.release_reason, "lot_intake_id": rec.lot_intake_id,
-                      "authorized_by": rec.authorized_by},
+                      "authorized_by": rec.authorized_by, "pass_status": gp_core.pass_status(rec),
+                      "valid_until": _iso(rec.valid_until), "valid_until_local": gp_core.fmt_local(rec.valid_until),
+                      "exited_at": _iso(rec.exited_at), "exited_local": gp_core.fmt_local(rec.exited_at),
+                      "confirmed_by": rec.confirmed_by, "rejected_by": rec.rejected_by,
+                      "reject_note": rec.reject_note, "cancelled_at": _iso(rec.cancelled_at),
+                      "sent_at": _iso(rec.sent_at), "verify_token": rec.verify_token},
         }
     if doc_type == "handover":
         return {
@@ -228,6 +235,9 @@ def _data(doc_type: str, rec) -> Dict[str, Any]:
             "vehicle_name": rec.vehicle_name or (rec.lot_intake.vehicle_name if rec.lot_intake else ""),
             "plate_number": rec.plate_number, "driver_name": rec.driver_name,
             "release_reason": rec.release_reason, "authorized_by": rec.authorized_by,
+            "driver_phone": rec.driver_phone, "color": rec.color,
+            "valid_until": gp_core.local_input_value(rec.valid_until),
+            "verify_token": rec.verify_token,
         }
     if doc_type == "handover":
         return {
@@ -383,6 +393,16 @@ def _write_intake(db: Session, user, rec: Optional[models.LotIntake], data: Dict
     return rec
 
 
+def _valid_until(v) -> Optional[datetime]:
+    """datetime-local value in Addis time; empty = default (23:59 that day)."""
+    if not _s(v):
+        return None
+    dt = gp_core.parse_local_datetime(_s(v))
+    if dt is None:
+        raise HTTPException(status_code=422, detail="valid_until must look like 2026-11-25T23:59.")
+    return dt
+
+
 def _write_gatepass(db: Session, user, rec: Optional[models.GatePass], data: Dict[str, Any], st: str):
     if rec is None:
         intake = None
@@ -401,11 +421,21 @@ def _write_gatepass(db: Session, user, rec: Optional[models.GatePass], data: Dic
             vehicle_id=_int(data.get("vehicle_id")),
             doc_status=st,
             commit=False,
+            driver_phone=_s(data.get("driver_phone")),
+            color=_s(data.get("color")),
+            valid_until=_valid_until(data.get("valid_until")),
         )
     was_draft = rec.doc_status == "draft"
+    if rec.cancelled_at or rec.exited_at:
+        raise HTTPException(status_code=409, detail="This pass is used or cancelled; it can't be edited.")
     for f in ("driver_name", "plate_number", "release_reason", "authorized_by", "vehicle_name"):
         if f in data:
             setattr(rec, f, _s(data.get(f)))
+    for f in ("driver_phone", "color"):
+        if f in data:
+            setattr(rec, f, _s(data.get(f)) or None)
+    if "valid_until" in data and _s(data.get("valid_until")):
+        rec.valid_until = _valid_until(data.get("valid_until"))
     if "vehicle_id" in data:
         rec.vehicle_id = _int(data.get("vehicle_id"))
     if "date" in data and data.get("date"):

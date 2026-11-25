@@ -424,6 +424,7 @@ class StaffUserOut(BaseModel):
     permissions: List[str] = []
     dealership_id: Optional[int] = None
     created_at: Optional[datetime] = None
+    telegram_linked: bool = False
 
     class Config:
         from_attributes = True
@@ -481,6 +482,12 @@ class GatePassOut(BaseModel):
     vehicle_id: Optional[int] = None
     doc_status: Optional[str] = None
     archived_at: Optional[datetime] = None
+    verify_token: Optional[str] = None
+    valid_until: Optional[datetime] = None
+    driver_phone: Optional[str] = None
+    exited_at: Optional[datetime] = None
+    confirmed_by: Optional[str] = None
+    cancelled_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

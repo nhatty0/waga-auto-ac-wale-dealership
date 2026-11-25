@@ -290,7 +290,8 @@ def test_migration_keeps_settings_name_and_backfills_permissions():
         d = db.query(models.Dealership).filter(models.Dealership.slug == settings.PRIMARY_DEALERSHIP_SLUG).first()
         assert d.name == "Renamed In Settings", d.name
         legacy = db.query(models.User).filter(models.User.id == legacy_id).first()
-        assert legacy.permissions == list(models.STAFF_PERMISSIONS) and legacy.is_active
+        # The three original sections; the newer "gate" permission is never granted implicitly.
+        assert legacy.permissions == ["vehicles", "appointments", "rentals"] and legacy.is_active
         d.name = ""
         db.commit()
     finally:

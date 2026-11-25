@@ -462,97 +462,9 @@ def get_or_create_user_stub(phone: str, db: Session) -> tuple:
         return user, new_dealer
 
 
-async def handle_telegram_start_command(chat_id: str, text: str, db: Session) -> bool:
-    """
-    If a user opens the bot with /start link_<phone>:
-    1. Extracts the phone number and links the sender's Telegram chat_id to that User and Dealership in DB.
-    2. Sends them their active 6-digit OTP directly inside Telegram:
-       "እንኳን ደህና መጡ! ወደ አውቶ ሾውሩም መግቢያ ኮድዎ: {otp} ነው። ይህ ኮድ ለ 3 ደቂቃ ያገለግላል።"
-    """
-    clean_text = text.strip()
-    if not clean_text.startswith("/start"):
-        return False
-
-    bot_token = settings.TELEGRAM_BOT_TOKEN
-    if not bot_token:
-        return False
-
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
-    target_phone = None
-    if "link_" in clean_text:
-        raw_phone = clean_text.split("link_")[1].strip().split()[0]
-        try:
-            target_phone = normalize_ethiopian_phone(raw_phone)
-        except Exception:
-            digits = "".join(filter(str.isdigit, raw_phone))
-            target_phone = digits if digits else None
-
-    if target_phone:
-        TELEGRAM_LINKED_CHATS[target_phone] = chat_id
-
-        user = db.query(models.User).filter(models.User.phone_number == target_phone).first()
-        if user:
-            user.telegram_chat_id = chat_id
-            if user.dealership:
-                user.dealership.telegram_chat_id = chat_id
-            db.commit()
-        else:
-            dealers = db.query(models.Dealership).all()
-            for d in dealers:
-                d_digits = "".join(filter(str.isdigit, d.phone_number or ""))
-                if d_digits == target_phone or (len(d_digits) >= 9 and d_digits.endswith(target_phone[-9:])):
-                    d.telegram_chat_id = chat_id
-                    db.commit()
-
-        # Retrieve active OTP or create a fresh 6-digit OTP
-        otp_rec = (
-            db.query(models.OTPVerification)
-            .filter(
-                models.OTPVerification.phone_number == target_phone,
-                models.OTPVerification.is_used == False,
-                models.OTPVerification.expires_at >= datetime.utcnow()
-            )
-            .order_by(models.OTPVerification.created_at.desc())
-            .first()
-        )
-        if otp_rec:
-            otp_code = otp_rec.otp_code
-        else:
-            otp_code = f"{secrets.randbelow(900000) + 100000}"
-            new_otp = models.OTPVerification(
-                phone_number=target_phone,
-                otp_code=otp_code,
-                expires_at=datetime.utcnow() + timedelta(minutes=3),
-                is_used=False
-            )
-            db.add(new_otp)
-            db.commit()
-
-        reply_text = f"እንኳን ደህና መጡ! ወደ አውቶ ሾውሩም መግቢያ ኮድዎ: *{otp_code}* ነው። ይህ ኮድ ለ 3 ደቂቃ ያገለግላል።"
-        payload = {
-            "chat_id": chat_id,
-            "text": reply_text,
-            "parse_mode": "Markdown"
-        }
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(url, json=payload, timeout=8.0)
-                return resp.status_code == 200
-        except Exception as e:
-            print(f"⚠️ [TELEGRAM BOT] Failed to dispatch start link OTP: {e}")
-            return False
-    else:
-        reply_text = (
-            "👋 ሰላም! እንኳን ወደ Elite Motors Platform በደህና መጡ።\n\n"
-            "ስልክ ቁጥርዎን ለማገናኘት በፖርታሉ ላይ የሚሰጠዎትን ሊንክ ይጠቀሙ።"
-        )
-        try:
-            async with httpx.AsyncClient() as client:
-                await client.post(url, json={"chat_id": chat_id, "text": reply_text}, timeout=8.0)
-            return True
-        except Exception:
-            return False
+# NOTE: the old `/start link_<phone>` handler was removed. It linked ANY Telegram chat to the
+# phone number typed after link_ and then sent that phone's login code into the chat (account
+# takeover). Telegram links now use one-time random tokens: see gate_pass.py.
 
 
 async def request_otp(req: schemas.SendOTPRequest, db: Session) -> schemas.SendOTPResponse:
@@ -606,8 +518,9 @@ async def request_otp(req: schemas.SendOTPRequest, db: Session) -> schemas.SendO
             print(f"⚠️ [AUTH] Telegram OTP dispatch error (non-blocking): {e}")
             telegram_delivery_success = False
 
-    bot_username = settings.TELEGRAM_BOT_USERNAME or "EliteMotorsAlert_bot"
-    bot_link = f"https://t.me/{bot_username}?start=link_{normalized_phone}"
+    # No phone-based Telegram link any more (it allowed account takeover); staff link Telegram
+    # with a one-time token from /superadmin -> Staff.
+    bot_link = None
 
     return schemas.SendOTPResponse(
         status="success",

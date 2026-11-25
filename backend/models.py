@@ -7,7 +7,8 @@ from sqlalchemy.orm import relationship
 from database import Base
 
 # Staff permissions an owner can tick in /superadmin -> Staff. Superadmins implicitly have all.
-STAFF_PERMISSIONS = ("vehicles", "appointments", "rentals")
+# "gate" = gatekeeper: sees the Gate screen and confirms car exits (web or Telegram).
+STAFF_PERMISSIONS = ("vehicles", "appointments", "rentals", "gate")
 
 
 def encode_permissions(perms) -> str:
@@ -172,6 +173,10 @@ class User(Base):
         return perm in self.permissions
 
     @property
+    def telegram_linked(self) -> bool:
+        return bool((self.telegram_chat_id or "").strip())
+
+    @property
     def is_superadmin(self) -> bool:
         # The SUPERADMIN_PHONE list is the single source of truth. role == "superadmin"
         # alone is NOT enough (migrate.py demotes stale superadmin rows on startup).
@@ -281,6 +286,22 @@ class GatePass(Base):
     doc_status = Column(String(20), nullable=True, default="final")   # draft passes don't release the car
     archived_at = Column(DateTime, nullable=True)
     archived_by = Column(String(150), nullable=True)
+    # Remote release (Telegram gate pass). Status is derived: see gate_pass.pass_status().
+    verify_token = Column(String(64), nullable=True, index=True)   # random, for /verify/<token> and t.me ?start=gp_<token>
+    valid_until = Column(DateTime, nullable=True)                  # UTC; default 23:59 Addis time on the pass date
+    color = Column(String(50), nullable=True)
+    driver_phone = Column(String(50), nullable=True)
+    driver_chat_id = Column(String(50), nullable=True)
+    issued_by = Column(String(150), nullable=True)
+    sent_at = Column(DateTime, nullable=True)
+    telegram_messages = Column(Text, nullable=True)               # JSON [{chat_id, message_id}] to edit after confirm/cancel
+    exited_at = Column(DateTime, nullable=True)
+    confirmed_by = Column(String(150), nullable=True)
+    rejected_at = Column(DateTime, nullable=True)
+    rejected_by = Column(String(150), nullable=True)
+    reject_note = Column(Text, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    cancelled_by = Column(String(150), nullable=True)
 
     lot_intake = relationship("LotIntake", back_populates="gate_passes")
     dealership = relationship("Dealership")
@@ -347,3 +368,21 @@ class Document(Base):
     updated_at = Column(DateTime, default=datetime.utcnow)
     archived_at = Column(DateTime, nullable=True)
     archived_by = Column(String(150), nullable=True)
+
+
+class TelegramLinkToken(Base):
+    """
+    One-time secret for t.me/<bot>?start=link_<token> (staff) or connect_<token> (owner lead chat).
+    Replaces the old links that carried a phone number or dealership id, which anyone could forge.
+    """
+    __tablename__ = "telegram_link_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(64), unique=True, index=True, nullable=False)
+    purpose = Column(String(30), nullable=False)            # "staff_link" | "dealer_connect"
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    dealership_id = Column(Integer, ForeignKey("dealerships.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    used_chat_id = Column(String(50), nullable=True)

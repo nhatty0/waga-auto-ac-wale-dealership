@@ -17,7 +17,9 @@
   - ENABLE_SMS_DISPATCH=false: OTP codes are printed to .dev\backend.log, no SMS is sent.
   - SUPERADMIN_PHONE=251900061300,251918032065 (owners) for this run only. backend\.env is not edited.
   - Telegram is OFF by default (no poller, no bot token) so localhost never messages the real bot.
-    Pass -Telegram to keep the bot token from backend\.env.
+    Pass -Telegram to keep the bot token from backend\.env and LONG-POLL it (getUpdates): Telegram
+    can't reach a webhook on localhost. Use a separate TEST bot: polling is refused (409) while a
+    bot has a webhook set, and you must not remove the production bot's webhook.
 #>
 param(
   [Parameter(Position = 0)]
@@ -76,7 +78,10 @@ function Start-Dev {
       "TESTING"             = "true"           # disables the Telegram getUpdates poller
       "PYTHONIOENCODING"    = "utf-8"          # emoji in logs would crash a redirected console
       "PYTHONUNBUFFERED"    = "1"
+      "PUBLIC_SITE_URL"     = "http://localhost:3000"   # verify links in gate-pass messages
+      "TELEGRAM_POLLING"    = "false"
     }
+    if ($Telegram) { $vars["TELEGRAM_POLLING"] = "true" }
     if (-not $Telegram) {
       # A single space: PowerShell 5.1 deletes a variable set to "", and then backend\.env would
       # fill it in. The backend strips it to "" = no bot token = no real Telegram messages.

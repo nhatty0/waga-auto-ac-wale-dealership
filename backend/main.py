@@ -1,4 +1,5 @@
 import os
+import json
 import uuid
 import shutil
 import random
@@ -43,10 +44,10 @@ from auth import (
     rate_limiter,
     resolve_telegram_chat_id,
     dispatch_telegram_otp,
-    handle_telegram_start_command,
     TELEGRAM_LINKED_CHATS
 )
-from routers import rentals, drivers, admin, lot_operations, documents
+import gate_pass
+from routers import rentals, drivers, admin, lot_operations, documents, gate
 
 # JWT & Auth Configuration from settings
 JWT_SECRET_KEY = settings.JWT_SECRET_KEY
@@ -144,6 +145,7 @@ app.include_router(drivers.router)
 app.include_router(admin.router)
 app.include_router(lot_operations.router)
 app.include_router(documents.router)
+app.include_router(gate.router)
 
 # CORS configuration to allow requests from the Next.js frontend
 app.add_middleware(
@@ -450,130 +452,68 @@ def link_telegram_chat(
     }
 
 
-async def handle_telegram_connect_command(chat_id: str, text: str, db: Session) -> bool:
-    """
-    Handles deep-linked 1-Click Telegram connect: /start connect_<dealership_id>
-    Links dealership.telegram_chat_id = chat_id and dispatches welcome confirmation message.
-    """
-    clean_text = text.strip()
-    if "connect_" not in clean_text:
-        return False
-
-    raw_token = clean_text.split("connect_")[1].strip().split()[0]
-    dealer = None
-    if raw_token.isdigit():
-        dealer = db.query(models.Dealership).filter(models.Dealership.id == int(raw_token)).first()
-    if not dealer:
-        dealer = db.query(models.Dealership).filter(models.Dealership.slug == raw_token).first()
-
-    if not dealer:
-        logger.warning(f"Dealership not found for connect command: {raw_token}")
-        return False
-
-    dealer.telegram_chat_id = str(chat_id)
-    # Also link any users belonging to this dealership
-    users = db.query(models.User).filter(models.User.dealership_id == dealer.id).all()
-    for u in users:
-        u.telegram_chat_id = str(chat_id)
-    db.commit()
-
-    bot_token = settings.TELEGRAM_PLATFORM_BOT_TOKEN or settings.TELEGRAM_BOT_TOKEN
-    welcome_text = "✅ ሰላም! የቴሌግራም አካውንትዎ ከ Waga Dealership Hub ጋር ተገናኝቷል። አዳዲስ ደንበኞች ቀጠሮ ሲይዙ ወይም ሲደውሉ እዚህ ማሳወቂያ ይደርስዎታ።"
-
-    if bot_token and "your_" not in bot_token:
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        payload = {
-            "chat_id": chat_id,
-            "text": welcome_text,
-        }
-        try:
-            async with httpx.AsyncClient() as client:
-                await client.post(url, json=payload, timeout=8.0)
-        except Exception as e:
-            logger.warning(f"Failed to send Telegram welcome message: {e}")
-
-    logger.info(f"✓ Dealership '{dealer.name}' (ID: {dealer.id}) linked to Telegram chat {chat_id}")
-    return True
-
-
 @app.post("/api/telegram/webhook")
 async def telegram_webhook(
     payload: dict,
-    db: Session = Depends(get_db),
     x_telegram_bot_api_secret_token: Optional[str] = Header(default=None),
 ):
     """
-    Incoming webhook from Telegram bot to handle /start connect_<dealership_id>
-    and /start link_<phone>.
+    Production entry point for Telegram updates (/start links, gate-pass buttons, reject notes).
     If TELEGRAM_WEBHOOK_SECRET is set, requests must carry the matching
-    X-Telegram-Bot-Api-Secret-Token header (set via setWebhook&secret_token=...).
+    X-Telegram-Bot-Api-Secret-Token header (setWebhook ... secret_token=...).
+    The dev long-poller feeds the very same gate_pass.process_update().
     """
     expected_secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip().strip("\"'")
     if expected_secret and x_telegram_bot_api_secret_token != expected_secret:
         raise HTTPException(status_code=403, detail="Invalid webhook secret")
-    message = payload.get("message", {})
-    chat = message.get("chat", {})
-    chat_id = str(chat.get("id", ""))
-    text = message.get("text", "")
-
-    if chat_id and text:
-        if "connect_" in text:
-            await handle_telegram_connect_command(chat_id, text, db)
-        elif text.strip().startswith("/start"):
-            await handle_telegram_start_command(chat_id, text, db)
-
+    await asyncio.to_thread(gate_pass.process_update_standalone, payload)
     return {"ok": True, "status": "ok"}
 
 
 async def telegram_polling_worker():
     """
-    Continuous background long-poller for Telegram bot events.
-    Automatically handles /start connect_<dealership_id> and /start link_<phone> deep-links.
+    Long-polling (getUpdates) for local development, where Telegram can't reach the webhook.
+    Same handler as the webhook. If a webhook is set on this bot, Telegram answers 409 and
+    nothing is polled (production keeps its webhook).
     """
-    bot_token = settings.TELEGRAM_PLATFORM_BOT_TOKEN or settings.TELEGRAM_BOT_TOKEN
+    bot_token = gate_pass.bot_token()
     if not bot_token or "your_" in bot_token:
+        print("🤖 [TELEGRAM] No bot token: poller not started.")
         return
-
     offset = 0
-    print("🤖 [TELEGRAM BOT] Background Poller started for deep-links & OTP dispatch...")
+    print(f"🤖 [TELEGRAM] Long-polling @{gate_pass.bot_username()} for /start links and gate-pass buttons...")
     while True:
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
                     f"https://api.telegram.org/bot{bot_token}/getUpdates",
-                    params={"offset": offset, "timeout": 4},
-                    timeout=8.0
+                    params={"offset": offset, "timeout": 25,
+                            "allowed_updates": json.dumps(["message", "callback_query"])},
+                    timeout=35.0,
                 )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    for update in data.get("result", []):
-                        update_id = update["update_id"]
-                        offset = update_id + 1
-                        message = update.get("message", {})
-                        chat = message.get("chat", {})
-                        chat_id = str(chat.get("id", ""))
-                        text = message.get("text", "")
-                        if chat_id and text:
-                            from database import SessionLocal
-                            with SessionLocal() as db:
-                                if "connect_" in text:
-                                    await handle_telegram_connect_command(chat_id, text, db)
-                                elif text.strip().startswith("/start"):
-                                    await handle_telegram_start_command(chat_id, text, db)
-                elif resp.status_code == 409:
-                    # Webhook is active on Telegram; polling is disabled
-                    await asyncio.sleep(20)
+            if resp.status_code == 200:
+                for update in resp.json().get("result", []):
+                    offset = update["update_id"] + 1
+                    await asyncio.to_thread(gate_pass.process_update_standalone, update)
+            elif resp.status_code == 409:
+                print("🤖 [TELEGRAM] 409: this bot has a webhook set, so polling is off. "
+                      "Use a separate test bot locally (see DEPLOY_YEGARA.md).")
+                await asyncio.sleep(60)
+            else:
+                await asyncio.sleep(5)
         except asyncio.CancelledError:
             break
-        except Exception:
-            await asyncio.sleep(4)
-        await asyncio.sleep(0.5)
+        except Exception as e:
+            logger.warning(f"[TELEGRAM] poll error: {e}")
+            await asyncio.sleep(5)
 
 
 @app.on_event("startup")
 async def start_telegram_poller():
-    # Run Telegram poller as a detached background task if not running in test mode
-    if os.getenv("TESTING") != "true":
+    # TELEGRAM_POLLING=true forces the poller (dev.ps1 -Telegram); =false disables it.
+    # Otherwise it runs except in tests (production: Telegram answers 409 while the webhook is set).
+    polling = os.getenv("TELEGRAM_POLLING", "").strip().lower()
+    if polling == "true" or (polling != "false" and os.getenv("TESTING") != "true"):
         asyncio.create_task(telegram_polling_worker())
 
 

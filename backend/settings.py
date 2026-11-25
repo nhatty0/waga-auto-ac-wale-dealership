@@ -49,6 +49,8 @@ class Settings:
     # Backwards compatibility aliases
     TELEGRAM_BOT_TOKEN: str = TELEGRAM_PLATFORM_BOT_TOKEN
     TELEGRAM_BOT_USERNAME: str = TELEGRAM_PLATFORM_BOT_USERNAME
+    # Public website (verify links in Telegram messages and on printed gate passes).
+    PUBLIC_SITE_URL: str = (os.getenv("PUBLIC_SITE_URL") or "https://acwalecarmarket.com").strip().strip("\"'").rstrip("/")
     TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "").strip().strip("\"'")
 
     # AfroMessage SMS Gateway Configuration
