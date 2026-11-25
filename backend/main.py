@@ -46,7 +46,7 @@ from auth import (
     handle_telegram_start_command,
     TELEGRAM_LINKED_CHATS
 )
-from routers import rentals, drivers, admin, lot_operations
+from routers import rentals, drivers, admin, lot_operations, documents
 
 # JWT & Auth Configuration from settings
 JWT_SECRET_KEY = settings.JWT_SECRET_KEY
@@ -143,6 +143,7 @@ app.include_router(rentals.router)
 app.include_router(drivers.router)
 app.include_router(admin.router)
 app.include_router(lot_operations.router)
+app.include_router(documents.router)
 
 # CORS configuration to allow requests from the Next.js frontend
 app.add_middleware(
@@ -944,6 +945,8 @@ def update_admin_dealership(
         dealer.phone_number = payload.phone_number.strip() if payload.phone_number.strip() else None
     if payload.phone_number_2 is not None:
         dealer.phone_number_2 = payload.phone_number_2.strip() if payload.phone_number_2.strip() else None
+    if payload.email is not None:
+        dealer.email = payload.email.strip() or None
     if payload.logo_url is not None:
         dealer.logo_url = payload.logo_url.strip() if payload.logo_url.strip() else None
     if payload.telegram_bot_token is not None:
@@ -1048,6 +1051,7 @@ def switch_dealership(
             slug=target_dealer.slug,
             phone_number=target_dealer.phone_number,
             phone_number_2=target_dealer.phone_number_2,
+            email=target_dealer.email,
             logo_url=target_dealer.logo_url,
             telegram_bot_token=target_dealer.telegram_bot_token,
             telegram_chat_id=target_dealer.telegram_chat_id,

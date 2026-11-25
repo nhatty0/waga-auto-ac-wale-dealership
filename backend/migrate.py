@@ -29,7 +29,41 @@ ADDITIVE_COLUMNS = [
     ("dealerships", "phone_number_2", "VARCHAR(50)", "VARCHAR(50)"),
     ("dealerships", "contact_phones_synced", "VARCHAR(120)", "VARCHAR(120)"),
     ("users", "permissions", "TEXT", "TEXT"),
+    # Document Center
+    ("dealerships", "email", "VARCHAR(150)", "VARCHAR(150)"),
+    ("lot_intakes", "doc_number", "VARCHAR(50)", "VARCHAR(50)"),
+    ("lot_intakes", "doc_status", "VARCHAR(20)", "VARCHAR(20)"),
+    ("gate_passes", "vehicle_name", "VARCHAR(150)", "VARCHAR(150)"),
+    ("gate_passes", "vehicle_id", "INTEGER", "INTEGER"),
+    ("gate_passes", "doc_status", "VARCHAR(20)", "VARCHAR(20)"),
+    ("gate_passes", "archived_at", "DATETIME", "TIMESTAMP"),
+    ("gate_passes", "archived_by", "VARCHAR(150)", "VARCHAR(150)"),
+    ("vehicle_handovers", "doc_status", "VARCHAR(20)", "VARCHAR(20)"),
 ]
+
+
+def _backfill_document_fields(db):
+    """
+    Fill the new Document Center columns on existing rows (only where they are NULL):
+    intake numbers IN-0001.. in creation order, and the vehicle name on gate passes so a pass
+    stays readable on its own. Existing values are never changed.
+    """
+    import re
+    used = [r[0] for r in db.query(models.LotIntake.doc_number).filter(models.LotIntake.doc_number.isnot(None)).all()]
+    seq = max([int(m.group(1)) for n in used if (m := re.match(r"IN-(\d+)$", n or ""))] or [0])
+    changed = 0
+    for intake in db.query(models.LotIntake).filter(models.LotIntake.doc_number.is_(None)).order_by(models.LotIntake.id).all():
+        seq += 1
+        intake.doc_number = f"IN-{seq:04d}"
+        changed += 1
+    for gp in db.query(models.GatePass).filter(models.GatePass.vehicle_name.is_(None)).all():
+        if gp.lot_intake is not None:
+            gp.vehicle_name = gp.lot_intake.vehicle_name
+            gp.vehicle_id = gp.vehicle_id or gp.lot_intake.published_vehicle_id
+            changed += 1
+    if changed:
+        db.commit()
+        print(f"🗂️  Document Center backfill: {changed} row(s) numbered / linked.")
 
 
 def _backfill_staff_permissions(db):
@@ -184,6 +218,7 @@ def run_migrations():
                 slug=PRIMARY_DEALERSHIP_SLUG,
                 phone_number=PRIMARY_DEALERSHIP_PHONE or None,
                 phone_number_2=PRIMARY_DEALERSHIP_PHONE_2 or None,
+                email=settings.PRIMARY_DEALERSHIP_EMAIL or None,
                 contact_phones_synced=f"{PRIMARY_DEALERSHIP_PHONE}|{PRIMARY_DEALERSHIP_PHONE_2}",
                 logo_url="/logo.png",
                 telegram_bot_token=os.getenv("TELEGRAM_PLATFORM_BOT_TOKEN") or None,
@@ -202,6 +237,8 @@ def run_migrations():
                 primary_dealer.name = PLATFORM_NAME
             primary_dealer.slug = PRIMARY_DEALERSHIP_SLUG
             _sync_contact_phones(primary_dealer)
+            if not (primary_dealer.email or "").strip() and settings.PRIMARY_DEALERSHIP_EMAIL:
+                primary_dealer.email = settings.PRIMARY_DEALERSHIP_EMAIL
             primary_dealer.is_active = True
             primary_dealer.subscription_plan = "pro"
             primary_dealer.max_vehicles = 1000
@@ -211,6 +248,7 @@ def run_migrations():
         # 2. Owners: promote every SUPERADMIN_PHONE number, demote stale superadmins
         _sync_superadmins(db, primary_dealer.id)
         _backfill_staff_permissions(db)
+        _backfill_document_fields(db)
 
         # 3. Seed active delivery personnel roster if empty
         driver_count = db.query(models.Driver).count()

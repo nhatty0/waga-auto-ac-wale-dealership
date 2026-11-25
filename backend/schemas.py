@@ -13,6 +13,7 @@ class DealershipBase(BaseModel):
     slug: str
     phone_number: Optional[str] = None
     phone_number_2: Optional[str] = None
+    email: Optional[str] = None
     logo_url: Optional[str] = None
     is_active: Optional[bool] = True
     subscription_plan: Optional[str] = "starter"
@@ -182,6 +183,7 @@ class DealershipUpdate(BaseModel):
     name: Optional[str] = None
     phone_number: Optional[str] = None
     phone_number_2: Optional[str] = None
+    email: Optional[str] = None
     logo_url: Optional[str] = None
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
@@ -475,6 +477,10 @@ class GatePassOut(BaseModel):
     lot_intake_id: Optional[int] = None
     dealership_id: Optional[int] = None
     created_at: Optional[datetime] = None
+    vehicle_name: Optional[str] = None
+    vehicle_id: Optional[int] = None
+    doc_status: Optional[str] = None
+    archived_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -507,6 +513,8 @@ class LotIntakeOut(LotIntakeBase):
     created_at: Optional[datetime] = None
     archived_at: Optional[datetime] = None
     archived_by: Optional[str] = None
+    doc_number: Optional[str] = None
+    doc_status: Optional[str] = None
     gate_passes: List[GatePassOut] = []
 
     class Config:

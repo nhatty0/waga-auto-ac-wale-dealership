@@ -19,6 +19,8 @@ class Settings:
     # Public contact lines shown on the showroom, flyers, print sheets and share text.
     PRIMARY_DEALERSHIP_PHONE: str = os.getenv("PRIMARY_DEALERSHIP_PHONE", "+251983112211").strip().strip("\"'")
     PRIMARY_DEALERSHIP_PHONE_2: str = os.getenv("PRIMARY_DEALERSHIP_PHONE_2", "+251989113211").strip().strip("\"'")
+    # Printed on document letterheads; only fills an empty dealership e-mail (Settings wins after that).
+    PRIMARY_DEALERSHIP_EMAIL: str = os.getenv("PRIMARY_DEALERSHIP_EMAIL", "acwalecarmarket@gmail.com").strip().strip("\"'")
 
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",

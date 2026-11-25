@@ -2,7 +2,7 @@ import enum
 import json
 from datetime import datetime
 from typing import List
-from sqlalchemy import Column, Integer, String, Float, Boolean, Text, DateTime, Enum, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, Text, DateTime, Enum, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -41,6 +41,8 @@ class Dealership(Base):
     slug = Column(String(100), unique=True, index=True, nullable=False)
     phone_number = Column(String(50), nullable=True)
     phone_number_2 = Column(String(50), nullable=True)
+    # Contact e-mail printed on document letterheads (editable in /superadmin Settings).
+    email = Column(String(150), nullable=True)
     # Last PRIMARY_DEALERSHIP_PHONE|_PHONE_2 pair copied in by migrate.py. Lets a changed .env
     # value win once on restart while edits made in /superadmin Settings survive restarts.
     contact_phones_synced = Column(String(120), nullable=True)
@@ -248,8 +250,14 @@ class LotIntake(Base):
     archived_by = Column(String(150), nullable=True)
 
     dealership = relationship("Dealership", back_populates="lot_intakes")
+    # Document Center: "IN-0001" (backfilled by migrate.py) and draft/final (NULL = final).
+    doc_number = Column(String(50), nullable=True, index=True)
+    doc_status = Column(String(20), nullable=True, default="final")
+
     published_vehicle = relationship("Vehicle")
-    gate_passes = relationship("GatePass", back_populates="lot_intake", cascade="all, delete-orphan")
+    # Ordered by id so "the latest pass" is always the last one.
+    gate_passes = relationship("GatePass", back_populates="lot_intake", cascade="all, delete-orphan",
+                               order_by="GatePass.id")
 
 
 class GatePass(Base):
@@ -265,6 +273,14 @@ class GatePass(Base):
     lot_intake_id = Column(Integer, ForeignKey("lot_intakes.id"), nullable=True)
     dealership_id = Column(Integer, ForeignKey("dealerships.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Document Center additions. A pass is its own record: it keeps the vehicle name and its own
+    # archive flag, so it stays findable even when the intake is released or archived.
+    vehicle_name = Column(String(150), nullable=True)
+    vehicle_id = Column(Integer, nullable=True, index=True)
+    doc_status = Column(String(20), nullable=True, default="final")   # draft passes don't release the car
+    archived_at = Column(DateTime, nullable=True)
+    archived_by = Column(String(150), nullable=True)
 
     lot_intake = relationship("LotIntake", back_populates="gate_passes")
     dealership = relationship("Dealership")
@@ -298,9 +314,36 @@ class VehicleHandover(Base):
     archived_at = Column(DateTime, nullable=True)
     archived_by = Column(String(150), nullable=True)
 
+    doc_status = Column(String(20), nullable=True, default="final")
+
     vehicle = relationship("Vehicle")
     dealership = relationship("Dealership", back_populates="handovers")
 
 
+class Document(Base):
+    """
+    Document Center records without a legacy table of their own: down-payment receipts
+    ("downpayment", DP-0001) and car rental agreements ("rental", RA-0001). The form fields live in
+    data_json; the columns below are copies used for search, lists and links.
+    """
+    __tablename__ = "documents"
+    __table_args__ = (UniqueConstraint("doc_type", "doc_number", name="uq_documents_type_number"),)
 
-
+    id = Column(Integer, primary_key=True, index=True)
+    doc_type = Column(String(30), nullable=False, index=True)
+    doc_number = Column(String(50), nullable=False)
+    doc_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    status = Column(String(20), nullable=False, default="draft")      # "draft" | "final"
+    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True, index=True)
+    rental_booking_id = Column(Integer, ForeignKey("rental_bookings.id"), nullable=True, index=True)
+    plate_number = Column(String(50), nullable=True, index=True)
+    party_name = Column(String(200), nullable=True)
+    party_phone = Column(String(50), nullable=True)
+    amount = Column(Float, nullable=True)
+    data_json = Column(Text, nullable=False, default="{}")
+    dealership_id = Column(Integer, ForeignKey("dealerships.id"), nullable=True, index=True)
+    created_by = Column(String(150), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    archived_at = Column(DateTime, nullable=True)
+    archived_by = Column(String(150), nullable=True)

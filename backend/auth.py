@@ -710,6 +710,7 @@ def verify_otp(req: schemas.VerifyOTPRequest, db: Session) -> schemas.AuthRespon
             "slug": user.dealership.slug,
             "phone_number": user.dealership.phone_number,
             "phone_number_2": user.dealership.phone_number_2,
+            "email": user.dealership.email,
             "logo_url": user.dealership.logo_url
         }
 

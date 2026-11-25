@@ -41,6 +41,87 @@ def _archiver_name(user: models.User) -> str:
     return (user.full_name or user.phone_number or f"user #{user.id}")[:150]
 
 
+def _max_seq(values, pattern: str) -> int:
+    best = 0
+    for v in values:
+        m = re.search(pattern, v or "", re.IGNORECASE)
+        if m:
+            try:
+                best = max(best, int(m.group(1)))
+            except ValueError:
+                pass
+    return best
+
+
+def next_intake_number(db: Session) -> str:
+    rows = [r[0] for r in db.query(models.LotIntake.doc_number).all()]
+    n = _max_seq(rows, r"^IN-(\d+)$") + 1
+    return f"IN-{n:04d}"
+
+
+def next_handover_number(db: Session) -> str:
+    rows = [r[0] for r in db.query(models.VehicleHandover.contract_number).all()]
+    n = _max_seq(rows, r"AC-rec-(\d+)") + 1
+    return f"AC-rec-{n:04d}"
+
+
+def next_slip_number(db: Session) -> str:
+    """
+    Next "AC-00001" slip number: one more than the highest AC-number ever issued. (The old code
+    took the digits of the *last row*, and on a collision fell back to count+1, which could collide
+    again and fail the save with a 500.)
+    """
+    rows = [r[0] for r in db.query(models.GatePass.slip_number).all()]
+    n = _max_seq(rows, r"^AC-(\d+)$") + 1
+    taken = set(rows)
+    while f"AC-{n:05d}" in taken:
+        n += 1
+    return f"AC-{n:05d}"
+
+
+def issue_gate_pass(db: Session, user: models.User, intake: Optional[models.LotIntake], *,
+                    driver_name: str, plate_number: str, release_reason: str, authorized_by: str,
+                    when: Optional[datetime] = None, slip_number: Optional[str] = None,
+                    vehicle_name: Optional[str] = None, vehicle_id: Optional[int] = None,
+                    doc_status: str = "final", commit: bool = True) -> models.GatePass:
+    """
+    Create a gate pass. A FINAL pass releases the intake (is_in_lot = False); a draft does not.
+    The pass stores the vehicle name and link itself, so it stays readable and findable on its
+    own after the car has left or the intake was archived.
+    """
+    slip = (slip_number or "").strip()
+    if not slip or db.query(models.GatePass).filter(models.GatePass.slip_number == slip).first():
+        slip = next_slip_number(db)
+    plate = (plate_number or "").strip() or (intake.plate_number if intake else "")
+    gp = models.GatePass(
+        slip_number=slip,
+        date=when or datetime.utcnow(),
+        driver_name=(driver_name or "").strip(),
+        plate_number=plate,
+        release_reason=(release_reason or "").strip(),
+        authorized_by=((authorized_by or "").strip() or user.full_name or user.phone_number or "Supervisor").strip(),
+        lot_intake_id=intake.id if intake else None,
+        dealership_id=intake.dealership_id if intake else get_target_dealership_id(db, user),
+        vehicle_name=(vehicle_name or "").strip() or (intake.vehicle_name if intake else None),
+        vehicle_id=vehicle_id or (intake.published_vehicle_id if intake else None),
+        doc_status=doc_status,
+        created_at=datetime.utcnow(),
+    )
+    if intake is not None and doc_status == "final":
+        intake.is_in_lot = False
+        if intake.published_vehicle_id and "የተሸጠ" in gp.release_reason:
+            v = db.query(models.Vehicle).filter(models.Vehicle.id == intake.published_vehicle_id).first()
+            if v:
+                v.status = models.VehicleStatus.SOLD
+    db.add(gp)
+    if commit:
+        db.commit()
+        db.refresh(gp)
+    else:
+        db.flush()
+    return gp
+
+
 @router.get("/lot-intakes", response_model=List[schemas.LotIntakeOut])
 def list_lot_intakes(
     in_lot: Optional[bool] = Query(None, description="Filter by currently in-lot (True) or released (False)"),
@@ -171,6 +252,8 @@ def create_lot_intake(
         remark=payload.remark.strip() if payload.remark else None,
         received_by_name=received_by,
         is_in_lot=True,
+        doc_number=next_intake_number(db),
+        doc_status="final",
         published_vehicle_id=published_id,
         dealership_id=dealership_id,
         created_at=datetime.utcnow()
@@ -202,53 +285,16 @@ def generate_gate_pass(
             detail=f"Lot intake record #{intake_id} not found."
         )
 
-    # Determine unique sequential slip number e.g. "AC-00481"
-    if payload.slip_number and payload.slip_number.strip():
-        slip_number = payload.slip_number.strip()
-    else:
-        last_pass = db.query(models.GatePass).order_by(models.GatePass.id.desc()).first()
-        next_num = 1
-        if last_pass:
-            digits = re.findall(r"\d+", last_pass.slip_number)
-            if digits:
-                next_num = int(digits[-1]) + 1
-            else:
-                next_num = last_pass.id + 1
-        slip_number = f"AC-{next_num:05d}"
-
-    # Ensure uniqueness if manual number was given or collision
-    existing = db.query(models.GatePass).filter(models.GatePass.slip_number == slip_number).first()
-    if existing:
-        total_count = db.query(models.GatePass).count()
-        slip_number = f"AC-{total_count + 1:05d}"
-
-    authorized_by = payload.authorized_by or current_user.full_name or current_user.phone_number or "Supervisor"
-    plate_number = payload.plate_number.strip() if (payload.plate_number and payload.plate_number.strip()) else intake.plate_number
-
-    gate_pass = models.GatePass(
-        slip_number=slip_number,
-        date=payload.date or datetime.utcnow(),
-        driver_name=payload.driver_name.strip(),
-        plate_number=plate_number,
-        release_reason=payload.release_reason.strip(),
-        authorized_by=authorized_by.strip(),
-        lot_intake_id=intake.id,
-        dealership_id=intake.dealership_id,
-        created_at=datetime.utcnow()
+    gate_pass = issue_gate_pass(
+        db, current_user, intake,
+        driver_name=payload.driver_name,
+        plate_number=payload.plate_number or "",
+        release_reason=payload.release_reason,
+        authorized_by=payload.authorized_by,
+        when=payload.date,
+        slip_number=payload.slip_number,
     )
-
-    # Release vehicle from lot
-    intake.is_in_lot = False
-
-    # If linked to a showroom vehicle, mark it as SOLD or update description
-    if intake.published_vehicle_id:
-        v = db.query(models.Vehicle).filter(models.Vehicle.id == intake.published_vehicle_id).first()
-        if v and "የተሸጠ" in payload.release_reason:
-            v.status = models.VehicleStatus.SOLD
-
-    db.add(gate_pass)
-    db.commit()
-    db.refresh(gate_pass)
+    plate_number = gate_pass.plate_number
 
     logger.info(f"🚪 Generated Gate Pass {gate_pass.slip_number} for lot intake #{intake.id} (Plate: {plate_number})")
     return gate_pass
@@ -268,8 +314,9 @@ def list_gate_passes(
     if dealership_id and not current_user.is_superadmin:
         query = query.filter(models.GatePass.dealership_id == dealership_id)
 
-    # Passes of an archived intake are archived with it.
-    query = query.filter(models.LotIntake.archived_at.is_(None))
+    # A pass is only hidden when the pass itself is archived. (It used to vanish whenever its
+    # intake was archived.) Released cars' passes always stay in this list.
+    query = query.filter(models.GatePass.archived_at.is_(None))
 
     return query.order_by(models.GatePass.date.desc(), models.GatePass.id.desc()).all()
 
@@ -386,19 +433,9 @@ def create_handover(
     dealership_id = payload.dealership_id or get_target_dealership_id(db, current_user)
 
     # Auto-assign sequential contract number: "AC-rec-0001", "AC-rec-0002", etc.
-    contract_number = payload.contract_number
-    if not contract_number or not contract_number.strip():
-        all_contracts = db.query(models.VehicleHandover.contract_number).all()
-        max_seq = 0
-        for (c_num,) in all_contracts:
-            if c_num:
-                m = re.search(r"AC-rec-(\d+)", c_num, re.IGNORECASE)
-                if m:
-                    try:
-                        max_seq = max(max_seq, int(m.group(1)))
-                    except ValueError:
-                        pass
-        contract_number = f"AC-rec-{max_seq + 1:04d}"
+    contract_number = (payload.contract_number or "").strip()
+    if not contract_number or db.query(models.VehicleHandover).filter(models.VehicleHandover.contract_number == contract_number).first():
+        contract_number = next_handover_number(db)
 
     # Handle belongings: payload.belongings list or payload.belongings_json
     belongings_str = payload.belongings_json or "[]"
@@ -428,6 +465,7 @@ def create_handover(
         commission_or_net_payout=payload.commission_or_net_payout.strip() if payload.commission_or_net_payout else None,
         vehicle_id=payload.vehicle_id,
         dealership_id=dealership_id,
+        doc_status="final",
         created_at=datetime.utcnow()
     )
 
