@@ -22,7 +22,7 @@ import models
 import schemas
 from database import engine, get_db
 from storage import upload_media_file, delete_media_file, UPLOAD_DIR
-from settings import settings
+from settings import settings, is_superadmin_phone
 from appointments import dispatch_lead_multichannel
 from telegram import (
     send_telegram_lead,
@@ -901,7 +901,12 @@ def get_admin_dealership(
 
     # Attach central platform bot username for 1-click connect deep linking
     setattr(dealer, "telegram_bot_username", settings.TELEGRAM_PLATFORM_BOT_USERNAME)
-    return dealer
+    out = schemas.DealershipOut.model_validate(dealer)
+    if not current_user.is_superadmin:
+        # Staff need name/slug/logo/phones for the /admin header, flyers and share text,
+        # but the Telegram credentials are owner-only settings.
+        out = out.model_copy(update={"telegram_bot_token": None, "telegram_chat_id": None})
+    return out
 
 
 @app.put("/api/admin/dealership", response_model=schemas.DealershipOut)
@@ -909,7 +914,7 @@ def update_admin_dealership(
     payload: schemas.DealershipUpdate,
     dealership_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     if dealership_id is not None and not current_user.is_superadmin:
         if dealership_id != current_user.dealership_id:
@@ -935,6 +940,8 @@ def update_admin_dealership(
         dealer.name = payload.name.strip()
     if payload.phone_number is not None:
         dealer.phone_number = payload.phone_number.strip() if payload.phone_number.strip() else None
+    if payload.phone_number_2 is not None:
+        dealer.phone_number_2 = payload.phone_number_2.strip() if payload.phone_number_2.strip() else None
     if payload.logo_url is not None:
         dealer.logo_url = payload.logo_url.strip() if payload.logo_url.strip() else None
     if payload.telegram_bot_token is not None:
@@ -954,7 +961,7 @@ def update_admin_dealership(
 def disconnect_dealership_telegram(
     dealership_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     Clears all Telegram bot credentials (token, chat_id, username) from the dealership record.
@@ -1038,6 +1045,7 @@ def switch_dealership(
             name=target_dealer.name,
             slug=target_dealer.slug,
             phone_number=target_dealer.phone_number,
+            phone_number_2=target_dealer.phone_number_2,
             logo_url=target_dealer.logo_url,
             telegram_bot_token=target_dealer.telegram_bot_token,
             telegram_chat_id=target_dealer.telegram_chat_id,
@@ -1056,7 +1064,7 @@ def switch_dealership(
 async def upload_dealership_logo(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     if not current_user.dealership_id:
         raise HTTPException(
@@ -1085,7 +1093,7 @@ async def upload_dealership_logo(
 async def test_telegram_alert(
     payload: Optional[schemas.TelegramTestRequest] = Body(None),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     if not current_user.dealership_id:
         raise HTTPException(
@@ -1191,7 +1199,7 @@ async def test_telegram_alert(
 @app.get("/api/superadmin/stats", response_model=schemas.SuperAdminStatsOut)
 def get_superadmin_stats(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     sales_count = db.query(models.Vehicle).filter(
         models.Vehicle.listing_type.in_(["sale", "both"])
@@ -1231,7 +1239,7 @@ def get_superadmin_stats(
 @app.get("/api/superadmin/executive-stats", response_model=schemas.ExecutiveStatsOut)
 def get_superadmin_executive_stats(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     primary_dealer = get_primary_dealership(db)
 
@@ -1369,7 +1377,7 @@ def delete_staff_member(
     if not user:
         raise HTTPException(status_code=404, detail="Staff member not found")
 
-    if user.id == current_user.id or user.role == "superadmin":
+    if user.id == current_user.id or user.role == "superadmin" or is_superadmin_phone(user.phone_number):
         raise HTTPException(status_code=400, detail="Cannot delete superadmin executive account")
 
     db.delete(user)
@@ -1460,10 +1468,7 @@ def delete_dealership_cascade(
     - Cleans up physical vehicle images and logo files on disk.
     - Cascades DB deletion of appointments, vehicle images, vehicles, non-superadmin users, and the dealership itself.
     """
-    is_superadmin = (
-        current_user.role == "superadmin" and
-        str(current_user.phone_number or "").strip().lstrip("+") == settings.SUPERADMIN_PHONE.strip().lstrip("+")
-    )
+    is_superadmin = current_user.is_superadmin
     is_matching_dealer = (current_user.dealership_id == dealership_id)
 
     if not is_superadmin and not is_matching_dealer:
@@ -1507,7 +1512,7 @@ def delete_dealership_cascade(
     # D. Associated non-superadmin users & auth credentials
     users = db.query(models.User).filter(models.User.dealership_id == dealership_id).all()
     for u in users:
-        if u.role == "superadmin":
+        if u.role == "superadmin" or is_superadmin_phone(u.phone_number):
             u.dealership_id = None
         else:
             db.query(models.OTPVerification).filter(models.OTPVerification.phone_number == u.phone_number).delete(synchronize_session=False)

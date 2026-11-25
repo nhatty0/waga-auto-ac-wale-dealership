@@ -9,12 +9,57 @@ export interface PhoneLine {
   local: string;
 }
 
-export const SALES_PHONES: PhoneLine[] = [
-  { tel: "+251911646628", display: "+251 911 646 628", local: "0911 646 628" },
-  { tel: "+251900061300", display: "+251 900 061 300", local: "0900 061 300" },
-];
+/** The two public contact fields of a dealership record (from the API). */
+export interface DealerContact {
+  phone_number?: string | null;
+  phone_number_2?: string | null;
+}
 
-export const TELEGRAM_CHAT_URL = "https://t.me/+251911646628";
+/**
+ * One phone (any format: "+251 98…", "2519…", "09…") -> tel / display / local strings.
+ * Returns null for an empty value. Numbers are never hardcoded in the UI: they come from
+ * the dealership record, which the backend fills from PRIMARY_DEALERSHIP_PHONE / _PHONE_2.
+ */
+export function toPhoneLine(raw?: string | null): PhoneLine | null {
+  const text = (raw || "").trim();
+  if (!text) return null;
+  let digits = text.replace(/\D/g, "");
+  if (digits.startsWith("2510") && digits.length === 13) digits = "251" + digits.slice(4);
+  else if (/^0[79]\d{8}$/.test(digits)) digits = "251" + digits.slice(1);
+  else if (/^[79]\d{8}$/.test(digits)) digits = "251" + digits;
+
+  if (/^251[79]\d{8}$/.test(digits)) {
+    const n = digits.slice(3); // 9XXXXXXXX
+    return {
+      tel: `+${digits}`,
+      display: `+251 ${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`,
+      local: `0${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`,
+    };
+  }
+  return { tel: text.startsWith("+") ? `+${digits}` : digits, display: text, local: text };
+}
+
+/** The dealership's public call lines (primary first), de-duplicated. Empty if none are set. */
+export function dealerPhoneLines(dealer?: DealerContact | null): PhoneLine[] {
+  const lines: PhoneLine[] = [];
+  for (const raw of [dealer?.phone_number, dealer?.phone_number_2]) {
+    const line = toPhoneLine(raw);
+    if (line && !lines.some((l) => l.tel === line.tel)) lines.push(line);
+  }
+  return lines;
+}
+
+/** "📞 +251 … / +251 …" text for share captions and print sheets ("" when no phone is set). */
+export function dealerPhonesText(dealer?: DealerContact | null, sep = " / "): string {
+  return dealerPhoneLines(dealer).map((p) => p.display).join(sep);
+}
+
+/** Telegram chat link for the primary line (t.me/+2519…), or undefined when no phone is set. */
+export function dealerTelegramUrl(dealer?: DealerContact | null): string | undefined {
+  const first = dealerPhoneLines(dealer)[0];
+  return first && first.tel.startsWith("+251") ? `https://t.me/${first.tel}` : undefined;
+}
+
 export const GOOGLE_MAPS_URL = "https://maps.app.goo.gl/v5NbRBzRNaNNZWzQA?g_st=atm";
 export const CONTACT_EMAIL = "acwalecarmarket@gmail.com";
 

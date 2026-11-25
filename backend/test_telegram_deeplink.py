@@ -71,6 +71,14 @@ def test_telegram_deeplink_and_multichannel():
         assert data_info.get("telegram_chat_id") is None
         print(f"✓ Dealership info returned telegram_bot_username='{data_info.get('telegram_bot_username')}'")
 
+        print("\n--- [TEST 2a: Telegram settings are owner-only] ---")
+        res_staff = client.post("/api/admin/dealership/test-telegram", json={},
+                                headers={"Authorization": f"Bearer {dealer_token}"})
+        assert res_staff.status_code == 403, res_staff.text
+        print("✓ dealer_admin gets 403 on test-telegram")
+        saved_superadmin_phone = settings.SUPERADMIN_PHONE
+        settings.SUPERADMIN_PHONE = f"{saved_superadmin_phone},{test_user_phone}"
+
         print("\n--- [TEST 2: Pre-save test alert fails cleanly when Telegram is not connected] ---")
         res_test_unconnected = client.post(
             "/api/admin/dealership/test-telegram",
@@ -168,6 +176,8 @@ def test_telegram_deeplink_and_multichannel():
         print("\n🎉 ALL 1-CLICK TELEGRAM DEEP-LINKING & DISPATCH TESTS PASSED PERFECTLY!\n")
 
     finally:
+        if "saved_superadmin_phone" in locals():
+            settings.SUPERADMIN_PHONE = saved_superadmin_phone
         # Cleanup
         try:
             if test_user:

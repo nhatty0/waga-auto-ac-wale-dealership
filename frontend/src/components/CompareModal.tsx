@@ -20,6 +20,7 @@ import { resolveImageUrl } from "@/lib/images";
 import { getPriceInfo } from "@/lib/price";
 import PriceSplit from "@/components/PriceSplit";
 import { getPlateLabel, getPlateBadgeClasses } from "@/lib/plates";
+import { dealerPhoneLines } from "@/lib/contact";
 
 interface CompareModalProps {
   vehicles: Vehicle[];
@@ -290,7 +291,7 @@ export default function CompareModal({
             <div key={car.id} className="flex-1">
               {car.status === "Sold" ? (
                 <a
-                  href="tel:+251911646628"
+                  href={`tel:${dealerPhoneLines(dealership || car.dealership)[0]?.tel ?? ""}`}
                   className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-1"
                 >
                   {t.findSimilar}

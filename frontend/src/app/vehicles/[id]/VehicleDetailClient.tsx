@@ -31,8 +31,8 @@ import { useLanguage } from "@/context/LanguageContext";
 import BookingModal from "@/components/BookingModal";
 import TelegramIcon from "@/components/TelegramIcon";
 import VehicleActionBar from "@/components/VehicleActionBar";
-import { SALES_PHONES, TELEGRAM_CHAT_URL, PhoneLine } from "@/lib/contact";
-import { PRIMARY_DEALER_NAME, PRIMARY_DEALER_SLUG } from "@/lib/site";
+import { dealerPhoneLines, dealerTelegramUrl } from "@/lib/contact";
+import { PRIMARY_DEALER_NAME } from "@/lib/site";
 import { openTelegramShare, formatTelegramVehicleCaption } from "@/lib/share";
 import { getPriceInfo } from "@/lib/price";
 import PriceSplit from "@/components/PriceSplit";
@@ -97,17 +97,12 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
         ];
 
   const dealership = vehicle.dealership;
-  const dealerSlug = dealership?.slug || PRIMARY_DEALER_SLUG;
   const dealerName = dealership?.name || PRIMARY_DEALER_NAME;
   // Single-tenant mode: the homepage is the showroom.
   const showroomHref = "/";
-  const dealerPhone = dealership?.phone_number || "+251 905 445 544";
-
-  // AC Wale has two sales lines (+ Telegram); other dealers use their own listed number.
-  const isAcWale = !dealership || dealerSlug === "ac-wale-cars";
-  const contactPhones: PhoneLine[] = isAcWale
-    ? SALES_PHONES
-    : [{ tel: dealerPhone.replace(/\s+/g, ""), display: dealerPhone, local: dealerPhone }];
+  // Call / Telegram lines come from the dealership record (PRIMARY_DEALERSHIP_PHONE / _PHONE_2).
+  const contactPhones = dealerPhoneLines(dealership);
+  const telegramUrl = dealerTelegramUrl(dealership);
 
   const priceInfo = getPriceInfo(vehicle);
   const downPaymentVal = vehicle.cash_price ?? vehicle.down_payment;
@@ -135,7 +130,7 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
   };
 
   const handleShareTelegram = () => {
-    openTelegramShare(vehicle, dealerName);
+    openTelegramShare(vehicle, dealership || dealerName);
   };
 
   return (
@@ -502,19 +497,23 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
                   <h4 className="text-xs font-bold text-white truncate">
                     {dealerName}
                   </h4>
-                  <p className="text-[11px] text-zinc-400 truncate">
-                    {dealerPhone}
-                  </p>
+                  {contactPhones.length > 0 && (
+                    <p className="text-[11px] text-zinc-400 truncate tabular-nums">
+                      {contactPhones.map((p) => p.display).join(" / ")}
+                    </p>
+                  )}
                 </div>
               </div>
 
+              {contactPhones[0] && (
               <a
-                href={`tel:${dealerPhone.replace(/\s+/g, "")}`}
+                href={`tel:${contactPhones[0].tel}`}
                 className="p-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-amber-400 rounded-xl transition flex-shrink-0"
                 title="Call Dealership"
               >
                 <Phone size={16} />
               </a>
+              )}
             </div>
           </div>
         </div>
@@ -670,7 +669,7 @@ export default function VehicleDetailClient({ vehicle }: VehicleDetailClientProp
         <VehicleActionBar
           lang={lang}
           phones={contactPhones}
-          telegramUrl={isAcWale ? TELEGRAM_CHAT_URL : undefined}
+          telegramUrl={telegramUrl}
           isSold={vehicle.status === "Sold"}
           findSimilarLabel={t.findSimilar}
           onBook={() => setIsBookingOpen(true)}

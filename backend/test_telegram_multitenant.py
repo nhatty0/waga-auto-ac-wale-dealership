@@ -53,6 +53,14 @@ def test_telegram_multitenant_flow():
         token = create_access_token({"sub": str(user.id), "phone_number": user.phone_number, "role": user.role})
         headers = {"Authorization": f"Bearer {token}"}
 
+        # Telegram settings are owner-only: as plain staff this user is refused...
+        res_staff = client.post("/api/admin/dealership/test-telegram", json={}, headers=headers)
+        assert res_staff.status_code == 403, res_staff.text
+        print("✓ Test passed: dealer_admin gets 403 on POST /api/admin/dealership/test-telegram")
+        # ...so the rest of the flow runs with this phone listed as an owner.
+        saved_superadmin_phone = settings.SUPERADMIN_PHONE
+        settings.SUPERADMIN_PHONE = f"{saved_superadmin_phone},{test_phone}"
+
         # Setup a vehicle for this dealer
         car = models.Vehicle(
             dealership_id=test_dealer.id,
@@ -184,6 +192,8 @@ def test_telegram_multitenant_flow():
         print("✓ Test passed: GET /api/admin/appointments includes vehicle_title for customer bookings")
 
     finally:
+        if "saved_superadmin_phone" in locals():
+            settings.SUPERADMIN_PHONE = saved_superadmin_phone
         # Cleanup
         if test_dealer and test_dealer.id:
             db.rollback()

@@ -23,6 +23,7 @@ import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
 import { useLanguage } from "@/context/LanguageContext";
 import TelegramIcon from "@/components/TelegramIcon";
+import { dealerPhoneLines, dealerTelegramUrl } from "@/lib/contact";
 
 interface RentalBookingModalProps {
   vehicle: Vehicle;
@@ -269,23 +270,28 @@ export default function RentalBookingModal({
 
             {/* Direct Contact Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <a
-                href={`https://t.me/WagaDealershipBot`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1 py-3 px-4 rounded-xl bg-[#229ED9] hover:bg-[#1E88E5] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition active:scale-95"
-              >
-                <TelegramIcon size={16} />
-                <span>{isAm ? "በቴሌግራም ያነጋግሩን" : "Chat on Telegram"}</span>
-              </a>
+              {dealerTelegramUrl(dealership) && (
+                <a
+                  href={dealerTelegramUrl(dealership)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 py-3 px-4 rounded-xl bg-[#229ED9] hover:bg-[#1E88E5] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition active:scale-95"
+                >
+                  <TelegramIcon size={16} />
+                  <span>{isAm ? "በቴሌግራም ያነጋግሩን" : "Chat on Telegram"}</span>
+                </a>
+              )}
 
-              <a
-                href={`tel:${dealership?.phone_number || "+251911646628"}`}
-                className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-2 border border-zinc-700 transition active:scale-95"
-              >
-                <Phone size={15} />
-                <span>{dealership?.phone_number || "+251 911 646 628"}</span>
-              </a>
+              {dealerPhoneLines(dealership).map((p) => (
+                <a
+                  key={p.tel}
+                  href={`tel:${p.tel}`}
+                  className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-2 border border-zinc-700 transition active:scale-95 tabular-nums"
+                >
+                  <Phone size={15} />
+                  <span>{p.display}</span>
+                </a>
+              ))}
             </div>
 
             <button

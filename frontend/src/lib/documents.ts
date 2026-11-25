@@ -68,8 +68,13 @@ function newestHandover(list: VehicleHandover[]): VehicleHandover | null {
   return [...list].sort((a, b) => (parseApiDate(b.date)?.getTime() ?? 0) - (parseApiDate(a.date)?.getTime() ?? 0) || b.id - a.id)[0];
 }
 
-export function isSuperadminUser(user?: { role?: string | null; phone_number?: string | null } | null) {
+/**
+ * Owner check for showing UI. The backend decides from its SUPERADMIN_PHONE list and reports
+ * it as `is_superadmin` (role is kept in sync on login/startup); no phone numbers live here.
+ * This only hides/shows buttons; every owner endpoint is enforced server-side (403).
+ */
+export function isSuperadminUser(user?: { role?: string | null; is_superadmin?: boolean | null } | null) {
   if (!user) return false;
-  const phone = (user.phone_number || "").replace(/\D/g, "");
-  return user.role === "superadmin" || ["251911646628", "251918032065"].some((p) => phone.endsWith(p));
+  if (typeof user.is_superadmin === "boolean") return user.is_superadmin;
+  return user.role === "superadmin";
 }

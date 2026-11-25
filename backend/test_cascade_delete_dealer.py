@@ -9,7 +9,7 @@ sys.path.insert(0, str(backend_dir))
 from fastapi.testclient import TestClient
 from database import SessionLocal
 import models
-from settings import settings
+from settings import settings, superadmin_phones
 from main import app, create_access_token
 from storage import UPLOAD_DIR
 
@@ -22,7 +22,7 @@ def test_cascade_delete_dealership():
 
     try:
         # 1. Setup SuperAdmin user
-        superadmin_phone = settings.SUPERADMIN_PHONE.strip().lstrip("+")
+        superadmin_phone = superadmin_phones()[0]
         superadmin = db.query(models.User).filter(models.User.phone_number == superadmin_phone).first()
         if not superadmin:
             superadmin = models.User(

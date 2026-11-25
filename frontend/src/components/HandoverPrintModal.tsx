@@ -4,17 +4,21 @@ import { createPortal } from "react-dom";
 import { Copy, Check, FileText } from "lucide-react";
 import PrintModalShell from "@/components/print/PrintModalShell";
 import ScaledPreview from "@/components/print/ScaledPreview";
-import { VehicleHandover, HandoverBelonging } from "@/types";
+import { Dealership, VehicleHandover, HandoverBelonging } from "@/types";
+import { dealerPhonesText } from "@/lib/contact";
 
 // The sheet is max-w-3xl (768px); preview it at that width.
 const HANDOVER_SHEET_PX = 768;
 
 interface HandoverPrintModalProps {
   handover: VehicleHandover;
+  /** The contract header prints this dealership's phones. */
+  dealership?: Dealership | null;
   onClose: () => void;
 }
 
-export default function HandoverPrintModal({ handover, onClose }: HandoverPrintModalProps) {
+export default function HandoverPrintModal({ handover, dealership, onClose }: HandoverPrintModalProps) {
+  const phonesText = dealerPhonesText(dealership);
   const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -238,7 +242,7 @@ export default function HandoverPrintModal({ handover, onClose }: HandoverPrintM
               ቅንጡ እና ዘመናዊ መኪኖች መሸጫ፣ መግዣ እና ማከራያ ድርጅት
             </p>
             <p className="text-[10px] text-zinc-600 font-medium mt-0.5">
-              22 አዋራሪስ ሆቴል ጀርባ | ስልክ: +251 911 646 628 / +251 900 061 300
+              22 አዋራሪስ ሆቴል ጀርባ{phonesText ? ` | ስልክ: ${phonesText}` : ""}
             </p>
           </div>
         </div>

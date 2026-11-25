@@ -2,15 +2,20 @@ import { Vehicle } from "@/types";
 import { getPlateLabel } from "./plates";
 import { SITE_URL } from "./site";
 import { getPriceInfo, priceText } from "./price";
+import { DealerContact, dealerPhonesText } from "./contact";
+import { PRIMARY_DEALER_NAME } from "./site";
 
-export function formatTelegramVehicleCaption(
-  vehicle: Vehicle,
-  dealershipName?: string
-): string {
+/** A dealership record (name + public phones), or just a display name. */
+export type ShareDealer = string | (DealerContact & { name?: string | null }) | null | undefined;
+
+export function formatTelegramVehicleCaption(vehicle: Vehicle, dealer?: ShareDealer): string {
+  const dealerObj = typeof dealer === "object" && dealer ? dealer : vehicle.dealership;
   const dealerName =
-    dealershipName ||
+    (typeof dealer === "string" && dealer) ||
+    dealerObj?.name ||
     vehicle.dealership?.name ||
-    "AC WALE MARKET";
+    PRIMARY_DEALER_NAME;
+  const phonesText = dealerPhonesText(dealerObj);
 
   const formattedPrice = priceText(vehicle, "ዋጋ በስልክ (Call for Price)");
 
@@ -42,6 +47,7 @@ export function formatTelegramVehicleCaption(
         ]),
     `🏷️ ሰሌዳ: ${plateCodeText}`,
     `📍 የቀረበው በ: ${dealerName}`,
+    ...(phonesText ? [`📞 ስልክ: ${phonesText}`] : []),
   ].join("\n");
 }
 
@@ -56,11 +62,11 @@ export function getVehicleShareUrl(vehicleId: number, baseOrigin?: string): stri
 
 export function openTelegramShare(
   vehicle: Vehicle,
-  dealershipName?: string,
+  dealer?: ShareDealer,
   baseOrigin?: string
 ): string {
   const shareUrl = getVehicleShareUrl(vehicle.id, baseOrigin);
-  const formattedCaption = formatTelegramVehicleCaption(vehicle, dealershipName);
+  const formattedCaption = formatTelegramVehicleCaption(vehicle, dealer);
   const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(
     shareUrl
   )}&text=${encodeURIComponent(formattedCaption)}`;

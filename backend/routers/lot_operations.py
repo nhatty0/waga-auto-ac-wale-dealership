@@ -11,7 +11,7 @@ from database import get_db
 import models
 import schemas
 from settings import settings
-from auth import get_current_admin, get_current_superadmin
+from auth import get_current_superadmin
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def list_lot_intakes(
     in_lot: Optional[bool] = Query(None, description="Filter by currently in-lot (True) or released (False)"),
     include_archived: bool = Query(False, description="Superadmin only: include soft-archived records"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     Get list of received cars (filter by currently in-lot vs past/released).
@@ -71,7 +71,7 @@ def list_lot_intakes(
 def get_lot_intake(
     intake_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     Get details of a specific lot intake record.
@@ -93,7 +93,7 @@ def get_lot_intake(
 def create_lot_intake(
     payload: schemas.LotIntakeCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     Create a new lot intake record (የግቢ ርክክብ).
@@ -189,7 +189,7 @@ def generate_gate_pass(
     intake_id: int,
     payload: schemas.GatePassCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     Generate gate pass slip (መኪና መውጫ), mark vehicle as released (is_in_lot = False),
@@ -257,7 +257,7 @@ def generate_gate_pass(
 @router.get("/gate-passes", response_model=List[schemas.GatePassOut])
 def list_gate_passes(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     List all generated gate passes (መኪና መውጫዎች) for audits and records.
@@ -325,7 +325,7 @@ def list_handovers(
     q: Optional[str] = Query(None, description="Search by plate, owner name, vehicle type, or contract number"),
     include_archived: bool = Query(False, description="Superadmin only: include soft-archived contracts"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     List all saved Vehicle Handover contracts (የመኪና መረከቢያ ውሎች).
@@ -358,7 +358,7 @@ def list_handovers(
 def get_handover(
     handover_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     Get a single Vehicle Handover contract by ID.
@@ -377,7 +377,7 @@ def get_handover(
 def create_handover(
     payload: schemas.VehicleHandoverCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     Create a new Vehicle Handover contract, auto-assign sequential `contract_number`,

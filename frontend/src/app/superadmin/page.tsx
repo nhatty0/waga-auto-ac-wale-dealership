@@ -27,8 +27,13 @@ import {
   ExternalLink,
   ChevronRight,
   Sparkles,
+  LayoutDashboard,
+  ClipboardList,
+  Archive,
+  Settings,
 } from "lucide-react";
 import { User, ExecutiveStats, StaffUser, RentalBooking } from "@/types";
+import AdminDashboard, { OwnerSection } from "@/components/admin/AdminDashboard";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
 
@@ -41,8 +46,46 @@ const RENTAL_STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-zinc-800 text-zinc-400 border-zinc-700",
 };
 
+type HubSection = "overview" | OwnerSection | "rentals" | "staff";
+
+const HUB_SECTIONS: { id: HubSection; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "lot_operations", label: "Lot & Gate Pass", icon: ClipboardList },
+  { id: "documents", label: "Documents", icon: Archive },
+  { id: "settings", label: "Settings", icon: Settings },
+  { id: "rentals", label: "Rental Deliveries", icon: Truck },
+  { id: "staff", label: "Staff", icon: Users },
+];
+
+const OWNER_DESKS: HubSection[] = ["lot_operations", "documents", "settings"];
+
 export default function ExecutiveOwnerDashboard() {
   const router = useRouter();
+
+  // Section navigation (kept in ?section= so a refresh or a shared link reopens the same desk).
+  // Reading window here is safe: until the role check finishes only the loader is rendered.
+  const [section, setSection] = useState<HubSection>(() => {
+    if (typeof window === "undefined") return "overview";
+    const wanted = new URLSearchParams(window.location.search).get("section");
+    return HUB_SECTIONS.some((h) => h.id === wanted) ? (wanted as HubSection) : "overview";
+  });
+  // Owner desks stay mounted once opened, so switching sections doesn't refetch or drop a half-filled form.
+  const [deskOpened, setDeskOpened] = useState(() => OWNER_DESKS.includes(section));
+  const selectSection = (id: HubSection) => {
+    setSection(id);
+    if (OWNER_DESKS.includes(id)) setDeskOpened(true);
+  };
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (section === "overview") url.searchParams.delete("section");
+    else url.searchParams.set("section", section);
+    window.history.replaceState(null, "", url.toString());
+    const el = document.querySelector<HTMLElement>(`[data-hub-tab="${section}"]`);
+    const row = el?.parentElement;
+    if (el && row && row.scrollWidth > row.clientWidth) {
+      row.scrollTo({ left: el.offsetLeft - (row.clientWidth - el.offsetWidth) / 2, behavior: "smooth" });
+    }
+  }, [section]);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
@@ -100,15 +143,8 @@ export default function ExecutiveOwnerDashboard() {
         }
 
         const user: User = await res.json();
-        const superadminPhone1 = "251918032065";
-        const superadminPhone2 = "251911646628";
-        const normalizedUserPhone = (user.phone_number || "").replace(/\D/g, "");
-
-        const isSuperadminUser =
-          user.role === "superadmin" ||
-          Boolean((user as any).is_superadmin) ||
-          normalizedUserPhone.includes(superadminPhone1) ||
-          normalizedUserPhone.includes(superadminPhone2);
+        // The backend decides from its SUPERADMIN_PHONE list; no phone numbers live in the UI.
+        const isSuperadminUser = user.is_superadmin === true;
 
         if (!isSuperadminUser) {
           router.push("/admin");
@@ -312,7 +348,7 @@ export default function ExecutiveOwnerDashboard() {
       )}
 
       {/* Top Executive Header */}
-      <header className="border-b border-zinc-800/80 bg-zinc-900/60 backdrop-blur-md sticky top-0 z-40 px-6 py-4">
+      <header className="border-b border-zinc-800/80 bg-zinc-900/60 backdrop-blur-md px-4 sm:px-6 py-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Link
@@ -381,10 +417,48 @@ export default function ExecutiveOwnerDashboard() {
         </div>
       </header>
 
+      {/* Section navigation: Overview | Lot & Gate Pass | Documents | Settings | Rentals | Staff */}
+      <nav
+        role="tablist"
+        aria-label="Owner hub sections"
+        className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex gap-2 overflow-x-auto no-scrollbar snap-x scroll-px-4">
+          {HUB_SECTIONS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              data-hub-tab={id}
+              aria-selected={section === id}
+              onClick={() => selectSection(id)}
+              className={`shrink-0 snap-start h-11 px-3.5 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 whitespace-nowrap ${
+                section === id
+                  ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+                  : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+              }`}
+            >
+              <Icon size={14} className="shrink-0" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* Owner desks (same components as the old /admin tabs; backend allows superadmin only) */}
+      {deskOpened && (
+        <div className={OWNER_DESKS.includes(section) ? "max-w-5xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 pb-24" : "hidden"}>
+          <AdminDashboard
+            portal="owner"
+            ownerSection={(OWNER_DESKS.includes(section) ? section : "lot_operations") as OwnerSection}
+          />
+        </div>
+      )}
+
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto w-full px-6 py-8 flex-1 space-y-8">
+      <main className={OWNER_DESKS.includes(section) ? "hidden" : "max-w-7xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 flex-1 space-y-8"}>
         {/* 4 KEY EXECUTIVE METRIC CARDS */}
-        <section>
+        <section className={section === "overview" ? "" : "hidden"}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
               <Sparkles size={16} className="text-amber-400" /> ዋና ዋና የንግድ አመልካቾች (Executive Key Metrics)
@@ -470,7 +544,7 @@ export default function ExecutiveOwnerDashboard() {
         </section>
 
         {/* OPERATIONAL TABLE 1: RECENT RENTAL DELIVERIES & DRIVER ASSIGNMENTS */}
-        <section className="bg-zinc-900/80 border border-zinc-800/90 rounded-2xl overflow-hidden shadow-2xl">
+        <section className={`bg-zinc-900/80 border border-zinc-800/90 rounded-2xl overflow-hidden shadow-2xl ${section === "rentals" ? "" : "hidden"}`}>
           <div className="p-6 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -651,7 +725,7 @@ export default function ExecutiveOwnerDashboard() {
         </section>
 
         {/* OPERATIONAL TABLE 2: STAFF MANAGEMENT */}
-        <section className="bg-zinc-900/80 border border-zinc-800/90 rounded-2xl overflow-hidden shadow-2xl">
+        <section className={`bg-zinc-900/80 border border-zinc-800/90 rounded-2xl overflow-hidden shadow-2xl ${section === "staff" ? "" : "hidden"}`}>
           <div className="p-6 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -691,7 +765,7 @@ export default function ExecutiveOwnerDashboard() {
               {/* Phones: stacked cards */}
               <ul className="sm:hidden divide-y divide-zinc-800/60">
                 {staffList.map((staff) => {
-                  const isSuperAdmin = staff.role === "superadmin" || staff.phone_number.includes("251918032065");
+                  const isSuperAdmin = staff.role === "superadmin";
                   return (
                     <li key={staff.id} className="p-4 space-y-2.5">
                       <div className="flex items-start justify-between gap-3">
@@ -755,7 +829,7 @@ export default function ExecutiveOwnerDashboard() {
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60">
                   {staffList.map((staff) => {
-                    const isSuperAdmin = staff.role === "superadmin" || staff.phone_number.includes("251918032065");
+                    const isSuperAdmin = staff.role === "superadmin";
 
                     return (
                       <tr key={staff.id} className="hover:bg-zinc-800/40 transition">

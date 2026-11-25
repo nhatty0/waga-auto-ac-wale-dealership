@@ -6,17 +6,21 @@ import { Printer, Phone } from "lucide-react";
 import PrintModalShell from "@/components/print/PrintModalShell";
 import ScaledPreview, { A4_PORTRAIT_PX } from "@/components/print/ScaledPreview";
 import { QRCodeSVG } from "qrcode.react";
-import { Vehicle } from "@/types";
+import { Dealership, Vehicle } from "@/types";
+import { dealerPhoneLines } from "@/lib/contact";
 import { resolveImageUrl } from "@/lib/images";
 import { getFlyerPlateSpec, isNewSeriesPlate } from "@/lib/plates";
 import { getPriceInfo, getSplitParts } from "@/lib/price";
 
 interface PrintFlyerModalProps {
   vehicle: Vehicle;
+  /** Phones printed on the flyer come from this record (falls back to vehicle.dealership). */
+  dealership?: Dealership | null;
   onClose: () => void;
 }
 
-export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalProps) {
+export default function PrintFlyerModal({ vehicle, dealership, onClose }: PrintFlyerModalProps) {
+  const phones = dealerPhoneLines(dealership || vehicle.dealership);
   const [mounted, setMounted] = useState(false);
   const [base64Image, setBase64Image] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -29,7 +33,9 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
   // Instant mobile inquiry or digital showroom link
   const inquiryQrUrl = typeof window !== "undefined" && window.location.origin
     ? `${window.location.origin}/?car=${vehicle.id}`
-    : "tel:+251911646628";
+    : phones[0]
+    ? `tel:${phones[0].tel}`
+    : `/?car=${vehicle.id}`;
 
   const plateSpec = getFlyerPlateSpec(vehicle.plate_status);
   const priceInfo = getPriceInfo(vehicle);
@@ -129,14 +135,12 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
         </div>
 
         <div className="text-right text-xs space-y-0.5 font-semibold text-zinc-800">
-          <div className="flex items-center justify-end gap-1.5 text-black font-bold">
-            <Phone size={13} className="text-amber-600" />
-            <a href="tel:+251911646628" className="hover:underline">+251 911 646 628</a>
-          </div>
-          <div className="flex items-center justify-end gap-1.5 text-zinc-900 font-bold">
-            <Phone size={13} className="text-zinc-700" />
-            <a href="tel:+251900061300" className="hover:underline">+251 900 061 300</a>
-          </div>
+          {phones.map((p, i) => (
+            <div key={p.tel} className={`flex items-center justify-end gap-1.5 font-bold ${i === 0 ? "text-black" : "text-zinc-900"}`}>
+              <Phone size={13} className={i === 0 ? "text-amber-600" : "text-zinc-700"} />
+              <a href={`tel:${p.tel}`} className="hover:underline">{p.display}</a>
+            </div>
+          ))}
           <div className="text-[11px] text-zinc-700 font-medium">
             <a href="mailto:acwalecarmarket@gmail.com" className="hover:underline">acwalecarmarket@gmail.com</a>
           </div>
@@ -327,10 +331,12 @@ export default function PrintFlyerModal({ vehicle, onClose }: PrintFlyerModalPro
             Scan QR Code on your phone for the full vehicle photo gallery, or call our sales desk to book an in-person visit.
           </p>
           <div className="pt-0.5 flex flex-wrap items-center gap-2 text-[10px] font-bold text-zinc-800">
-            <span>📞 +251 911 646 628</span>
-            <span>•</span>
-            <span>📞 +251 900 061 300</span>
-            <span>•</span>
+            {phones.map((p) => (
+              <React.Fragment key={p.tel}>
+                <span>📞 {p.display}</span>
+                <span>•</span>
+              </React.Fragment>
+            ))}
             <span>📧 acwalecarmarket@gmail.com</span>
             <span>•</span>
             <span>📍 22 አዋራሪስ ሆቴል ጀርባ • Addis Ababa</span>

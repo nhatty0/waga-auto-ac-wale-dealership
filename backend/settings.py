@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import List, Optional
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -16,8 +16,9 @@ class Settings:
     PLATFORM_NAME: str = os.getenv("PLATFORM_NAME", "AC WALE MARKET").strip().strip("\"'")
     PRIMARY_DEALERSHIP_SLUG: str = os.getenv("PRIMARY_DEALERSHIP_SLUG", "ac-wale-cars").strip().strip("\"'")
     PRIMARY_DEALERSHIP_NAME: str = os.getenv("PRIMARY_DEALERSHIP_NAME", "AC WALE MARKET").strip().strip("\"'")
-    PRIMARY_DEALERSHIP_PHONE: str = os.getenv("PRIMARY_DEALERSHIP_PHONE", "+251911646628").strip().strip("\"'")
-    PRIMARY_DEALERSHIP_PHONE_2: str = os.getenv("PRIMARY_DEALERSHIP_PHONE_2", "+251900061300").strip().strip("\"'")
+    # Public contact lines shown on the showroom, flyers, print sheets and share text.
+    PRIMARY_DEALERSHIP_PHONE: str = os.getenv("PRIMARY_DEALERSHIP_PHONE", "+251983112211").strip().strip("\"'")
+    PRIMARY_DEALERSHIP_PHONE_2: str = os.getenv("PRIMARY_DEALERSHIP_PHONE_2", "+251989113211").strip().strip("\"'")
 
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
@@ -29,7 +30,8 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days
     ACCESS_TOKEN_EXPIRE_DAYS: int = 30
 
-    # Dedicated Platform Master SuperAdmin Phone (12 digits international format)
+    # Owner (superadmin) phones: comma-separated, any format ("251900061300,0918032065").
+    # This list is the only thing that grants superadmin; see is_superadmin_phone().
     SUPERADMIN_PHONE: str = os.getenv("SUPERADMIN_PHONE", "251918032065").strip().strip("\"'")
 
     # Central Platform Telegram Bot Credentials & Username (1-Click Deep-Linking)
@@ -62,4 +64,42 @@ class Settings:
     S3_PUBLIC_CUSTOM_DOMAIN: str = os.getenv("S3_PUBLIC_CUSTOM_DOMAIN", "")
 
 
+def normalize_phone_digits(phone) -> str:
+    """
+    Non-raising Ethiopian phone normalizer used for comparisons.
+    Strips "+", spaces and every other non-digit, then maps 09…/07… (and 9…/7…, 2510…)
+    to the 12-digit 2519…/2517… form. Anything else is returned as bare digits.
+    """
+    digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
+    if digits.startswith("2510") and len(digits) == 13:
+        return "251" + digits[4:]
+    if digits[:2] in ("09", "07") and len(digits) == 10:
+        return "251" + digits[1:]
+    if digits[:1] in ("9", "7") and len(digits) == 9:
+        return "251" + digits
+    return digits
+
+
+def parse_phone_list(raw: str) -> List[str]:
+    """Comma/semicolon/newline separated phones -> unique normalized list (order kept).
+    Spaces inside one number ("0918 032 065") are fine; they are stripped by the normalizer."""
+    out: List[str] = []
+    for part in str(raw or "").replace(";", ",").replace("\n", ",").split(","):
+        norm = normalize_phone_digits(part.strip().strip("\"'"))
+        if norm and norm not in out:
+            out.append(norm)
+    return out
+
+
 settings = Settings()
+
+
+def superadmin_phones() -> List[str]:
+    """Normalized owner phones from SUPERADMIN_PHONE (read live, so tests/overrides apply)."""
+    return parse_phone_list(settings.SUPERADMIN_PHONE)
+
+
+def is_superadmin_phone(phone) -> bool:
+    """True when `phone` (any format) is one of the configured SUPERADMIN_PHONE numbers."""
+    norm = normalize_phone_digits(phone)
+    return bool(norm) and norm in superadmin_phones()

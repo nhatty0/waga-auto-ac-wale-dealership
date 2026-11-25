@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from database import SessionLocal
 import models
 import schemas
-from settings import settings
+from settings import settings, superadmin_phones
 from main import app, create_access_token
 from auth import rate_limiter, TELEGRAM_LINKED_CHATS
 
@@ -31,7 +31,7 @@ def test_security_lockdown():
         assert dealer1 is not None
 
         # 1.1 Master SuperAdmin (role == "superadmin" AND phone == settings.SUPERADMIN_PHONE)
-        master_phone = settings.SUPERADMIN_PHONE.strip().lstrip("+")
+        master_phone = superadmin_phones()[0]
         superadmin_user = db.query(models.User).filter(models.User.phone_number == master_phone).first()
         if not superadmin_user:
             superadmin_user = models.User(

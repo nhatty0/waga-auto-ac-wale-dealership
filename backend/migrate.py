@@ -11,11 +11,13 @@ if env_path.exists():
 else:
     load_dotenv()
 
-SINGLE_TENANT_MODE = os.getenv("SINGLE_TENANT_MODE", "true").strip().strip("\"'").lower() in ("true", "1", "yes")
-PLATFORM_NAME = os.getenv("PLATFORM_NAME", "AC WALE MARKET").strip().strip("\"'")
-PRIMARY_DEALERSHIP_SLUG = os.getenv("PRIMARY_DEALERSHIP_SLUG", "ac-wale-cars").strip().strip("\"'")
-PRIMARY_DEALERSHIP_PHONE = os.getenv("PRIMARY_DEALERSHIP_PHONE", "+251911646628").strip().strip("\"'")
-SUPERADMIN_PHONE = os.getenv("SUPERADMIN_PHONE", "251911646628").strip().strip("\"'").lstrip("+")
+from settings import settings, normalize_phone_digits, superadmin_phones
+
+SINGLE_TENANT_MODE = settings.SINGLE_TENANT_MODE
+PLATFORM_NAME = settings.PLATFORM_NAME
+PRIMARY_DEALERSHIP_SLUG = settings.PRIMARY_DEALERSHIP_SLUG
+PRIMARY_DEALERSHIP_PHONE = settings.PRIMARY_DEALERSHIP_PHONE      # default +251983112211
+PRIMARY_DEALERSHIP_PHONE_2 = settings.PRIMARY_DEALERSHIP_PHONE_2  # default +251989113211
 
 
 # (table, column, sqlite type, postgres type) — all nullable, no defaults.
@@ -24,7 +26,70 @@ ADDITIVE_COLUMNS = [
     ("lot_intakes", "archived_by", "VARCHAR(150)", "VARCHAR(150)"),
     ("vehicle_handovers", "archived_at", "DATETIME", "TIMESTAMP"),
     ("vehicle_handovers", "archived_by", "VARCHAR(150)", "VARCHAR(150)"),
+    ("dealerships", "phone_number_2", "VARCHAR(50)", "VARCHAR(50)"),
+    ("dealerships", "contact_phones_synced", "VARCHAR(120)", "VARCHAR(120)"),
 ]
+
+
+def _sync_contact_phones(dealer) -> bool:
+    """
+    Copy PRIMARY_DEALERSHIP_PHONE / _PHONE_2 into the dealership record when the .env pair
+    differs from the pair copied last time. A changed .env therefore wins once (on the next
+    restart), while numbers edited later in /superadmin Settings survive restarts.
+    """
+    pair = f"{PRIMARY_DEALERSHIP_PHONE}|{PRIMARY_DEALERSHIP_PHONE_2}"
+    if dealer.contact_phones_synced == pair:
+        return False
+    dealer.phone_number = PRIMARY_DEALERSHIP_PHONE or None
+    dealer.phone_number_2 = PRIMARY_DEALERSHIP_PHONE_2 or None
+    dealer.contact_phones_synced = pair
+    print(f"📞 Public contact phones set from .env: {PRIMARY_DEALERSHIP_PHONE} / {PRIMARY_DEALERSHIP_PHONE_2}")
+    return True
+
+
+def _sync_superadmins(db, primary_dealer_id: int):
+    """
+    SUPERADMIN_PHONE (comma-separated) is the only source of owner access:
+    - every listed phone exists as a user with role 'superadmin' (created if missing);
+    - every other user still holding role 'superadmin' is demoted to 'dealer_admin'.
+    Nothing is deleted.
+    """
+    owners = superadmin_phones()
+    if not owners:
+        print("⚠️  SUPERADMIN_PHONE is empty: skipping superadmin promote/demote (nobody changed).")
+        return
+
+    users = db.query(models.User).all()
+    by_phone = {}
+    for u in users:
+        by_phone.setdefault(normalize_phone_digits(u.phone_number), u)
+
+    for phone in owners:
+        user = by_phone.get(phone)
+        if not user:
+            user = models.User(
+                phone_number=phone,
+                full_name="AC Wale Executive Owner",
+                role="superadmin",
+                dealership_id=primary_dealer_id,
+                is_active=True,
+            )
+            db.add(user)
+            print(f"👑 Created SuperAdmin user: phone '{phone}'.")
+        else:
+            if user.role != "superadmin":
+                print(f"👑 Promoted user #{user.id} ('{user.phone_number}') to superadmin.")
+            user.role = "superadmin"
+            user.dealership_id = user.dealership_id or primary_dealer_id
+            user.is_active = True
+            print(f"👑 Verified SuperAdmin user: phone '{user.phone_number}'.")
+
+    for u in users:
+        if u.role == "superadmin" and normalize_phone_digits(u.phone_number) not in owners:
+            u.role = "dealer_admin"
+            print(f"⬇️  Demoted user #{u.id} ('{u.phone_number}') from superadmin to dealer_admin: phone not in SUPERADMIN_PHONE.")
+
+    db.commit()
 
 
 def _ensure_nullable_columns(is_sqlite: bool):
@@ -98,7 +163,9 @@ def run_migrations():
                 id=1,
                 name=PLATFORM_NAME,
                 slug=PRIMARY_DEALERSHIP_SLUG,
-                phone_number=PRIMARY_DEALERSHIP_PHONE,
+                phone_number=PRIMARY_DEALERSHIP_PHONE or None,
+                phone_number_2=PRIMARY_DEALERSHIP_PHONE_2 or None,
+                contact_phones_synced=f"{PRIMARY_DEALERSHIP_PHONE}|{PRIMARY_DEALERSHIP_PHONE_2}",
                 logo_url="/logo.png",
                 telegram_bot_token=os.getenv("TELEGRAM_PLATFORM_BOT_TOKEN") or None,
                 telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID") or None,
@@ -113,37 +180,15 @@ def run_migrations():
         else:
             primary_dealer.name = PLATFORM_NAME
             primary_dealer.slug = PRIMARY_DEALERSHIP_SLUG
-            primary_dealer.phone_number = PRIMARY_DEALERSHIP_PHONE
+            _sync_contact_phones(primary_dealer)
             primary_dealer.is_active = True
             primary_dealer.subscription_plan = "pro"
             primary_dealer.max_vehicles = 1000
             db.commit()
             print(f"🏢 Primary Business Record locked: '{primary_dealer.name}' (ID: {primary_dealer.id}, Slug: '{primary_dealer.slug}')")
 
-        # 2. Seed SuperAdmin / Executive Owner user
-        # Match normalized 12-digit phone e.g. 251918032065 or with +
-        superadmin_user = db.query(models.User).filter(
-            (models.User.phone_number == SUPERADMIN_PHONE) |
-            (models.User.phone_number == f"+{SUPERADMIN_PHONE}")
-        ).first()
-
-        if not superadmin_user:
-            superadmin_user = models.User(
-                phone_number=SUPERADMIN_PHONE,
-                full_name="AC Wale Executive Owner",
-                role="superadmin",
-                dealership_id=primary_dealer.id,
-                is_active=True
-            )
-            db.add(superadmin_user)
-            db.commit()
-            print(f"👑 Created SuperAdmin Owner User: phone '{SUPERADMIN_PHONE}', role 'superadmin'.")
-        else:
-            superadmin_user.role = "superadmin"
-            superadmin_user.dealership_id = primary_dealer.id
-            superadmin_user.is_active = True
-            db.commit()
-            print(f"👑 Verified SuperAdmin Owner User: phone '{superadmin_user.phone_number}', role 'superadmin'.")
+        # 2. Owners: promote every SUPERADMIN_PHONE number, demote stale superadmins
+        _sync_superadmins(db, primary_dealer.id)
 
         # 3. Seed active delivery personnel roster if empty
         driver_count = db.query(models.Driver).count()

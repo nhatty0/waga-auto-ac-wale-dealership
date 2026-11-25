@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 import Hero3DSection from "@/components/showroom3d/Hero3DSection";
 import { useLanguage } from "@/context/LanguageContext";
+import { useEffect, useState } from "react";
+import { getApiBaseUrl } from "@/lib/api";
+import { dealerPhoneLines, PhoneLine } from "@/lib/contact";
+import { PRIMARY_DEALER_SLUG } from "@/lib/site";
 
 const PARTNER_BADGES = [
   "Nyala Motors",
@@ -26,6 +30,15 @@ const PARTNER_BADGES = [
 ];
 
 export default function SaaSPlatformLanding() {
+  // Contact lines come from the primary dealership record (no numbers hardcoded in the UI).
+  const [phones, setPhones] = useState<PhoneLine[]>([]);
+  useEffect(() => {
+    fetch(`${getApiBaseUrl()}/api/public/dealerships/${PRIMARY_DEALER_SLUG}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setPhones(dealerPhoneLines(d)))
+      .catch(() => setPhones([]));
+  }, []);
+  const mainPhone = phones[0];
   const { lang, toggleLang, t } = useLanguage();
 
   return (
@@ -282,17 +295,19 @@ export default function SaaSPlatformLanding() {
                   <span className="text-xs text-zinc-500 font-medium block">
                     Direct Dealership Onboarding & Pilot Setup
                   </span>
-                  <a
-                    href="tel:+251918032065"
-                    className="text-lg sm:text-xl font-black text-amber-400 hover:text-amber-300 transition tracking-wide flex items-center gap-2 mt-0.5"
-                  >
-                    <PhoneCall size={18} />
-                    <span>+251 918 032 065</span>
-                  </a>
+                  {mainPhone && (
+                    <a
+                      href={`tel:${mainPhone.tel}`}
+                      className="text-lg sm:text-xl font-black text-amber-400 hover:text-amber-300 transition tracking-wide flex items-center gap-2 mt-0.5"
+                    >
+                      <PhoneCall size={18} />
+                      <span>{mainPhone.display}</span>
+                    </a>
+                  )}
                 </div>
 
                 <a
-                  href="tel:+251918032065"
+                  href={mainPhone ? `tel:${mainPhone.tel}` : "#contact"}
                   className="px-6 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs sm:text-sm shadow-xl shadow-amber-500/20 active:scale-95 transition flex items-center justify-center gap-2"
                 >
                   <Phone size={15} />
@@ -333,13 +348,15 @@ export default function SaaSPlatformLanding() {
           </div>
 
           <div className="flex items-center text-xs font-semibold text-zinc-400">
-            <a
-              href="tel:+251918032065"
-              className="hover:text-amber-400 transition flex items-center gap-1.5"
-            >
-              <Phone size={13} className="text-amber-400" />
-              <span>+251 918 032 065</span>
-            </a>
+            {mainPhone && (
+              <a
+                href={`tel:${mainPhone.tel}`}
+                className="hover:text-amber-400 transition flex items-center gap-1.5"
+              >
+                <Phone size={13} className="text-amber-400" />
+                <span>{mainPhone.display}</span>
+              </a>
+            )}
           </div>
         </div>
       </footer>

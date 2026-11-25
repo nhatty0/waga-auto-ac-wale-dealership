@@ -66,7 +66,7 @@ This handoff document is prepared for **Claude** (and other senior AI engineers)
 3. **Tailored Pilot & Direct Sales Contact Section**:
    - Replaced fixed price cards with "Early Access Dealership Packages / ልዩ የጅምር አቅርቦት" spotlight section.
    - 5 Key Value Pillars (Brand Identity, Cash/Loan Debt Transfer, Real-time Telegram/SMS leads, Printable A4 QR sheets, WebP compression).
-   - Direct CTA button linked to `tel:+251918032065`.
+   - Direct CTA button linked to the primary dealership's phone (from the API; no numbers are hardcoded in UI code).
 4. **Clean Navigation & Consolidated 2-Login Architecture**:
    - Top header: "Features", "Partners", "Contact", and single right button: "Dealer Login / መግቢያ" -> `/admin`.
    - Hero section: Single primary launch CTA -> `/admin`.

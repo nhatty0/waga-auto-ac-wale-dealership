@@ -28,7 +28,8 @@ def run_track2_tests():
             db.commit()
             db.refresh(regular_user)
 
-        superadmin_phone = os.getenv("SUPERADMIN_PHONE", "251918032065").lstrip("+")
+        from settings import superadmin_phones
+        superadmin_phone = superadmin_phones()[0]
         superadmin_user = db.query(models.User).filter(models.User.phone_number == superadmin_phone).first()
         if not superadmin_user:
             superadmin_user = models.User(

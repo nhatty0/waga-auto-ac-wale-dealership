@@ -25,7 +25,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import TelegramIcon from "@/components/TelegramIcon";
 import VehicleActionBar from "@/components/VehicleActionBar";
-import { SALES_PHONES, TELEGRAM_CHAT_URL } from "@/lib/contact";
+import { dealerPhoneLines, dealerPhonesText, dealerTelegramUrl } from "@/lib/contact";
 import { openTelegramShare } from "@/lib/share";
 import { getPriceInfo, priceText as buildPriceText, CALL_FOR_PRICE } from "@/lib/price";
 import PriceSplit from "@/components/PriceSplit";
@@ -135,6 +135,7 @@ export default function VehicleModal({
         : "";
 
     const plateText = getPlateLabel(vehicle.plate_status, isAm);
+    const phonesText = dealerPhonesText(dealership || vehicle.dealership);
 
     if (isAm) {
       return (
@@ -148,7 +149,7 @@ export default function VehicleModal({
         `⛽ *ነዳጅ:* ${vehicle.fuel_type} | ⚙️ *ማርሽ:* ${vehicle.transmission}\n` +
         `🚙 *የቦዲ ዓይነት:* ${vehicle.body_type} | 🏎️ *ድራይቭ:* ${vehicle.drive_train || "FWD"}\n\n` +
         `📍 *ኤሲ ዋለ የመኪና መሸጫ (AC WALE MARKET) - 22 አዋራሪስ ሆቴል ጀርባ፣ አዲስ አበባ*\n` +
-        `📞 *ስልክ:* +251 911 646 628 / +251 900 061 300\n` +
+        (phonesText ? `📞 *ስልክ:* ${phonesText}\n` : "") +
         `📧 *Email:* acwalecarmarket@gmail.com`
       );
     }
@@ -164,14 +165,14 @@ export default function VehicleModal({
       `⛽ *Fuel:* ${vehicle.fuel_type} | ⚙️ *Transmission:* ${vehicle.transmission}\n` +
       `🚙 *Body Type:* ${vehicle.body_type} | 🏎️ *Drivetrain:* ${vehicle.drive_train || "FWD"}\n\n` +
       `📍 *AC WALE MARKET (ኤሲ ዋለ የመኪና መሸጫ) - 22 Behind Awraris Hotel, Addis Ababa*\n` +
-      `📞 *Call:* +251 911 646 628 / +251 900 061 300\n` +
+      (phonesText ? `📞 *Call:* ${phonesText}\n` : "") +
       `📧 *Email:* acwalecarmarket@gmail.com`
     );
   };
 
   const handleShareToTelegram = (e: React.MouseEvent) => {
     e.stopPropagation();
-    openTelegramShare(vehicle, dealership?.name);
+    openTelegramShare(vehicle, dealership || vehicle.dealership);
   };
 
   const handleCopySpecs = async (e: React.MouseEvent) => {
@@ -649,8 +650,8 @@ export default function VehicleModal({
             {/* STICKY BOTTOM ACTION BAR: Call (chooser for 2 lines) + Telegram + Book a Visit */}
             <VehicleActionBar
               lang={lang}
-              phones={SALES_PHONES}
-              telegramUrl={TELEGRAM_CHAT_URL}
+              phones={dealerPhoneLines(dealership || vehicle.dealership)}
+              telegramUrl={dealerTelegramUrl(dealership || vehicle.dealership)}
               isSold={vehicle.status === "Sold"}
               findSimilarLabel={t.findSimilar}
               onBook={() => {

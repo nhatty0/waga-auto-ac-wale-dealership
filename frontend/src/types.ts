@@ -82,6 +82,7 @@ export interface Dealership {
   name: string;
   slug: string;
   phone_number?: string | null;
+  phone_number_2?: string | null;
   logo_url?: string | null;
   telegram_bot_token?: string | null;
   telegram_chat_id?: string | null;
@@ -120,6 +121,8 @@ export interface User {
   role: string;
   dealership_id?: number | null;
   dealership?: Dealership | null;
+  /** Server-computed: phone is in SUPERADMIN_PHONE (the only thing that grants owner access). */
+  is_superadmin?: boolean;
   is_active: boolean;
   created_at: string;
 }

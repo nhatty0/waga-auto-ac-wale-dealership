@@ -28,6 +28,10 @@ class Dealership(Base):
     name = Column(String(150), nullable=False)
     slug = Column(String(100), unique=True, index=True, nullable=False)
     phone_number = Column(String(50), nullable=True)
+    phone_number_2 = Column(String(50), nullable=True)
+    # Last PRIMARY_DEALERSHIP_PHONE|_PHONE_2 pair copied in by migrate.py. Lets a changed .env
+    # value win once on restart while edits made in /superadmin Settings survive restarts.
+    contact_phones_synced = Column(String(120), nullable=True)
     logo_url = Column(String(1000), nullable=True)
     telegram_bot_token = Column(String(255), nullable=True)
     telegram_chat_id = Column(String(100), nullable=True)
@@ -138,10 +142,10 @@ class User(Base):
 
     @property
     def is_superadmin(self) -> bool:
-        from settings import settings
-        superadmin_phone = settings.SUPERADMIN_PHONE.strip().lstrip("+")
-        user_phone = str(self.phone_number or "").strip().lstrip("+")
-        return self.role == "superadmin" or user_phone in (superadmin_phone, "251911646628", "251918032065")
+        # The SUPERADMIN_PHONE list is the single source of truth. role == "superadmin"
+        # alone is NOT enough (migrate.py demotes stale superadmin rows on startup).
+        from settings import is_superadmin_phone
+        return is_superadmin_phone(self.phone_number)
 
 class OTPVerification(Base):
     __tablename__ = "otp_verifications"

@@ -9,7 +9,7 @@ from database import SessionLocal
 import models
 from main import app
 from auth import create_access_token
-from settings import settings
+from settings import settings, superadmin_phones
 
 client = TestClient(app)
 
@@ -49,7 +49,7 @@ def test_dealer_switcher_security_lockdown():
             db.commit()
 
         # Create or ensure SuperAdmin user
-        super_phone = settings.SUPERADMIN_PHONE.strip().lstrip("+")
+        super_phone = superadmin_phones()[0]
         super_user = db.query(models.User).filter(models.User.phone_number == super_phone).first()
         if not super_user:
             super_user = models.User(

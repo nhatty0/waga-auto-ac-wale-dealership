@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
-from settings import settings
+from settings import settings, is_superadmin_phone, superadmin_phones
 from database import get_db
 from sms import send_otp_sms
 
@@ -182,7 +182,7 @@ def get_current_admin(
 
     # Deactivated dealership check:
     # Instantly reject any subsequent request by its users with HTTP 403
-    if user.role != "superadmin" and user.dealership_id is not None:
+    if not is_superadmin_phone(user.phone_number) and user.dealership_id is not None:
         dealership = db.query(models.Dealership).filter(models.Dealership.id == user.dealership_id).first()
         if dealership and dealership.is_active is False:
             raise HTTPException(
@@ -194,32 +194,20 @@ def get_current_admin(
 
 
 def is_user_superadmin(user: models.User) -> bool:
-    """
-    Checks if user is SuperAdmin (role == 'superadmin' or phone == settings.SUPERADMIN_PHONE).
-    """
+    """True when the user's phone is in the SUPERADMIN_PHONE list."""
     if not user:
         return False
-    return getattr(user, "is_superadmin", False) or user.role == "superadmin"
+    return is_superadmin_phone(user.phone_number)
 
 
 def get_current_superadmin(
     current_user: models.User = Depends(get_current_admin)
 ) -> models.User:
     """
-    SuperAdmin Strict Locking:
-    Accepts if current_user has role 'superadmin', is_superadmin == True,
-    or phone matches configured/known superadmin phones (251911646628, 251918032065).
+    SuperAdmin strict locking: only phones listed in SUPERADMIN_PHONE pass.
+    A row with role == 'superadmin' but an unlisted phone is rejected (403).
     """
-    superadmin_phone = settings.SUPERADMIN_PHONE.strip().lstrip("+")
-    user_phone = str(current_user.phone_number or "").strip().lstrip("+")
-
-    is_super = (
-        getattr(current_user, "is_superadmin", False)
-        or current_user.role == "superadmin"
-        or user_phone in (superadmin_phone, "251911646628", "251918032065")
-    )
-
-    if not is_super:
+    if not is_superadmin_phone(current_user.phone_number):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: platform owner privileges required"
@@ -239,8 +227,10 @@ def resolve_telegram_chat_id(phone: str, db: Session) -> Optional[str]:
     3. Dealership phone match
     4. Runtime TELEGRAM_LINKED_CHATS session mapping
     """
-    clean_super = settings.SUPERADMIN_PHONE.strip()
-    if phone == clean_super and settings.TELEGRAM_CHAT_ID:
+    # Only the FIRST listed owner phone maps to the env TELEGRAM_CHAT_ID (as before with a
+    # single SUPERADMIN_PHONE), so one owner's OTP never lands in another owner's chat.
+    owners = superadmin_phones()
+    if owners and phone == owners[0] and settings.TELEGRAM_CHAT_ID:
         return settings.TELEGRAM_CHAT_ID.strip()
 
     if phone in TELEGRAM_LINKED_CHATS:
@@ -321,7 +311,7 @@ def get_or_create_user_stub(phone: str, db: Session) -> tuple:
             primary_dealer = models.Dealership(
                 name=settings.PLATFORM_NAME,
                 slug=settings.PRIMARY_DEALERSHIP_SLUG,
-                phone_number="+251905445544",
+                phone_number=settings.PRIMARY_DEALERSHIP_PHONE or None,
                 is_active=True,
                 subscription_plan="pro",
                 max_vehicles=1000
@@ -682,7 +672,7 @@ def verify_otp(req: schemas.VerifyOTPRequest, db: Session) -> schemas.AuthRespon
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Your admin account is deactivated. Please contact support."
             )
-        elif user.dealership_id is not None and user.role != "superadmin":
+        elif user.dealership_id is not None and not is_superadmin_phone(user.phone_number):
             # Check if the user's dealership is suspended
             dealer = db.query(models.Dealership).filter(models.Dealership.id == user.dealership_id).first()
             if dealer and dealer.is_active is False:
@@ -696,10 +686,14 @@ def verify_otp(req: schemas.VerifyOTPRequest, db: Session) -> schemas.AuthRespon
             db.commit()
             db.refresh(user)
 
-    # Designate SuperAdmin role if phone strictly matches SUPERADMIN_PHONE
-    superadmin_phone = settings.SUPERADMIN_PHONE.strip().lstrip("+")
-    if normalized_phone.lstrip("+") == superadmin_phone and user.role != "superadmin":
-        user.role = "superadmin"
+    # Keep the role column in sync with the SUPERADMIN_PHONE list on every login.
+    if is_superadmin_phone(normalized_phone):
+        if user.role != "superadmin":
+            user.role = "superadmin"
+            db.commit()
+            db.refresh(user)
+    elif user.role == "superadmin":
+        user.role = "dealer_admin"
         db.commit()
         db.refresh(user)
 
@@ -720,6 +714,7 @@ def verify_otp(req: schemas.VerifyOTPRequest, db: Session) -> schemas.AuthRespon
             "name": user.dealership.name,
             "slug": user.dealership.slug,
             "phone_number": user.dealership.phone_number,
+            "phone_number_2": user.dealership.phone_number_2,
             "logo_url": user.dealership.logo_url
         }
 
@@ -733,6 +728,7 @@ def verify_otp(req: schemas.VerifyOTPRequest, db: Session) -> schemas.AuthRespon
             "role": user.role,
             "dealership_id": user.dealership_id,
             "dealership": dealer_data,
+            "is_superadmin": is_superadmin_phone(user.phone_number),
             "is_active": user.is_active,
             "created_at": user.created_at.isoformat() if user.created_at else None
         }

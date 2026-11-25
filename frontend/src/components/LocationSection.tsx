@@ -8,16 +8,19 @@ import {
   CONTACT_EMAIL,
   GOOGLE_MAPS_URL,
   HOURS,
-  SALES_PHONES,
-  TELEGRAM_CHAT_URL,
+  PhoneLine,
   addressCopyText,
 } from "@/lib/contact";
 
 interface LocationSectionProps {
   lang?: "am" | "en";
+  /** The dealership's call lines (dealerPhoneLines(dealership)); none are hardcoded here. */
+  phones?: PhoneLine[];
+  /** Telegram chat link for the primary line (hidden when omitted). */
+  telegramUrl?: string;
 }
 
-export default function LocationSection({ lang = "am" }: LocationSectionProps) {
+export default function LocationSection({ lang = "am", phones = [], telegramUrl }: LocationSectionProps) {
   const isAm = lang === "am";
   const [copied, setCopied] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
@@ -86,15 +89,22 @@ export default function LocationSection({ lang = "am" }: LocationSectionProps) {
               {copied ? (isAm ? "ተገልብጧል" : "Copied") : isAm ? "ኮፒ" : "Copy"}
             </span>
           </button>
-          <button
-            type="button"
-            onClick={() => setCallOpen(true)}
-            className={secondaryBtn}
-            aria-haspopup="dialog"
-          >
-            <Phone size={16} className="text-amber-400" />
-            <span>{isAm ? "ደውል" : "Call"}</span>
-          </button>
+          {phones.length > 1 ? (
+            <button
+              type="button"
+              onClick={() => setCallOpen(true)}
+              className={secondaryBtn}
+              aria-haspopup="dialog"
+            >
+              <Phone size={16} className="text-amber-400" />
+              <span>{isAm ? "ደውል" : "Call"}</span>
+            </button>
+          ) : phones[0] ? (
+            <a href={`tel:${phones[0].tel}`} className={secondaryBtn} title={phones[0].display}>
+              <Phone size={16} className="text-amber-400" />
+              <span>{isAm ? "ደውል" : "Call"}</span>
+            </a>
+          ) : null}
         </div>
 
         {/* Hours: compact table, international + Ethiopian time */}
@@ -118,21 +128,23 @@ export default function LocationSection({ lang = "am" }: LocationSectionProps) {
 
         {/* Other ways to reach us */}
         <div className="mt-5 flex flex-wrap items-center gap-x-1 text-[13px] text-zinc-400">
-          {SALES_PHONES.map((p) => (
+          {phones.map((p) => (
             <a key={p.tel} href={`tel:${p.tel}`} className="h-11 px-2 -ml-2 mr-1 inline-flex items-center gap-1.5 hover:text-amber-400 tabular-nums">
               <Phone size={13} className="text-zinc-500" />
               {p.display}
             </a>
           ))}
-          <a
-            href={TELEGRAM_CHAT_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="h-11 px-2 -ml-2 mr-1 inline-flex items-center gap-1.5 hover:text-sky-400"
-          >
-            <Send size={13} className="text-zinc-500" />
-            {isAm ? "በቴሌግራም ያነጋግሩን" : "Telegram Chat"}
-          </a>
+          {telegramUrl && (
+            <a
+              href={telegramUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="h-11 px-2 -ml-2 mr-1 inline-flex items-center gap-1.5 hover:text-sky-400"
+            >
+              <Send size={13} className="text-zinc-500" />
+              {isAm ? "በቴሌግራም ያነጋግሩን" : "Telegram Chat"}
+            </a>
+          )}
           <a href={`mailto:${CONTACT_EMAIL}`} className="h-11 px-2 -ml-2 inline-flex items-center gap-1.5 hover:text-zinc-200 break-all">
             <Mail size={13} className="text-zinc-500" />
             {CONTACT_EMAIL}
@@ -140,7 +152,7 @@ export default function LocationSection({ lang = "am" }: LocationSectionProps) {
         </div>
       </div>
 
-      <CallChooser open={callOpen} onClose={() => setCallOpen(false)} phones={SALES_PHONES} lang={lang} />
+      <CallChooser open={callOpen} onClose={() => setCallOpen(false)} phones={phones} lang={lang} />
     </section>
   );
 }

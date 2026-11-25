@@ -12,6 +12,7 @@ class DealershipBase(BaseModel):
     name: str
     slug: str
     phone_number: Optional[str] = None
+    phone_number_2: Optional[str] = None
     logo_url: Optional[str] = None
     is_active: Optional[bool] = True
     subscription_plan: Optional[str] = "starter"
@@ -180,6 +181,7 @@ class DealershipOut(DealershipBase):
 class DealershipUpdate(BaseModel):
     name: Optional[str] = None
     phone_number: Optional[str] = None
+    phone_number_2: Optional[str] = None
     logo_url: Optional[str] = None
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
@@ -297,7 +299,9 @@ class UserOut(BaseModel):
     full_name: Optional[str] = None
     role: str = "dealer_admin"
     dealership_id: Optional[int] = None
-    dealership: Optional[DealershipOut] = None
+    # Public shape only: Telegram credentials are owner settings (GET /api/admin/dealership).
+    dealership: Optional[DealershipPublicOut] = None
+    is_superadmin: bool = False
     is_active: bool = True
     created_at: datetime
 

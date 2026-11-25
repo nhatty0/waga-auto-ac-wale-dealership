@@ -41,7 +41,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useCompare } from "@/context/CompareContext";
 import { resolveImageUrl } from "@/lib/images";
 import { getPlateLabel, getPlateBadgeClasses, isNewSeriesPlate, getPlateType } from "@/lib/plates";
-import { ADDRESS, CONTACT_EMAIL, GOOGLE_MAPS_URL, HOURS, SALES_PHONES } from "@/lib/contact";
+import { ADDRESS, CONTACT_EMAIL, GOOGLE_MAPS_URL, HOURS, dealerPhoneLines, dealerTelegramUrl } from "@/lib/contact";
 
 interface DealerShowroomViewProps {
   dealerSlug: string;
@@ -116,6 +116,8 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
   const router = useRouter();
 
   const [dealership, setDealership] = useState<Dealership | null>(null);
+  const salesPhones = dealerPhoneLines(dealership);
+  const salesTelegramUrl = dealerTelegramUrl(dealership);
   const [logoImgError, setLogoImgError] = useState(false);
   const [isAdminSession, setIsAdminSession] = useState(false);
   const [logoClicks, setLogoClicks] = useState(0);
@@ -429,25 +431,30 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
               </span>
             </button>
 
-            {/* Direct Contact CTA: prominent round button on phones, number on larger screens */}
-            <a
-              href="tel:+251911646628"
-              className="h-11 w-11 sm:w-auto sm:px-4 ml-0.5 sm:ml-0 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 rounded-full transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/25 shrink-0 active:scale-95"
-              title="Call Sales Desk (+251 911 646 628)"
-              aria-label={lang === "am" ? "ደውል +251 911 646 628" : "Call +251 911 646 628"}
-            >
-              <Phone size={18} className="sm:w-3.5 sm:h-3.5" />
-              <span className="hidden sm:inline">+251 911 646 628</span>
-            </a>
+            {/* Direct Contact CTA: prominent round button on phones, number on larger screens.
+                Numbers come from the dealership record (PRIMARY_DEALERSHIP_PHONE / _PHONE_2). */}
+            {salesPhones[0] && (
+              <a
+                href={`tel:${salesPhones[0].tel}`}
+                className="h-11 w-11 sm:w-auto sm:px-4 ml-0.5 sm:ml-0 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 rounded-full transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/25 shrink-0 active:scale-95"
+                title={`Call Sales Desk (${salesPhones[0].display})`}
+                aria-label={lang === "am" ? `ደውል ${salesPhones[0].display}` : `Call ${salesPhones[0].display}`}
+              >
+                <Phone size={18} className="sm:w-3.5 sm:h-3.5" />
+                <span className="hidden sm:inline tabular-nums">{salesPhones[0].display}</span>
+              </a>
+            )}
 
-            <a
-              href="tel:+251900061300"
-              className="hidden md:flex h-11 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-4 rounded-full hover:bg-amber-500/20 transition items-center gap-1.5 shadow-sm shrink-0"
-              title="Call Sales Desk (+251 900 061 300)"
-            >
-              <Phone size={12} className="text-amber-400" />
-              <span>+251 900 061 300</span>
-            </a>
+            {salesPhones[1] && (
+              <a
+                href={`tel:${salesPhones[1].tel}`}
+                className="hidden md:flex h-11 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-4 rounded-full hover:bg-amber-500/20 transition items-center gap-1.5 shadow-sm shrink-0"
+                title={`Call Sales Desk (${salesPhones[1].display})`}
+              >
+                <Phone size={12} className="text-amber-400" />
+                <span className="tabular-nums">{salesPhones[1].display}</span>
+              </a>
+            )}
           </div>
         </div>
       </header>
@@ -731,7 +738,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            openTelegramShare(car, dealership?.name || "AC Wale Cars");
+                            openTelegramShare(car, dealership || car.dealership);
                           }}
                           className="h-11 w-11 shrink-0 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-[#45B6ED] hover:text-white rounded-xl transition flex items-center justify-center active:scale-95"
                           title={lang === "am" ? "በቴሌግራም አጋራ" : "Share on Telegram"}
@@ -822,7 +829,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
       <AboutSection lang={lang} />
 
       {/* SHOWROOM LOCATION & VISIT LOT */}
-      <LocationSection lang={lang} />
+      <LocationSection lang={lang} phones={salesPhones} telegramUrl={salesTelegramUrl} />
 
       {/* Modals */}
       {activeVehicle && (
@@ -927,7 +934,7 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
               </span>
             </p>
             <div className="flex flex-col">
-              {SALES_PHONES.map((p) => (
+              {salesPhones.map((p) => (
                 <a key={p.tel} href={`tel:${p.tel}`} className="min-h-8 inline-flex items-center gap-2 hover:text-amber-400 tabular-nums">
                   <Phone size={14} className="shrink-0 text-amber-400" />
                   {p.display}
@@ -952,6 +959,8 @@ export default function DealerShowroomView({ dealerSlug }: DealerShowroomViewPro
           isOpen={true}
           initialTab={aboutModalTab}
           lang={lang}
+          phones={salesPhones}
+          telegramUrl={salesTelegramUrl}
           onClose={() => setAboutModalTab(null)}
         />
       )}

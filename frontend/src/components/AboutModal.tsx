@@ -4,19 +4,24 @@ import React, { useState } from "react";
 import { X, Sparkles, MapPin, Building2, Phone, Mail, Clock, ShieldCheck, Navigation } from "lucide-react";
 import AboutSection from "./AboutSection";
 import LocationSection from "./LocationSection";
+import { PhoneLine } from "@/lib/contact";
 
 interface AboutModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialTab?: "about" | "location";
   lang?: "am" | "en";
+  phones?: PhoneLine[];
+  telegramUrl?: string;
 }
 
 export default function AboutModal({
   isOpen,
   onClose,
   initialTab = "about",
-  lang = "am"
+  lang = "am",
+  phones = [],
+  telegramUrl,
 }: AboutModalProps) {
   const [activeTab, setActiveTab] = useState<"about" | "location">(initialTab);
   const isAm = lang === "am";
@@ -86,7 +91,7 @@ export default function AboutModal({
           {activeTab === "about" ? (
             <AboutSection lang={lang} />
           ) : (
-            <LocationSection lang={lang} />
+            <LocationSection lang={lang} phones={phones} telegramUrl={telegramUrl} />
           )}
         </div>
       </div>
