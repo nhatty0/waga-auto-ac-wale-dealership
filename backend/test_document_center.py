@@ -85,7 +85,7 @@ def test_numbering_and_drafts():
     a, b = a.json(), b.json()
     assert a["number"].startswith("DP-") and b["number"].startswith("DP-")
     assert int(b["number"][3:]) == int(a["number"][3:]) + 1
-    assert a["status"] == "draft" and a["data"]["seller_name"] == "ኤሲ ዋለ መኪና መሸጫ"
+    assert a["status"] == "draft" and a["data"]["seller_name"] == "ኤሲ ዋለ መኪና መሸጫ" and a["data"]["seller_subcity"] == "ቦሌ"
     assert a["date"], "every document gets a date"
 
     # Final needs the required fields
@@ -104,6 +104,11 @@ def test_numbering_and_drafts():
     assert ra["number"].startswith("RA-")
     it = _intake(h, _plate())
     assert it["number"].startswith("IN-")
+    pub = client.post(f"{BASE}/intake", headers=h, json={"data": {
+        "vehicle_name": "Kia Picanto", "plate_number": _plate(), "owner_name": "P", "owner_phone": "09",
+        "final_cash_price": 900000, "publish_to_showroom": True}})
+    assert pub.status_code == 201, pub.text
+    assert pub.json()["vehicle_id"] and pub.json()["number"].startswith("IN-")
     ho = client.post(f"{BASE}/handover", headers=h, json={"data": {
         "owner_full_name": "Hailu", "owner_phone": "0911", "vehicle_type": "Vitz", "plate_number": _plate()}}).json()
     assert ho["number"].startswith("AC-rec-")

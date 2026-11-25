@@ -463,7 +463,11 @@ def _write_generic(db: Session, user, doc_type: str, rec: Optional[models.Docume
         merged[k] = v
 
     if doc_type == "downpayment":
-        merged.setdefault("seller_name", DEFAULT_SELLER)
+        if creating and not _s(merged.get("seller_name")):
+            # The paper form's printed defaults (the dealership itself, Bole woreda 04).
+            for k, v in (("seller_name", DEFAULT_SELLER), ("seller_city", "አ/አ"), ("seller_subcity", "ቦሌ"),
+                         ("seller_woreda", "04"), ("seller_house_no", "አዲስ")):
+                merged.setdefault(k, v)
         party_name, party_phone = _s(merged.get("buyer_name")), _s(merged.get("buyer_phone"))
         amount = _num(merged.get("amount"))
     else:
@@ -718,6 +722,24 @@ def create_document(doc_type: str, payload: DocumentSave, db: Session = Depends(
             payload.data["vehicle_name"] = _s(payload.data.get("vehicle_name")) or intake.vehicle_name
     if st == "final":
         _require_final_fields(doc_type, payload.data)
+    if doc_type == "intake" and payload.data.get("publish_to_showroom") is True:
+        # Same path as the old lot desk: also creates the showroom listing.
+        import schemas
+        from routers.lot_operations import create_lot_intake
+        d = payload.data
+        rec = create_lot_intake(schemas.LotIntakeCreate(
+            vehicle_name=_s(d.get("vehicle_name")) or "Vehicle", year_of_production=_int(d.get("year_of_production")),
+            plate_number=_s(d.get("plate_number")), owner_name=_s(d.get("owner_name")),
+            owner_phone=_s(d.get("owner_phone")), remark=_s(d.get("remark")) or None,
+            received_by_name=_s(d.get("received_by_name")) or None, received_date=_parse_dt(d.get("date")),
+            primary_cash_price=_num(d.get("primary_cash_price")) or 0.0, primary_bank_price=_num(d.get("primary_bank_price")) or 0.0,
+            final_cash_price=_num(d.get("final_cash_price")) or 0.0, final_bank_price=_num(d.get("final_bank_price")) or 0.0,
+            publish_to_showroom=True,
+        ), db, user)
+        rec.doc_status = st
+        db.commit()
+        db.refresh(rec)
+        return _detail(doc_type, rec)
     rec = _write(db, user, doc_type, None, payload.data, st)
     db.commit()
     db.refresh(rec)
