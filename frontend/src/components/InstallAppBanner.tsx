@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { X, Share, PlusSquare, Smartphone } from "lucide-react";
 
@@ -15,7 +14,6 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export default function InstallAppBanner() {
-  const pathname = usePathname();
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [bannerType, setBannerType] = useState<"android" | "ios" | null>(null);
@@ -28,7 +26,9 @@ export default function InstallAppBanner() {
       (window.navigator as unknown as { standalone?: boolean }).standalone ===
         true;
 
-    if (isStandalone) {
+    // The public pass-verify page is shown to gate guards: no install prompt over it.
+    // (Read from window, not usePathname: URL hooks in the root layout need a Suspense boundary.)
+    if (isStandalone || window.location.pathname.startsWith("/verify")) {
       return;
     }
 
@@ -128,8 +128,7 @@ export default function InstallAppBanner() {
     }
   };
 
-  // The public pass-verify page is shown to gate guards: no install prompt over it.
-  if (!isVisible || !bannerType || pathname?.startsWith("/verify")) {
+  if (!isVisible || !bannerType) {
     return null;
   }
 
