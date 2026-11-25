@@ -31,7 +31,8 @@ interface DocumentFormProps {
   userName?: string;
   dealerPhone?: string;
   onClose: () => void;
-  onSaved: (doc: DocDetail, print: boolean) => void;
+  /** note: extra message for the toast (e.g. "Sent to 2 gatekeepers"). */
+  onSaved: (doc: DocDetail, print: boolean, note?: string) => void;
 }
 
 const inputCls =
@@ -125,7 +126,12 @@ export default function DocumentForm({ type, docId, prefill, userName, dealerPho
       const saved = docId || doc
         ? await docApi<DocDetail>(`/${type}/${doc?.id ?? docId}`, { method: "PUT", body })
         : await docApi<DocDetail>(`/${type}`, { method: "POST", body });
-      onSaved(saved, print);
+      let note: string | undefined;
+      // Remote release: send a new final pass straight to the gatekeepers' Telegram.
+      if (type === "gatepass" && !docId && status === "final" && data.send_telegram === true) {
+        note = await sendPassToGate(saved.id);
+      }
+      onSaved(saved, print, note);
     } catch (e) {
       const err = e as DocApiError;
       setError(err.message);
@@ -195,6 +201,26 @@ export default function DocumentForm({ type, docId, prefill, userName, dealerPho
                       <Field key={f.key} f={f} value={str(data[f.key])} invalid={missing.includes(f.key)} onChange={(v) => onField(f, v)} />
                     ))}
                   </div>
+                )}
+                {sec.special === "telegram" && (
+                  docId ? (
+                    <p className="text-xs text-zinc-400">Use the Telegram buttons on the pass in the list to re-send it, give the driver his link or cancel it.</p>
+                  ) : (
+                    <label className="flex items-start gap-3 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-5 w-5 accent-sky-500"
+                        checked={data.send_telegram === true}
+                        onChange={(e) => set({ send_telegram: e.target.checked })}
+                      />
+                      <span className="text-sm">
+                        <span className="font-bold">Send to Telegram · ለበር ጠባቂ ላክ</span>
+                        <span className="block text-[11px] text-zinc-400">
+                          All active gatekeepers with Telegram linked get the pass with Confirm exit / Reject buttons.
+                        </span>
+                      </span>
+                    </label>
+                  )
                 )}
                 {sec.special === "publish" && !docId && (
                   <label className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-3 cursor-pointer">
@@ -281,7 +307,7 @@ function Field({ f, value, invalid, onChange }: { f: FieldDef; value: string; in
       ) : (
         <input
           id={id}
-          type={f.kind === "date" ? "date" : f.kind === "time" ? "time" : f.kind === "tel" ? "tel" : "text"}
+          type={f.kind === "date" ? "date" : f.kind === "time" ? "time" : f.kind === "datetime" ? "datetime-local" : f.kind === "tel" ? "tel" : "text"}
           inputMode={f.kind === "money" || f.kind === "number" ? "decimal" : undefined}
           value={value}
           readOnly={f.readOnly}
@@ -531,4 +557,20 @@ function Checklist({ value, onChange }: { value: Record<string, string>; onChang
       </ul>
     </div>
   );
+}
+
+/** POST .../send; returns a short result line for the toast (never throws). */
+export async function sendPassToGate(passId: number): Promise<string> {
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/api/superadmin/gate-passes/${passId}/send`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${getDocToken() || ""}` },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return `Not sent to Telegram: ${typeof body.detail === "string" ? body.detail : `HTTP ${res.status}`}`;
+    const names: string[] = body.recipients || [];
+    return names.length ? `Sent to ${names.join(", ")} on Telegram` : "Not sent: no gatekeeper reachable";
+  } catch {
+    return "Not sent to Telegram (network error)";
+  }
 }

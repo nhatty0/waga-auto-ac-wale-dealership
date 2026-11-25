@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Check, Copy } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import PrintModalShell from "@/components/print/PrintModalShell";
 import ScaledPreview from "@/components/print/ScaledPreview";
 
@@ -17,6 +18,9 @@ interface GatePassModalProps {
 }
 
 export default function GatePassModal({ pass, vehicleName, onClose }: GatePassModalProps) {
+  // Same origin as the app: in production the public site, locally http://localhost:3000.
+  const verifyUrl =
+    pass.verify_token && typeof window !== "undefined" ? `${window.location.origin}/verify/${pass.verify_token}` : "";
   const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -165,6 +169,18 @@ export default function GatePassModal({ pass, vehicleName, onClose }: GatePassMo
             </span>
           </div>
         </div>
+
+        {/* Verify QR: the guard scans it to see VALID / USED / EXPIRED on /verify/<token> */}
+        {verifyUrl && (
+          <div className="flex items-center gap-2 border border-black rounded p-1.5">
+            <QRCodeSVG value={verifyUrl} size={76} level="M" />
+            <div className="text-[10px] leading-snug text-black">
+              <p className="font-black text-[11px]">ለማረጋገጥ ይቃኙ</p>
+              <p className="font-bold">Scan to verify this pass</p>
+              <p className="text-zinc-600">Valid / used / expired, shown live</p>
+            </div>
+          </div>
+        )}
 
         {/* Bottom footer line inside the same box */}
         <div className="mt-1.5 pt-1 border-t border-black flex items-center justify-between text-[10px] text-zinc-700 leading-tight">

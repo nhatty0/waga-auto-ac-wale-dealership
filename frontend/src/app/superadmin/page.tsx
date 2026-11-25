@@ -31,6 +31,7 @@ import { User, ExecutiveStats, RentalBooking } from "@/types";
 import AdminDashboard from "@/components/admin/AdminDashboard";
 import StaffManager from "@/components/admin/StaffManager";
 import DocumentCenter from "@/components/documents/DocumentCenter";
+import QrLinkModal from "@/components/QrLinkModal";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
 
@@ -87,6 +88,7 @@ export default function ExecutiveOwnerDashboard() {
   }, [section]);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [connectUrl, setConnectUrl] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
 
   // Executive Data State
@@ -200,7 +202,21 @@ export default function ExecutiveOwnerDashboard() {
     );
   }
 
-  const telegramConnectUrl = "https://t.me/WagaCarsAlert_bot?start=connect_1";
+  // One-time connect link from the API (the old fixed ?start=connect_1 link could be used by anyone).
+  const openConnectBot = async () => {
+    try {
+      const token = localStorage.getItem("token") || localStorage.getItem("dealer_token") || "";
+      const res = await fetch(`${getApiBaseUrl()}/api/superadmin/telegram/connect-link`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : `HTTP ${res.status}`);
+      setConnectUrl(body.url);
+    } catch (e) {
+      showToast((e as Error).message || "Could not create the Telegram link", "error");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-amber-500 selection:text-black">
@@ -246,15 +262,14 @@ export default function ExecutiveOwnerDashboard() {
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* 1-Click Connect Telegram Shortcut */}
-            <a
-              href={telegramConnectUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={openConnectBot}
               className="min-h-[44px] md:min-h-0 px-3.5 py-2 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 font-semibold text-xs flex items-center gap-1.5 transition"
-              title="Connect Official Notification Bot"
+              title="Connect your Telegram: leads and gate-pass notices"
             >
               <Send size={14} /> ቴሌግራም አገናኝ (Connect Bot)
-            </a>
+            </button>
 
             {/* Refresh Data */}
             <button
@@ -600,6 +615,16 @@ export default function ExecutiveOwnerDashboard() {
           <div className="max-w-5xl mx-auto w-full">
             <DocumentCenter userName={currentUser?.full_name || ""} />
           </div>
+        )}
+
+        {connectUrl && (
+          <QrLinkModal
+            title="Connect your Telegram"
+            subtitle="Owner notices: new leads, gate exits, rejected passes"
+            url={connectUrl}
+            onClose={() => setConnectUrl(null)}
+            note="One-time link, valid 48 hours. Open it on YOUR phone and tap Start."
+          />
         )}
 
         {/* STAFF: add / edit / permissions / active toggle (owner-only API) */}

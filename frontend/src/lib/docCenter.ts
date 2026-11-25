@@ -63,7 +63,7 @@ export const DOC_INFO: Record<DocType, { am: string; en: string; short: string; 
 
 // ---------------------------------------------------------------- form layout
 
-export type FieldKind = "text" | "tel" | "number" | "money" | "date" | "time" | "textarea" | "select";
+export type FieldKind = "text" | "tel" | "number" | "money" | "date" | "time" | "datetime" | "textarea" | "select";
 
 export interface FieldDef {
   key: string;
@@ -78,7 +78,7 @@ export interface FieldDef {
   readOnly?: boolean;
 }
 
-export type SectionSpecial = "vehicle" | "checklist" | "belongings" | "booking" | "publish";
+export type SectionSpecial = "vehicle" | "checklist" | "belongings" | "booking" | "publish" | "telegram";
 
 export interface SectionDef {
   am: string;
@@ -167,16 +167,20 @@ export const DOC_FORMS: Record<DocType, SectionDef[]> = {
       am: "ተሽከርካሪ", en: "Car leaving", special: "vehicle", fields: [
         { key: "vehicle_name", am: "የመኪናው ዓይነት", en: "Vehicle", wide: true },
         { key: "plate_number", am: "የሰሌዳ ቁጥር", en: "Plate", required: true },
+        { key: "color", am: "ቀለም", en: "Color" },
       ],
     },
     {
       am: "መውጫ", en: "Release", fields: [
         { key: "driver_name", am: "የሹፌሩ ስም", en: "Driver", required: true },
+        { key: "driver_phone", am: "የሹፌሩ ስልክ", en: "Driver phone", kind: "tel" },
         { key: "release_reason", am: "የመውጣት ምክንያት", en: "Reason", kind: "select", options: RELEASE_REASONS, required: true },
         { key: "authorized_by", am: "የፈቀደው ኃላፊ", en: "Authorized by" },
         { key: "date", am: "ቀን", en: "Date", kind: "date" },
+        { key: "valid_until", am: "የሚያገለግለው እስከ", en: "Valid until (empty = 23:59 today)", kind: "datetime" },
       ],
     },
+    { am: "ቴሌግራም", en: "Remote release", special: "telegram", fields: [] },
   ],
   handover: [
     {
@@ -311,7 +315,7 @@ export function newDocDefaults(type: DocType, opts: { userName?: string; dealerP
     case "intake":
       return { date: today, received_by_name: opts.userName || "" };
     case "gatepass":
-      return { date: today, release_reason: RELEASE_REASONS[0], authorized_by: opts.userName || "" };
+      return { date: today, release_reason: RELEASE_REASONS[0], authorized_by: opts.userName || "", send_telegram: true };
     case "handover":
       return {
         date: today,
@@ -343,7 +347,7 @@ export function vehicleFill(type: DocType, hit: LookupHit): DocData {
     plate_number: hit.plate_number,
   };
   if (type === "intake") Object.assign(out, { vehicle_name: hit.vehicle_type, year_of_production: hit.year ?? "" });
-  if (type === "gatepass") Object.assign(out, { vehicle_name: hit.label, lot_intake_id: hit.lot_intake_id ?? undefined });
+  if (type === "gatepass") Object.assign(out, { vehicle_name: hit.label, lot_intake_id: hit.lot_intake_id ?? undefined, color: hit.color });
   if (type === "handover")
     Object.assign(out, {
       vehicle_type: hit.vehicle_type, manufacture_year: hit.year ?? "", chassis_number: hit.chassis_number,
