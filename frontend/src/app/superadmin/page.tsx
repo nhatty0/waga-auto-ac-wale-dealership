@@ -24,13 +24,13 @@ import {
   ChevronRight,
   Sparkles,
   LayoutDashboard,
-  ClipboardList,
   Archive,
   Settings,
 } from "lucide-react";
 import { User, ExecutiveStats, RentalBooking } from "@/types";
-import AdminDashboard, { OwnerSection } from "@/components/admin/AdminDashboard";
+import AdminDashboard from "@/components/admin/AdminDashboard";
 import StaffManager from "@/components/admin/StaffManager";
+import DocumentCenter from "@/components/documents/DocumentCenter";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
 
@@ -43,18 +43,18 @@ const RENTAL_STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-zinc-800 text-zinc-400 border-zinc-700",
 };
 
-type HubSection = "overview" | OwnerSection | "rentals" | "staff";
+type HubSection = "overview" | "documents" | "settings" | "rentals" | "staff";
 
 const HUB_SECTIONS: { id: HubSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "lot_operations", label: "Lot & Gate Pass", icon: ClipboardList },
   { id: "documents", label: "Documents", icon: Archive },
   { id: "settings", label: "Settings", icon: Settings },
   { id: "rentals", label: "Rental Deliveries", icon: Truck },
   { id: "staff", label: "Staff", icon: Users },
 ];
 
-const OWNER_DESKS: HubSection[] = ["lot_operations", "documents", "settings"];
+// Settings is the last desk still served by the shared AdminDashboard (owner portal).
+const OWNER_DESKS: HubSection[] = ["settings"];
 
 export default function ExecutiveOwnerDashboard() {
   const router = useRouter();
@@ -63,7 +63,9 @@ export default function ExecutiveOwnerDashboard() {
   // Reading window here is safe: until the role check finishes only the loader is rendered.
   const [section, setSection] = useState<HubSection>(() => {
     if (typeof window === "undefined") return "overview";
-    const wanted = new URLSearchParams(window.location.search).get("section");
+    let wanted = new URLSearchParams(window.location.search).get("section");
+    // Old links to the separate lot desk now open the Document Center.
+    if (wanted === "lot_operations") wanted = "documents";
     return HUB_SECTIONS.some((h) => h.id === wanted) ? (wanted as HubSection) : "overview";
   });
   // Owner desks stay mounted once opened, so switching sections doesn't refetch or drop a half-filled form.
@@ -286,7 +288,7 @@ export default function ExecutiveOwnerDashboard() {
         </div>
       </header>
 
-      {/* Section navigation: Overview | Lot & Gate Pass | Documents | Settings | Rentals | Staff */}
+      {/* Section navigation: Overview | Documents | Settings | Rentals | Staff */}
       <nav
         role="tablist"
         aria-label="Owner hub sections"
@@ -319,7 +321,7 @@ export default function ExecutiveOwnerDashboard() {
         <div className={OWNER_DESKS.includes(section) ? "max-w-5xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-8 pb-24" : "hidden"}>
           <AdminDashboard
             portal="owner"
-            ownerSection={(OWNER_DESKS.includes(section) ? section : "lot_operations") as OwnerSection}
+            ownerSection="settings"
           />
         </div>
       )}
@@ -592,6 +594,13 @@ export default function ExecutiveOwnerDashboard() {
             )}
           </div>
         </section>
+
+        {/* DOCUMENTS: one Document Center for all five document types (owner-only API) */}
+        {section === "documents" && (
+          <div className="max-w-5xl mx-auto w-full">
+            <DocumentCenter userName={currentUser?.full_name || ""} />
+          </div>
+        )}
 
         {/* STAFF: add / edit / permissions / active toggle (owner-only API) */}
         {section === "staff" && <StaffManager />}

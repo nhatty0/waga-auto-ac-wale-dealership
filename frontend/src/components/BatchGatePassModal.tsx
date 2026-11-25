@@ -166,7 +166,19 @@ export default function BatchGatePassModal({
         window.print();
       }, 300);
     } catch (err: any) {
-      setError(err?.message || "የጅምላ መውጫ ማዘጋጀት አልተቻለም። እባክዎ በድጋሚ ይሞክሩ።");
+      // Passes saved before the failure are real (those cars are already released): show and
+      // print them instead of making them "disappear" behind the error.
+      if (results.length > 0) {
+        setGeneratedPasses(results);
+        setIsGenerated(true);
+        if (onSuccess) await onSuccess();
+        setError(
+          `${results.length} pass(es) saved: ${results.map((r) => r.pass.slip_number).join(", ")}. ` +
+            (err?.message || "The rest failed. Please try them again.")
+        );
+      } else {
+        setError(err?.message || "የጅምላ መውጫ ማዘጋጀት አልተቻለም። እባክዎ በድጋሚ ይሞክሩ።");
+      }
     } finally {
       setSubmitting(false);
     }
