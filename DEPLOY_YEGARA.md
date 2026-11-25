@@ -95,13 +95,44 @@ The database file `~/acwale_data/ac_wale_cars.db` is created automatically on fi
 If you get an error page, read `backend/app_debug.log`.
 
 **3f. Telegram webhook** (replaces the background poller, which cannot run on shared hosting).
-Open this in a browser once, with your NEW token and the `TELEGRAM_WEBHOOK_SECRET` from `.env`:
+The webhook carries everything the bot does: staff `/start link_…` links, the owner's Connect Bot link,
+the driver's `/start gp_…` link, and the gate pass **Confirm exit / Reject** buttons (`callback_query`).
+Without `callback_query` in `allowed_updates` the buttons spin and nothing is recorded.
+
+Production `.env` needs (add once, keep the values private):
+
+| Variable | Value |
+|---|---|
+| `TELEGRAM_PLATFORM_BOT_TOKEN` | the client's bot token (from @BotFather) |
+| `TELEGRAM_PLATFORM_BOT_USERNAME` | the bot's username without `@` (used in t.me links) |
+| `TELEGRAM_WEBHOOK_SECRET` | a long random string, e.g. `python -c "import secrets;print(secrets.token_urlsafe(32))"` |
+| `PUBLIC_SITE_URL` | `https://acwalecarmarket.com` (verify links in Telegram messages; this is the default) |
+
+Restart the Python app after editing `.env`. Then open this in a browser once (one line; replace
+`<TOKEN>` and `<SECRET>`; the `allowed_updates` part is `["message","callback_query"]` URL-encoded):
 
 ```
-https://api.telegram.org/bot<NEW_TOKEN>/setWebhook?url=https://api.acwale.et/v1/api/telegram/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>
+https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://api.acwalecarmarket.com/v1/api/telegram/webhook&secret_token=<SECRET>&allowed_updates=%5B%22message%22%2C%22callback_query%22%5D&drop_pending_updates=true
 ```
 
 It should answer `{"ok":true,"result":true,"description":"Webhook was set"}`.
+
+Check it any time with `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`: `url` must be the address
+above, `allowed_updates` must list `message` and `callback_query`, and `last_error_message` should be
+empty. A `403` there means the secret in `.env` and in setWebhook differ: run setWebhook again.
+Re-run setWebhook whenever the token, the secret or the API domain changes.
+
+**Local development uses a separate test bot.** Telegram can't reach `localhost`, so
+`.\dev.ps1 start -Telegram` long-polls (`getUpdates`) with the token in `backend\.env`. Polling is
+refused (HTTP 409) for a bot that has a webhook, so never point your local `.env` at the client's bot
+and never call `deleteWebhook` on it. The webhook and the poller run the same code
+(`gate_pass.process_update`).
+
+**Security note (this release).** The old `/start link_<phone>` link was removed: it linked any
+Telegram chat to any phone number and sent that phone's login code into it. `/start connect_<id>` was
+removed for the same reason. Staff and the owner now link Telegram with one-time links (48 h) from
+`/superadmin` (Staff → Link Telegram, and the Connect Bot button). Chats linked before stay linked;
+if you are unsure who linked a chat in the past, unlink it in Staff and send a new link.
 
 ## 4. Frontend (build on your PC, run on Setup Node.js App)
 
@@ -184,3 +215,5 @@ Also download `acwale_data/` to your PC monthly.
 | "Request Timeout" 500 | Old `passenger_wsgi.py` without the per-worker bridge; restore it from Git |
 | Frontend 503 / "Incomplete response" | Wrong Node version or out of memory: cPanel → Resource Usage |
 | Telegram /start links do nothing | Re-run setWebhook (3f); check secret matches `.env` |
+| Gate pass buttons spin / do nothing | `allowed_updates` lacks `callback_query`: re-run setWebhook (3f) |
+| "Not authorized" on Confirm exit | That Telegram is not linked to an ACTIVE staff member with the Gate permission |
