@@ -302,6 +302,7 @@ class UserOut(BaseModel):
     # Public shape only: Telegram credentials are owner settings (GET /api/admin/dealership).
     dealership: Optional[DealershipPublicOut] = None
     is_superadmin: bool = False
+    permissions: List[str] = []
     is_active: bool = True
     created_at: datetime
 
@@ -416,8 +417,11 @@ class StaffUserOut(BaseModel):
     full_name: Optional[str] = None
     role: str
     is_active: bool
+    is_superadmin: bool = False
+    # Effective permissions ("vehicles", "appointments", "rentals"); owners have all.
+    permissions: List[str] = []
     dealership_id: Optional[int] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -426,7 +430,16 @@ class StaffUserOut(BaseModel):
 class StaffInviteRequest(BaseModel):
     phone_number: str
     full_name: Optional[str] = None
-    role: str = "sales_agent"  # "subadmin", "sales_agent", "dealer_admin"
+    permissions: List[str] = []
+    is_active: bool = True
+    role: Optional[str] = None  # legacy field, ignored: access is decided by `permissions`
+
+
+class StaffUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    permissions: Optional[List[str]] = None
+    is_active: Optional[bool] = None
 
 
 class StaffStatusRequest(BaseModel):

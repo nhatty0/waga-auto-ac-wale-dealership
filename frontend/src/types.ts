@@ -123,9 +123,14 @@ export interface User {
   dealership?: Dealership | null;
   /** Server-computed: phone is in SUPERADMIN_PHONE (the only thing that grants owner access). */
   is_superadmin?: boolean;
+  /** Effective staff permissions from the server ("vehicles" | "appointments" | "rentals"). */
+  permissions?: StaffPermission[];
   is_active: boolean;
   created_at: string;
 }
+
+export type StaffPermission = "vehicles" | "appointments" | "rentals";
+export const STAFF_PERMISSIONS: StaffPermission[] = ["vehicles", "appointments", "rentals"];
 
 export interface Driver {
   id: number;
@@ -192,8 +197,11 @@ export interface StaffUser {
   full_name?: string | null;
   role: string;
   is_active: boolean;
+  /** Owners (SUPERADMIN_PHONE) are listed but can't be edited here. */
+  is_superadmin?: boolean;
+  permissions: StaffPermission[];
   dealership_id?: number | null;
-  created_at: string;
+  created_at?: string | null;
 }
 
 export interface GatePass {

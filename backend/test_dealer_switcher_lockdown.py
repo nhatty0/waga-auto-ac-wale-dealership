@@ -47,6 +47,11 @@ def test_dealer_switcher_security_lockdown():
             dealer_user.role = "dealer_admin"
             dealer_user.dealership_id = d1.id
             db.commit()
+        # Explicit fixture state (don't rely on the startup migration's backfill): an active staff
+        # member WITH the vehicles permission, so Test 2's 403 can only come from tenant isolation.
+        dealer_user.is_active = True
+        dealer_user.permissions_json = models.encode_permissions(models.STAFF_PERMISSIONS)
+        db.commit()
 
         # Create or ensure SuperAdmin user
         super_phone = superadmin_phones()[0]

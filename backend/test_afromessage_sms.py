@@ -91,6 +91,15 @@ def test_afromessage_sms_integration():
     db.query(models.OTPVerification).filter(models.OTPVerification.phone_number == norm_phone).delete()
     db.commit()
 
+    # Login lock: only registered, active staff (or owners) get an OTP, so register this number first.
+    staff = db.query(models.User).filter(models.User.phone_number == norm_phone).first()
+    if not staff:
+        staff = models.User(phone_number=norm_phone, role="dealer_admin", dealership_id=1)
+        db.add(staff)
+    staff.is_active = True
+    staff.permissions_json = models.encode_permissions(["vehicles"])
+    db.commit()
+
     sms_dispatches = []
     async def track_sms(phone, otp):
         sms_dispatches.append({"phone": phone, "otp": otp})

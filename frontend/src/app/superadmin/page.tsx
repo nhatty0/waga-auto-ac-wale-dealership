@@ -19,11 +19,7 @@ import {
   CheckCircle2,
   Clock,
   Truck,
-  Plus,
-  Trash2,
-  X,
   AlertTriangle,
-  UserPlus,
   ExternalLink,
   ChevronRight,
   Sparkles,
@@ -32,8 +28,9 @@ import {
   Archive,
   Settings,
 } from "lucide-react";
-import { User, ExecutiveStats, StaffUser, RentalBooking } from "@/types";
+import { User, ExecutiveStats, RentalBooking } from "@/types";
 import AdminDashboard, { OwnerSection } from "@/components/admin/AdminDashboard";
+import StaffManager from "@/components/admin/StaffManager";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
 
@@ -93,18 +90,9 @@ export default function ExecutiveOwnerDashboard() {
   // Executive Data State
   const [stats, setStats] = useState<ExecutiveStats | null>(null);
   const [rentals, setRentals] = useState<RentalBooking[]>([]);
-  const [staffList, setStaffList] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Invite/Add Staff Modal
-  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
-  const [staffPhone, setStaffPhone] = useState("");
-  const [staffName, setStaffName] = useState("");
-  const [staffRole, setStaffRole] = useState("sales_agent");
-  const [isSavingStaff, setIsSavingStaff] = useState(false);
-
-  // Action Loading & Toasts
-  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  // Toasts
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   const showToast = (text: string, type: "success" | "error" = "success") => {
@@ -171,12 +159,11 @@ export default function ExecutiveOwnerDashboard() {
       setLoading(true);
       const headers = { Authorization: `Bearer ${token}` };
 
-      const [statsRes, rentalsRes, staffRes] = await Promise.all([
+      const [statsRes, rentalsRes] = await Promise.all([
         fetch(`${getApiBaseUrl()}/api/admin/stats`, { headers })
           .then((r) => (r.ok ? r : fetch(`${getApiBaseUrl()}/api/superadmin/stats`, { headers })))
           .then((r) => (r.ok ? r : fetch(`${getApiBaseUrl()}/api/superadmin/executive-stats`, { headers }))),
         fetch(`${getApiBaseUrl()}/api/admin/rentals`, { headers }),
-        fetch(`${getApiBaseUrl()}/api/superadmin/staff`, { headers }),
       ]);
 
       if (statsRes.ok) {
@@ -187,11 +174,6 @@ export default function ExecutiveOwnerDashboard() {
       if (rentalsRes.ok) {
         const rentalsData = await rentalsRes.json();
         setRentals(Array.isArray(rentalsData) ? rentalsData : []);
-      }
-
-      if (staffRes.ok) {
-        const staffData = await staffRes.json();
-        setStaffList(Array.isArray(staffData) ? staffData : []);
       }
     } catch (err) {
       console.error("Failed to load Executive Dashboard data", err);
@@ -206,119 +188,6 @@ export default function ExecutiveOwnerDashboard() {
       fetchDashboardData();
     }
   }, [authChecking, currentUser]);
-
-  // 3. Add or Invite Staff Member
-  const handleAddStaff = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const token = getAuthToken();
-    if (!token) return;
-
-    if (!staffPhone.trim()) {
-      showToast("Please enter a valid phone number", "error");
-      return;
-    }
-
-    setIsSavingStaff(true);
-    try {
-      const res = await fetch(`${getApiBaseUrl()}/api/superadmin/staff`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phone_number: staffPhone.trim(),
-          full_name: staffName.trim() || null,
-          role: staffRole,
-        }),
-      });
-
-      if (res.ok) {
-        const createdUser: StaffUser = await res.json();
-        setStaffList((prev) => [createdUser, ...prev.filter((u) => u.id !== createdUser.id)]);
-        showToast(`✓ Staff member ${createdUser.full_name || createdUser.phone_number} successfully registered!`);
-        setIsStaffModalOpen(false);
-        setStaffPhone("");
-        setStaffName("");
-        setStaffRole("sales_agent");
-      } else {
-        const err = await res.json();
-        showToast(err.detail || "Failed to invite staff member", "error");
-      }
-    } catch (err) {
-      console.error("Error inviting staff", err);
-      showToast("Network error inviting staff member", "error");
-    } finally {
-      setIsSavingStaff(false);
-    }
-  };
-
-  // 4. Toggle Staff Active / Inactive Status
-  const handleToggleStaffStatus = async (staff: StaffUser) => {
-    const token = getAuthToken();
-    if (!token) return;
-
-    setActionLoadingId(staff.id);
-    const newStatus = !staff.is_active;
-
-    try {
-      const res = await fetch(`${getApiBaseUrl()}/api/superadmin/staff/${staff.id}/status`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ is_active: newStatus }),
-      });
-
-      if (res.ok) {
-        const updated: StaffUser = await res.json();
-        setStaffList((prev) => prev.map((s) => (s.id === staff.id ? updated : s)));
-        showToast(
-          newStatus
-            ? `✓ Staff member ${staff.full_name || staff.phone_number} activated.`
-            : `⚠️ Staff member ${staff.full_name || staff.phone_number} deactivated.`,
-          newStatus ? "success" : "error"
-        );
-      } else {
-        const err = await res.json();
-        showToast(err.detail || "Failed to update staff status", "error");
-      }
-    } catch (err) {
-      console.error("Staff status error", err);
-      showToast("Network error updating staff", "error");
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  // 5. Delete Staff Member
-  const handleDeleteStaff = async (staffId: number, staffName: string) => {
-    if (!confirm(`Are you sure you want to remove staff member '${staffName}'?`)) return;
-    const token = getAuthToken();
-    if (!token) return;
-
-    setActionLoadingId(staffId);
-    try {
-      const res = await fetch(`${getApiBaseUrl()}/api/superadmin/staff/${staffId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (res.ok) {
-        setStaffList((prev) => prev.filter((s) => s.id !== staffId));
-        showToast("✓ Staff member deleted successfully");
-      } else {
-        const err = await res.json();
-        showToast(err.detail || "Failed to delete staff member", "error");
-      }
-    } catch (err) {
-      console.error("Delete staff error", err);
-      showToast("Network error deleting staff member", "error");
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
 
   if (authChecking) {
     return (
@@ -724,300 +593,10 @@ export default function ExecutiveOwnerDashboard() {
           </div>
         </section>
 
-        {/* OPERATIONAL TABLE 2: STAFF MANAGEMENT */}
-        <section className={`bg-zinc-900/80 border border-zinc-800/90 rounded-2xl overflow-hidden shadow-2xl ${section === "staff" ? "" : "hidden"}`}>
-          <div className="p-6 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <Users size={16} />
-                </span>
-                <h3 className="text-base font-bold text-white tracking-tight">
-                  የሰራተኞች አስተዳደር (Staff Management & Authorized Access)
-                </h3>
-              </div>
-              <p className="text-xs text-zinc-400 mt-1">
-                Executive Owner, Sub-Admins, and Sales Representatives authorized to manage AC Wale Cars.
-              </p>
-            </div>
-
-            <button
-              onClick={() => setIsStaffModalOpen(true)}
-              className="min-h-[44px] sm:min-h-0 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition self-start sm:self-auto"
-            >
-              <UserPlus size={15} />
-              <span>+ ሰራተኛ ጨምር (Invite Staff)</span>
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            {loading ? (
-              <div className="p-12 text-center text-zinc-500">
-                <RotateCw size={24} className="animate-spin mx-auto mb-2 text-zinc-400" />
-                Loading staff roster...
-              </div>
-            ) : staffList.length === 0 ? (
-              <div className="p-12 text-center text-zinc-500">
-                No staff members recorded.
-              </div>
-            ) : (
-              <>
-              {/* Phones: stacked cards */}
-              <ul className="sm:hidden divide-y divide-zinc-800/60">
-                {staffList.map((staff) => {
-                  const isSuperAdmin = staff.role === "superadmin";
-                  return (
-                    <li key={staff.id} className="p-4 space-y-2.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="font-bold text-white text-sm flex items-center gap-2 break-words">
-                            {isSuperAdmin && <ShieldCheck size={14} className="shrink-0 text-amber-400" />}
-                            {staff.full_name || "AC Wale Staff Member"}
-                          </div>
-                          <div className="text-xs text-zinc-400 font-mono">+{staff.phone_number.replace(/^\+/, "")}</div>
-                          <div className="text-xs text-zinc-500">ID #{staff.id} · {new Date(staff.created_at).toLocaleDateString()}</div>
-                        </div>
-                        <span className={`shrink-0 px-2 py-1 rounded text-[11px] font-bold ${staff.is_active ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"}`}>
-                          {staff.is_active ? "✓ Active" : "✕ Suspended"}
-                        </span>
-                      </div>
-                      <div>
-                        {isSuperAdmin ? (
-                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-black uppercase bg-amber-500/10 text-amber-400 border border-amber-500/30">👑 Executive Owner</span>
-                        ) : staff.role === "subadmin" ? (
-                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold uppercase bg-sky-500/10 text-sky-400 border border-sky-500/20">🛡️ Sub-Admin</span>
-                        ) : (
-                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">👤 Sales Agent</span>
-                        )}
-                      </div>
-                      {isSuperAdmin ? (
-                        <p className="text-xs text-zinc-500 italic">Protected Master Account</p>
-                      ) : (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleToggleStaffStatus(staff)}
-                            disabled={actionLoadingId === staff.id}
-                            className={`flex-1 min-h-[44px] px-3 rounded-xl text-sm font-bold transition ${staff.is_active ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"}`}
-                          >
-                            {staff.is_active ? "አግድ (Suspend)" : "አንቃ (Activate)"}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteStaff(staff.id, staff.full_name || staff.phone_number)}
-                            disabled={actionLoadingId === staff.id}
-                            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-zinc-800 text-zinc-400 hover:text-rose-400 transition"
-                            aria-label="Delete Staff Member"
-                            title="Delete Staff Member"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-              <table className="hidden sm:table w-full text-left text-sm text-zinc-300">
-                <thead className="bg-zinc-950/60 border-b border-zinc-800 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <tr>
-                    <th className="px-6 py-3.5">ሰራተኛ (Staff Member)</th>
-                    <th className="px-6 py-3.5">ስልክ ቁጥር (Phone)</th>
-                    <th className="px-6 py-3.5">ሚና (Role)</th>
-                    <th className="px-6 py-3.5">ሁኔታ (Status)</th>
-                    <th className="px-6 py-3.5">የተመዘገበበት ቀን (Joined)</th>
-                    <th className="px-6 py-3.5 text-right">እርምጃዎች (Actions)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60">
-                  {staffList.map((staff) => {
-                    const isSuperAdmin = staff.role === "superadmin";
-
-                    return (
-                      <tr key={staff.id} className="hover:bg-zinc-800/40 transition">
-                        <td className="px-6 py-4">
-                          <div className="font-bold text-white flex items-center gap-2">
-                            {isSuperAdmin && <ShieldCheck size={14} className="text-amber-400" />}
-                            {staff.full_name || "AC Wale Staff Member"}
-                          </div>
-                          <div className="text-[11px] text-zinc-500 font-mono">
-                            ID #{staff.id}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="font-mono text-zinc-300 text-xs">
-                            +{staff.phone_number.replace(/^\+/, "")}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          {isSuperAdmin ? (
-                            <span className="px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                              👑 Executive Owner
-                            </span>
-                          ) : staff.role === "subadmin" ? (
-                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                              🛡️ Sub-Admin
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              👤 Sales Agent
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                              staff.is_active
-                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                                : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                            }`}
-                          >
-                            {staff.is_active ? "✓ Active" : "✕ Suspended"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-xs text-zinc-400">
-                          {new Date(staff.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          {isSuperAdmin ? (
-                            <span className="text-[11px] text-zinc-500 italic">Protected Master Account</span>
-                          ) : (
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => handleToggleStaffStatus(staff)}
-                                disabled={actionLoadingId === staff.id}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                                  staff.is_active
-                                    ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20"
-                                    : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20"
-                                }`}
-                              >
-                                {staff.is_active ? "አግድ (Suspend)" : "አንቃ (Activate)"}
-                              </button>
-                              <button
-                                onClick={() => handleDeleteStaff(staff.id, staff.full_name || staff.phone_number)}
-                                disabled={actionLoadingId === staff.id}
-                                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 transition"
-                                title="Delete Staff Member"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              </>
-            )}
-          </div>
-        </section>
+        {/* STAFF: add / edit / permissions / active toggle (owner-only API) */}
+        {section === "staff" && <StaffManager />}
       </main>
 
-      {/* INVITE / ADD STAFF MODAL */}
-      {isStaffModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
-            <button
-              onClick={() => setIsStaffModalOpen(false)}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
-            >
-              <X size={18} />
-            </button>
-
-            <div className="flex items-center gap-3 mb-5">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                <UserPlus size={20} />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white tracking-tight">
-                  አዲስ ሰራተኛ ጨምር (Invite Staff Member)
-                </h3>
-                <p className="text-xs text-zinc-400 mt-0.5">
-                  Grant authorized administrative access to AC Wale Cars.
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleAddStaff} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
-                  የስልክ ቁጥር (Ethiopian Mobile Number) *
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-zinc-500 font-mono text-xs">+251</span>
-                  <input
-                    type="tel"
-                    required
-                    value={staffPhone}
-                    onChange={(e) => setStaffPhone(e.target.value)}
-                    placeholder="911 234 567"
-                    className="w-full pl-14 pr-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-amber-500 transition"
-                  />
-                </div>
-                <p className="text-[11px] text-zinc-500 mt-1">
-                  The staff member will login using OTP verification to this phone number.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
-                  ሙሉ ስም (Full Name)
-                </label>
-                <input
-                  type="text"
-                  value={staffName}
-                  onChange={(e) => setStaffName(e.target.value)}
-                  placeholder="e.g. Dawit Tadesse"
-                  className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500 transition"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
-                  የስራ ሚና (System Role)
-                </label>
-                <select
-                  value={staffRole}
-                  onChange={(e) => setStaffRole(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500 transition"
-                >
-                  <option value="sales_agent">Sales Representative (የሽያጭ ተወካይ)</option>
-                  <option value="subadmin">Sub-Admin / Manager (ረዳት አስተዳዳሪ)</option>
-                  <option value="dealer_admin">Showroom Admin (የሾውሩም አስተዳዳሪ)</option>
-                </select>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsStaffModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs transition"
-                >
-                  Cancel (ይቅር)
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingStaff}
-                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition disabled:opacity-50"
-                >
-                  {isSavingStaff ? (
-                    <>
-                      <RotateCw size={14} className="animate-spin" />
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={14} />
-                      <span>ፈቃድ ስጥ (Grant Access)</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -50,3 +50,6 @@ backend/.env
 frontend/.env.local
 frontend/.next/
 frontend/node_modules/
+
+# Local dev stack (dev.ps1): logs and pids
+.dev/

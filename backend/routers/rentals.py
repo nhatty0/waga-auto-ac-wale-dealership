@@ -9,7 +9,7 @@ from database import get_db
 import models
 import schemas
 from settings import settings
-from auth import get_current_admin
+from auth import require_rentals
 from sms import send_rental_booking_sms, send_driver_dispatch_sms
 from telegram import send_rental_lead_telegram, send_driver_dispatch_telegram
 
@@ -184,7 +184,7 @@ async def create_public_rental_booking(
 def get_admin_rentals(
     status_filter: Optional[str] = Query(None, alias="status"),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_rentals)
 ):
     """
     Admin endpoint to view active, pending, and past rentals.
@@ -212,7 +212,7 @@ async def assign_driver_to_rental(
     booking_id: int,
     payload: schemas.AssignDriverRequest,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_rentals)
 ):
     """
     Assigns a driver to a booking and triggers an SMS/Telegram dispatch alert directly to the driver with trip details.
@@ -313,7 +313,7 @@ def update_rental_status(
     booking_id: int,
     payload: schemas.RentalBookingStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_rentals)
 ):
     """
     Update booking status (pending, confirmed, driver_assigned, delivered, completed, cancelled).

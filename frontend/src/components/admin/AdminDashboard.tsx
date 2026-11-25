@@ -42,7 +42,7 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
-import { Vehicle, Appointment, User, Driver, RentalBooking, LotIntake, GatePass, VehicleHandover } from "@/types";
+import { Vehicle, Appointment, User, Driver, RentalBooking, LotIntake, GatePass, VehicleHandover, StaffPermission, STAFF_PERMISSIONS } from "@/types";
 import PrintFlyerModal from "@/components/admin/PrintFlyerModal";
 import ShowroomQrModal from "@/components/admin/ShowroomQrModal";
 import GatePassModal from "@/components/GatePassModal";
@@ -245,8 +245,29 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "lot_o
   const [staffTab, setActiveTab] = useState<
     "inventory" | "appointments" | "rentals" | "lot_operations" | "drivers" | "documents" | "settings"
   >("inventory");
-  // Owner portal: the /superadmin navigation picks the desk.
-  const activeTab = isOwnerPortal ? ownerSection : staffTab;
+
+  // Staff tabs follow the permissions the owner ticked in /superadmin -> Staff (the backend
+  // enforces the same rules with 403). Owners have every permission.
+  const userPerms: StaffPermission[] = isSuperadminUser(currentUser)
+    ? [...STAFF_PERMISSIONS]
+    : currentUser?.permissions ?? [];
+  const can = (perm: StaffPermission) => userPerms.includes(perm);
+  const STAFF_TAB_PERMISSION = {
+    inventory: "vehicles",
+    appointments: "appointments",
+    rentals: "rentals",
+    drivers: "rentals",
+  } as const;
+  const allowedStaffTabs = (Object.keys(STAFF_TAB_PERMISSION) as (keyof typeof STAFF_TAB_PERMISSION)[]).filter(
+    (tab) => can(STAFF_TAB_PERMISSION[tab])
+  );
+  const firstAllowedTab = allowedStaffTabs[0] ?? "inventory";
+  // Owner portal: the /superadmin navigation picks the desk. Staff: fall back to a permitted tab.
+  const activeTab = isOwnerPortal
+    ? ownerSection
+    : (allowedStaffTabs as string[]).includes(staffTab)
+    ? staffTab
+    : firstAllowedTab;
 
   // Phones: keep the selected tab fully visible in the horizontally scrolling tab row.
   useEffect(() => {
@@ -790,26 +811,43 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "lot_o
       const baseApi = getApiBaseUrl();
       const dealerQuery = targetDealerId ? `?dealership_id=${targetDealerId}` : "";
 
-      const vRes = await fetch(`${baseApi}/api/admin/vehicles${dealerQuery}`, {
-        headers,
-      });
-      if (vRes.status === 401) {
-        handleUnauthorized();
+      // Fresh profile first: permissions may have changed since login, and a deactivated
+      // account must go back to the login screen with the server's message.
+      const meRes = await fetch(`${baseApi}/api/admin/me`, { headers });
+      if (meRes.status === 401) {
+        const body = await meRes.json().catch(() => ({}));
+        handleUnauthorized(body?.detail);
         return;
       }
-      const vData = await vRes.json();
-      setVehicles(Array.isArray(vData) ? vData : []);
+      const me: User | null = meRes.ok ? await meRes.json() : null;
+      if (me) setCurrentUser((prev) => (prev ? { ...prev, ...me, dealership: prev.dealership || me.dealership } : me));
+      const perms: string[] = me?.is_superadmin ? [...STAFF_PERMISSIONS] : me?.permissions ?? [];
 
-      const aRes = await fetch(`${baseApi}/api/admin/appointments${dealerQuery}`, {
-        headers,
-      });
-      if (aRes.status === 401) {
-        handleUnauthorized();
-        return;
+      if (perms.includes("vehicles")) {
+        const vRes = await fetch(`${baseApi}/api/admin/vehicles${dealerQuery}`, {
+          headers,
+        });
+        if (vRes.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        const vData = await vRes.json();
+        setVehicles(Array.isArray(vData) ? vData : []);
       }
-      const aData = await aRes.json();
-      setAppointments(Array.isArray(aData) ? aData : []);
 
+      if (perms.includes("appointments")) {
+        const aRes = await fetch(`${baseApi}/api/admin/appointments${dealerQuery}`, {
+          headers,
+        });
+        if (aRes.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        const aData = await aRes.json();
+        setAppointments(Array.isArray(aData) ? aData : []);
+      }
+
+      if (perms.includes("rentals")) {
       // Fetch Rentals
       try {
         const rRes = await fetch(`${baseApi}/api/admin/rentals`, { headers });
@@ -830,6 +868,7 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "lot_o
         }
       } catch (drErr) {
         console.error("Failed to fetch drivers", drErr);
+      }
       }
 
       // Lot desk + handover contracts are owner-only (backend answers 403 to staff).
@@ -2101,6 +2140,48 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "lot_o
     showroomUrl
   )}&text=${encodeURIComponent(telegramShareText)}`;
 
+  // Staff account with no permissions ticked yet.
+  if (!isOwnerPortal && allowedStaffTabs.length === 0) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center space-y-4">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <ShieldCheck size={26} />
+          </div>
+          <div className="space-y-1.5">
+            <h1 className="text-lg font-black">እስካሁን ፈቃድ አልተሰጠዎትም</h1>
+            <p className="text-sm font-bold text-zinc-200">No access yet</p>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Your account is active, but the owner hasn&apos;t given you any sections yet. Ask the owner to tick
+              Vehicles, Appointments or Rentals for you, then tap Refresh.
+              <br />
+              ባለቤቱ ክፍሎችን እንዲፈቅድልዎ ይጠይቁ።
+            </p>
+            {currentUser?.phone_number && (
+              <p className="text-[11px] text-zinc-500 font-mono pt-1">+{currentUser.phone_number}</p>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => fetchData()}
+              className="h-11 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-sm font-bold"
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-bold flex items-center justify-center gap-1.5"
+            >
+              <LogOut size={15} /> Log out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // 2. Main Dashboard (unlocked)
   return (
     <div
@@ -2177,6 +2258,7 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "lot_o
             <span>Showroom</span>
           </a>
 
+          {can("vehicles") && (
           <button
             onClick={() => {
               resetForm();
@@ -2187,6 +2269,7 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "lot_o
             <Plus size={16} />
             <span>Add Vehicle</span>
           </button>
+          )}
           <button
             onClick={handleLogout}
             className="h-11 w-11 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-red-400 border border-zinc-800 rounded-xl transition shrink-0"
@@ -2288,62 +2371,70 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "lot_o
 
       {/* Tabs */}
       <div role="tablist" aria-label="Dashboard sections" className="sticky top-0 z-30 -mx-4 px-4 py-2 mb-4 bg-black/85 backdrop-blur-md flex gap-2 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-4 sm:static sm:mx-0 sm:px-0 sm:py-0 sm:mb-6 sm:bg-transparent sm:backdrop-blur-none sm:grid sm:grid-cols-4 sm:overflow-visible">
-        <button
-          onClick={() => setActiveTab("inventory")}
-          role="tab"
-          aria-selected={activeTab === "inventory"}
-          data-admin-tab="inventory"
-          className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
-            activeTab === "inventory"
-              ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
-              : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
-          }`}
-        >
-          <Car size={14} className="shrink-0" />
-          <span className="truncate">Inventory ({vehicles.length})</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("appointments")}
-          role="tab"
-          aria-selected={activeTab === "appointments"}
-          data-admin-tab="appointments"
-          className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
-            activeTab === "appointments"
-              ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
-              : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
-          }`}
-        >
-          <Calendar size={14} className="shrink-0" />
-          <span className="truncate">Appointments ({appointments.length})</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("rentals")}
-          role="tab"
-          aria-selected={activeTab === "rentals"}
-          data-admin-tab="rentals"
-          className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
-            activeTab === "rentals"
-              ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
-              : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
-          }`}
-        >
-          <Key size={14} className="shrink-0" />
-          <span className="truncate">Rentals ({rentals.length})</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("drivers")}
-          role="tab"
-          aria-selected={activeTab === "drivers"}
-          data-admin-tab="drivers"
-          className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
-            activeTab === "drivers"
-              ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
-              : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
-          }`}
-        >
-          <UserCheck size={14} className="shrink-0" />
-          <span className="truncate">Drivers ({drivers.length})</span>
-        </button>
+        {(allowedStaffTabs as string[]).includes("inventory") && (
+          <button
+            onClick={() => setActiveTab("inventory")}
+            role="tab"
+            aria-selected={activeTab === "inventory"}
+            data-admin-tab="inventory"
+            className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
+              activeTab === "inventory"
+                ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+                : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+            }`}
+          >
+            <Car size={14} className="shrink-0" />
+            <span className="truncate">Inventory ({vehicles.length})</span>
+          </button>
+        )}
+        {(allowedStaffTabs as string[]).includes("appointments") && (
+          <button
+            onClick={() => setActiveTab("appointments")}
+            role="tab"
+            aria-selected={activeTab === "appointments"}
+            data-admin-tab="appointments"
+            className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
+              activeTab === "appointments"
+                ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+                : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+            }`}
+          >
+            <Calendar size={14} className="shrink-0" />
+            <span className="truncate">Appointments ({appointments.length})</span>
+          </button>
+        )}
+        {(allowedStaffTabs as string[]).includes("rentals") && (
+          <button
+            onClick={() => setActiveTab("rentals")}
+            role="tab"
+            aria-selected={activeTab === "rentals"}
+            data-admin-tab="rentals"
+            className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
+              activeTab === "rentals"
+                ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+                : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+            }`}
+          >
+            <Key size={14} className="shrink-0" />
+            <span className="truncate">Rentals ({rentals.length})</span>
+          </button>
+        )}
+        {(allowedStaffTabs as string[]).includes("drivers") && (
+          <button
+            onClick={() => setActiveTab("drivers")}
+            role="tab"
+            aria-selected={activeTab === "drivers"}
+            data-admin-tab="drivers"
+            className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
+              activeTab === "drivers"
+                ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+                : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+            }`}
+          >
+            <UserCheck size={14} className="shrink-0" />
+            <span className="truncate">Drivers ({drivers.length})</span>
+          </button>
+        )}
       </div>
       </>
       )}

@@ -39,6 +39,8 @@ def _user(db, phone, role, dealership_id):
     u.role = role
     u.is_active = True
     u.dealership_id = dealership_id
+    # Staff here hold every staff permission, so a 403 can only come from the owner-only rule.
+    u.permissions_json = models.encode_permissions(models.STAFF_PERMISSIONS)
     db.commit()
     db.refresh(u)
     return u

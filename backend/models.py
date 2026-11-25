@@ -1,8 +1,20 @@
 import enum
+import json
 from datetime import datetime
+from typing import List
 from sqlalchemy import Column, Integer, String, Float, Boolean, Text, DateTime, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from database import Base
+
+# Staff permissions an owner can tick in /superadmin -> Staff. Superadmins implicitly have all.
+STAFF_PERMISSIONS = ("vehicles", "appointments", "rentals")
+
+
+def encode_permissions(perms) -> str:
+    """Known permissions only, de-duplicated, in canonical order, as a JSON list."""
+    wanted = set(perms or [])
+    return json.dumps([p for p in STAFF_PERMISSIONS if p in wanted])
+
 
 class VehicleStatus(str, enum.Enum):
     AVAILABLE = "Available"
@@ -139,6 +151,23 @@ class User(Base):
     telegram_chat_id = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # JSON list from STAFF_PERMISSIONS, e.g. '["vehicles","rentals"]'. NULL only on rows that
+    # predate staff permissions; migrate.py backfills those with all permissions.
+    permissions_json = Column("permissions", Text, nullable=True)
+
+    @property
+    def permissions(self) -> List[str]:
+        """Effective permissions: everything for superadmins, otherwise the stored list."""
+        if self.is_superadmin:
+            return list(STAFF_PERMISSIONS)
+        try:
+            stored = json.loads(self.permissions_json or "[]")
+        except (TypeError, ValueError):
+            return []
+        return [p for p in STAFF_PERMISSIONS if isinstance(stored, list) and p in stored]
+
+    def has_permission(self, perm: str) -> bool:
+        return perm in self.permissions
 
     @property
     def is_superadmin(self) -> bool:

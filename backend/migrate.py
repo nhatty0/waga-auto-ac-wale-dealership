@@ -28,7 +28,26 @@ ADDITIVE_COLUMNS = [
     ("vehicle_handovers", "archived_by", "VARCHAR(150)", "VARCHAR(150)"),
     ("dealerships", "phone_number_2", "VARCHAR(50)", "VARCHAR(50)"),
     ("dealerships", "contact_phones_synced", "VARCHAR(120)", "VARCHAR(120)"),
+    ("users", "permissions", "TEXT", "TEXT"),
 ]
+
+
+def _backfill_staff_permissions(db):
+    """
+    Users created before staff permissions existed (permissions IS NULL) get ALL permissions,
+    so nobody is locked out on deploy. Their is_active flag is left as it is: someone the owner
+    already deactivated stays deactivated. Superadmins don't need a list (they have everything).
+    """
+    rows = db.query(models.User).filter(models.User.permissions_json.is_(None)).all()
+    changed = 0
+    for u in rows:
+        if u.is_superadmin:
+            continue
+        u.permissions_json = models.encode_permissions(models.STAFF_PERMISSIONS)
+        changed += 1
+        print(f"🔑 Staff user #{u.id} ('{u.phone_number}') given all permissions (pre-existing account, active={u.is_active}).")
+    if changed:
+        db.commit()
 
 
 def _sync_contact_phones(dealer) -> bool:
@@ -178,7 +197,9 @@ def run_migrations():
             db.refresh(primary_dealer)
             print(f"🏢 Created Primary Business Record: '{PLATFORM_NAME}' (ID: {primary_dealer.id}, Slug: '{primary_dealer.slug}', Phone: '{primary_dealer.phone_number}')")
         else:
-            primary_dealer.name = PLATFORM_NAME
+            # The name is editable in /superadmin Settings: only fill it when it is empty.
+            if not (primary_dealer.name or "").strip():
+                primary_dealer.name = PLATFORM_NAME
             primary_dealer.slug = PRIMARY_DEALERSHIP_SLUG
             _sync_contact_phones(primary_dealer)
             primary_dealer.is_active = True
@@ -189,6 +210,7 @@ def run_migrations():
 
         # 2. Owners: promote every SUPERADMIN_PHONE number, demote stale superadmins
         _sync_superadmins(db, primary_dealer.id)
+        _backfill_staff_permissions(db)
 
         # 3. Seed active delivery personnel roster if empty
         driver_count = db.query(models.Driver).count()

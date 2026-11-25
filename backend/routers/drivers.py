@@ -8,7 +8,7 @@ from database import get_db
 import models
 import schemas
 from settings import settings
-from auth import get_current_admin
+from auth import require_rentals
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def get_target_dealership_id(db: Session, user: models.User) -> Optional[int]:
 @router.get("", response_model=List[schemas.DriverOut])
 def list_drivers(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_rentals)
 ):
     """
     List all drivers belonging to AC Wale Cars driver roster.
@@ -44,7 +44,7 @@ def list_drivers(
 def create_driver(
     payload: schemas.DriverCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_rentals)
 ):
     """
     Register a new driver in AC Wale Cars roster.
@@ -78,7 +78,7 @@ def create_driver(
 def get_driver(
     driver_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_rentals)
 ):
     """
     Get a driver by ID.
@@ -97,7 +97,7 @@ def update_driver(
     driver_id: int,
     payload: schemas.DriverUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_rentals)
 ):
     """
     Update driver details or toggle active status.
@@ -127,7 +127,7 @@ def update_driver(
 def delete_or_deactivate_driver(
     driver_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_rentals)
 ):
     """
     Deactivates or removes a driver from the roster.

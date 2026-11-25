@@ -36,6 +36,8 @@ from auth import (
     create_access_token,
     get_current_admin,
     get_current_superadmin,
+    require_vehicles,
+    require_appointments,
     request_otp,
     verify_otp,
     rate_limiter,
@@ -587,7 +589,7 @@ def get_current_admin_profile(current_admin: models.User = Depends(get_current_a
 def get_admin_vehicles(
     dealership_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_vehicles)
 ):
     if dealership_id is not None and not current_user.is_superadmin:
         if dealership_id != current_user.dealership_id:
@@ -607,7 +609,7 @@ def get_admin_vehicles(
 def create_vehicle(
     car_data: schemas.VehicleCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_vehicles)
 ):
     if not current_user.is_superadmin:
         if not current_user.dealership_id:
@@ -691,7 +693,7 @@ def update_vehicle(
     vehicle_id: int,
     car_data: schemas.VehicleCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_vehicles)
 ):
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not vehicle:
@@ -768,7 +770,7 @@ def update_vehicle(
 @app.post("/api/admin/upload-images", response_model=List[str])
 def upload_car_images(
     files: List[UploadFile] = File(...),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_vehicles)
 ):
     # Plain `def` on purpose: FastAPI runs it in a worker thread, so the blocking
     # Pillow WebP encode, S3 put_object and disk write don't stall the event loop
@@ -790,7 +792,7 @@ def update_vehicle_status(
     vehicle_id: int,
     new_status: models.VehicleStatus,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_vehicles)
 ):
     car = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not car:
@@ -812,7 +814,7 @@ def update_vehicle_status(
 def delete_vehicle(
     vehicle_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_vehicles)
 ):
     car = db.query(models.Vehicle).filter(models.Vehicle.id == vehicle_id).first()
     if not car:
@@ -848,7 +850,7 @@ def delete_vehicle(
 def get_all_appointments(
     dealership_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(require_appointments)
 ):
     if dealership_id is not None and not current_user.is_superadmin:
         if dealership_id != current_user.dealership_id:
@@ -1285,17 +1287,40 @@ def get_superadmin_executive_stats(
     )
 
 
+def _staff_or_404(db: Session, user_id: int) -> models.User:
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    return user
+
+
+def _reject_owner_edit(user: models.User):
+    if user.is_superadmin:
+        raise HTTPException(
+            status_code=400,
+            detail="Owner accounts are managed by SUPERADMIN_PHONE in the server .env, not here.",
+        )
+
+
+def _clean_permissions(perms) -> str:
+    unknown = [p for p in (perms or []) if p not in models.STAFF_PERMISSIONS]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown permission(s): {', '.join(unknown)}")
+    return models.encode_permissions(perms)
+
+
 @app.get("/api/superadmin/staff", response_model=List[schemas.StaffUserOut])
 def get_superadmin_staff(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_superadmin)
 ):
+    """Owners first, then active staff, then deactivated staff (nothing is ever hard-deleted)."""
     primary_dealer = get_primary_dealership(db)
     dealer_id = primary_dealer.id if primary_dealer else 1
-    staff_users = db.query(models.User).filter(
+    users = db.query(models.User).filter(
         (models.User.dealership_id == dealer_id) | (models.User.dealership_id == None)
     ).order_by(models.User.created_at.desc()).all()
-    return staff_users
+    return sorted(users, key=lambda u: (not u.is_superadmin, not u.is_active))
 
 
 @app.post("/api/superadmin/staff", response_model=schemas.StaffUserOut)
@@ -1304,42 +1329,60 @@ def invite_or_create_staff(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_superadmin)
 ):
-    from auth import normalize_ethiopian_phone
-    try:
-        norm_phone = normalize_ethiopian_phone(payload.phone_number)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    """Add a staff member (name + phone + permissions + active). Re-adding a known phone updates it."""
+    from auth import normalize_ethiopian_phone, find_user_by_phone
+    norm_phone = normalize_ethiopian_phone(payload.phone_number)
+    if is_superadmin_phone(norm_phone):
+        raise HTTPException(status_code=400, detail="This is an owner number (SUPERADMIN_PHONE); owners already have full access.")
+    perms = _clean_permissions(payload.permissions)
 
     primary_dealer = get_primary_dealership(db)
     dealer_id = primary_dealer.id if primary_dealer else 1
 
-    # Check if user with this normalized phone already exists
-    user = db.query(models.User).filter(
-        (models.User.phone_number == norm_phone) |
-        (models.User.phone_number == f"+{norm_phone}")
-    ).first()
-
-    if user:
-        if payload.full_name:
-            user.full_name = payload.full_name.strip()
-        user.role = payload.role or "sales_agent"
-        user.is_active = True
-        user.dealership_id = dealer_id
-        db.commit()
-        db.refresh(user)
-        return user
-
-    new_user = models.User(
-        phone_number=norm_phone,
-        full_name=payload.full_name.strip() if payload.full_name else None,
-        role=payload.role or "sales_agent",
-        dealership_id=dealer_id,
-        is_active=True
-    )
-    db.add(new_user)
+    user = find_user_by_phone(norm_phone, db)
+    if user is None:
+        user = models.User(phone_number=norm_phone, role="dealer_admin", created_at=datetime.utcnow())
+        db.add(user)
+    if payload.full_name is not None:
+        user.full_name = payload.full_name.strip() or None
+    user.role = "dealer_admin"
+    user.permissions_json = perms
+    user.is_active = payload.is_active
+    user.dealership_id = dealer_id
     db.commit()
-    db.refresh(new_user)
-    return new_user
+    db.refresh(user)
+    return user
+
+
+@app.put("/api/superadmin/staff/{user_id}", response_model=schemas.StaffUserOut)
+def update_staff_member(
+    user_id: int,
+    payload: schemas.StaffUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin)
+):
+    """Edit name, phone, permissions and/or the active flag of a staff member."""
+    from auth import normalize_ethiopian_phone, find_user_by_phone
+    user = _staff_or_404(db, user_id)
+    _reject_owner_edit(user)
+
+    if payload.phone_number is not None:
+        norm_phone = normalize_ethiopian_phone(payload.phone_number)
+        if is_superadmin_phone(norm_phone):
+            raise HTTPException(status_code=400, detail="This is an owner number (SUPERADMIN_PHONE).")
+        other = find_user_by_phone(norm_phone, db)
+        if other and other.id != user.id:
+            raise HTTPException(status_code=409, detail="Another account already uses this phone number.")
+        user.phone_number = norm_phone
+    if payload.full_name is not None:
+        user.full_name = payload.full_name.strip() or None
+    if payload.permissions is not None:
+        user.permissions_json = _clean_permissions(payload.permissions)
+    if payload.is_active is not None:
+        user.is_active = payload.is_active
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @app.patch("/api/superadmin/staff/{user_id}/status", response_model=schemas.StaffUserOut)
@@ -1349,40 +1392,32 @@ def update_staff_status(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_superadmin)
 ):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Staff member not found")
-
-    if user.id == current_user.id:
-        if payload.is_active is False:
-            raise HTTPException(status_code=400, detail="Cannot deactivate your own executive account")
-
+    """Active toggle. Takes effect on the staff member's very next request."""
+    user = _staff_or_404(db, user_id)
+    _reject_owner_edit(user)
     if payload.is_active is not None:
         user.is_active = payload.is_active
-    if payload.role is not None:
-        user.role = payload.role
-
     db.commit()
     db.refresh(user)
     return user
 
 
-@app.delete("/api/superadmin/staff/{user_id}")
+@app.delete("/api/superadmin/staff/{user_id}", response_model=schemas.StaffUserOut)
 def delete_staff_member(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_superadmin)
 ):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Staff member not found")
-
-    if user.id == current_user.id or user.role == "superadmin" or is_superadmin_phone(user.phone_number):
-        raise HTTPException(status_code=400, detail="Cannot delete superadmin executive account")
-
-    db.delete(user)
+    """
+    Soft delete = deactivate. Staff rows are never removed, so their names stay on intake
+    records, gate passes and handover contracts.
+    """
+    user = _staff_or_404(db, user_id)
+    _reject_owner_edit(user)
+    user.is_active = False
     db.commit()
-    return {"message": "Staff member deleted successfully"}
+    db.refresh(user)
+    return user
 
 
 @app.get("/api/superadmin/dealerships", response_model=List[schemas.SuperAdminDealershipOut])
@@ -1460,22 +1495,15 @@ def update_dealership_status(
 def delete_dealership_cascade(
     dealership_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     Cascade Deletion of Dealership:
-    - Access Control: Requires SuperAdmin authorization OR matching authenticated dealer if self-deleting.
+    - Access Control: SuperAdmin only (403 for every staff account, including the dealer's own staff).
     - Cleans up physical vehicle images and logo files on disk.
     - Cascades DB deletion of appointments, vehicle images, vehicles, non-superadmin users, and the dealership itself.
     """
-    is_superadmin = current_user.is_superadmin
-    is_matching_dealer = (current_user.dealership_id == dealership_id)
-
-    if not is_superadmin and not is_matching_dealer:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: You do not have permission to delete this dealership."
-        )
+    # Superadmin only (enforced by the dependency): staff can no longer delete the dealership.
 
     dealer = db.query(models.Dealership).filter(models.Dealership.id == dealership_id).first()
     if not dealer:

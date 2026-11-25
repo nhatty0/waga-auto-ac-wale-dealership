@@ -172,11 +172,13 @@ def get_current_admin(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Checked on EVERY request: deactivating a staff member locks them out immediately,
+    # even while their 30-day token is still valid.
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account inactive or not found",
+            detail=ACCOUNT_DEACTIVATED_MSG if user else "User account inactive or not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -213,6 +215,69 @@ def get_current_superadmin(
             detail="Access denied: platform owner privileges required"
         )
     return current_user
+
+
+def require_permission(permission: str):
+    """
+    Dependency factory: the current user must be a superadmin or a staff member whose
+    permission list contains `permission` ("vehicles", "appointments", "rentals"); else 403.
+    """
+    if permission not in models.STAFF_PERMISSIONS:
+        raise ValueError(f"Unknown staff permission: {permission}")
+
+    def _dependency(current_user: models.User = Depends(get_current_admin)) -> models.User:
+        if not current_user.has_permission(permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: your account does not have the '{permission}' permission. Ask the owner.",
+            )
+        return current_user
+
+    return _dependency
+
+
+require_vehicles = require_permission("vehicles")
+require_appointments = require_permission("appointments")
+require_rentals = require_permission("rentals")
+
+
+# ==========================================
+# LOGIN LOCK: only owners and active staff can get an OTP
+# ==========================================
+NOT_REGISTERED_MSG = "ይህ ቁጥር አልተመዘገበም። ባለቤቱን ያነጋግሩ። (This number is not registered. Contact the owner.)"
+ACCOUNT_DEACTIVATED_MSG = "ይህ መለያ ታግዷል። ባለቤቱን ያነጋግሩ። (This account has been deactivated. Contact the owner.)"
+
+
+def find_user_by_phone(normalized_phone: str, db: Session) -> Optional[models.User]:
+    """Users may be stored as 2519…, +2519… or 09…: match on the normalized form."""
+    from settings import normalize_phone_digits
+    user = db.query(models.User).filter(
+        (models.User.phone_number == normalized_phone) | (models.User.phone_number == f"+{normalized_phone}")
+    ).first()
+    if user:
+        return user
+    for u in db.query(models.User).all():
+        if normalize_phone_digits(u.phone_number) == normalized_phone:
+            return u
+    return None
+
+
+def ensure_login_allowed(normalized_phone: str, db: Session) -> models.User:
+    """
+    Owner phones (SUPERADMIN_PHONE) always may log in (their user row is created if missing).
+    Everyone else must already be a registered, active staff member: unknown numbers are NOT
+    auto-created and get 403, so no OTP is generated or sent for them.
+    """
+    user = find_user_by_phone(normalized_phone, db)
+    if is_superadmin_phone(normalized_phone):
+        if user is None:
+            user, _ = get_or_create_user_stub(normalized_phone, db)
+        return user
+    if not user:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=NOT_REGISTERED_MSG)
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ACCOUNT_DEACTIVATED_MSG)
+    return user
 
 
 # ==========================================
@@ -511,8 +576,9 @@ async def request_otp(req: schemas.SendOTPRequest, db: Session) -> schemas.SendO
     # 1. Rate Limiting Check (Max 3 OTP requests / 10 minutes)
     rate_limiter.check_request_limit(normalized_phone)
 
-    # 2. Ensure unverified user and dealership stub exist
-    get_or_create_user_stub(normalized_phone, db)
+    # 2. Login lock: owners and active staff only. Raises 403 for anyone else, BEFORE any
+    #    OTP is generated, stored or sent.
+    ensure_login_allowed(normalized_phone, db)
 
     # 3. Generate secure random 6-digit numeric OTP with 3-minute TTL
     otp_code = f"{secrets.randbelow(900000) + 100000}"
@@ -596,95 +662,24 @@ def verify_otp(req: schemas.VerifyOTPRequest, db: Session) -> schemas.AuthRespon
     db.commit()
     rate_limiter.record_verification_success(normalized_phone)
 
-    # Helper to auto-create showroom for brand new phone registrations
-    def create_dedicated_dealership(phone_digits: str) -> models.Dealership:
-        phone_suffix = phone_digits[-9:] if len(phone_digits) >= 9 else phone_digits
-        base_slug = f"showroom-{phone_suffix}"
-        slug = base_slug
-        counter = 1
-        while db.query(models.Dealership).filter(models.Dealership.slug == slug).first():
-            slug = f"{base_slug}-{counter}"
-            counter += 1
-
-        intl_phone = f"+{phone_digits}" if not phone_digits.startswith("+") else phone_digits
-
-        new_dealer = models.Dealership(
-            name="My Showroom",
-            slug=slug,
-            phone_number=intl_phone,
-            logo_url=None,
-            telegram_bot_token=None,
-            telegram_chat_id=None,
-            is_active=True,
-            subscription_plan="starter",
-            max_vehicles=50,
-            created_at=datetime.utcnow()
-        )
-        db.add(new_dealer)
-        db.commit()
-        db.refresh(new_dealer)
-        return new_dealer
-
-    # Find or auto-create User
-    user = db.query(models.User).filter(models.User.phone_number == normalized_phone).first()
-    if getattr(settings, "SINGLE_TENANT_MODE", False):
+    # Login lock again (the account may have been removed/deactivated after the OTP was sent).
+    # Unknown numbers are never auto-registered.
+    user = ensure_login_allowed(normalized_phone, db)
+    if user.dealership_id is None:
         primary_dealer = db.query(models.Dealership).filter(
-            (models.Dealership.slug == settings.PRIMARY_DEALERSHIP_SLUG) |
-            (models.Dealership.name == settings.PLATFORM_NAME) |
-            (models.Dealership.id == 1)
+            (models.Dealership.slug == settings.PRIMARY_DEALERSHIP_SLUG) | (models.Dealership.id == 1)
         ).first()
-        target_dealer_id = primary_dealer.id if primary_dealer else 1
-        if not user:
-            user = models.User(
-                phone_number=normalized_phone,
-                role="dealer_admin",
-                dealership_id=target_dealer_id,
-                is_active=True,
-                created_at=datetime.utcnow()
-            )
-            db.add(user)
+        if primary_dealer:
+            user.dealership_id = primary_dealer.id
             db.commit()
             db.refresh(user)
-        elif not user.is_active:
+    elif not is_superadmin_phone(user.phone_number):
+        dealer = db.query(models.Dealership).filter(models.Dealership.id == user.dealership_id).first()
+        if dealer and dealer.is_active is False:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your admin account is deactivated. Please contact support."
+                detail="Your dealership account is currently suspended. Please contact platform support."
             )
-        elif user.dealership_id is None:
-            user.dealership_id = target_dealer_id
-            db.commit()
-            db.refresh(user)
-    else:
-        if not user:
-            new_dealership = create_dedicated_dealership(normalized_phone)
-            user = models.User(
-                phone_number=normalized_phone,
-                role="dealer_admin",
-                dealership_id=new_dealership.id,
-                is_active=True,
-                created_at=datetime.utcnow()
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        elif not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your admin account is deactivated. Please contact support."
-            )
-        elif user.dealership_id is not None and not is_superadmin_phone(user.phone_number):
-            # Check if the user's dealership is suspended
-            dealer = db.query(models.Dealership).filter(models.Dealership.id == user.dealership_id).first()
-            if dealer and dealer.is_active is False:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Your dealership account is currently suspended. Please contact platform support."
-                )
-        elif user.dealership_id is None:
-            new_dealership = create_dedicated_dealership(normalized_phone)
-            user.dealership_id = new_dealership.id
-            db.commit()
-            db.refresh(user)
 
     # Keep the role column in sync with the SUPERADMIN_PHONE list on every login.
     if is_superadmin_phone(normalized_phone):
@@ -729,6 +724,7 @@ def verify_otp(req: schemas.VerifyOTPRequest, db: Session) -> schemas.AuthRespon
             "dealership_id": user.dealership_id,
             "dealership": dealer_data,
             "is_superadmin": is_superadmin_phone(user.phone_number),
+            "permissions": user.permissions,
             "is_active": user.is_active,
             "created_at": user.created_at.isoformat() if user.created_at else None
         }
