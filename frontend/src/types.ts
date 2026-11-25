@@ -131,8 +131,8 @@ export interface User {
   created_at: string;
 }
 
-export type StaffPermission = "vehicles" | "appointments" | "rentals";
-export const STAFF_PERMISSIONS: StaffPermission[] = ["vehicles", "appointments", "rentals"];
+export type StaffPermission = "vehicles" | "appointments" | "rentals" | "gate";
+export const STAFF_PERMISSIONS: StaffPermission[] = ["vehicles", "appointments", "rentals", "gate"];
 
 export interface Driver {
   id: number;
@@ -204,6 +204,8 @@ export interface StaffUser {
   permissions: StaffPermission[];
   dealership_id?: number | null;
   created_at?: string | null;
+  /** A Telegram chat is linked (gate passes are sent there). */
+  telegram_linked?: boolean;
 }
 
 export interface GatePass {
@@ -217,6 +219,8 @@ export interface GatePass {
   lot_intake_id?: number | null;
   dealership_id?: number | null;
   created_at?: string;
+  /** Random token behind /verify/<token> (QR on the printed slip). */
+  verify_token?: string | null;
 }
 
 export interface LotIntake {

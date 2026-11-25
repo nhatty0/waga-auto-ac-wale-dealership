@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Car, Calendar, Key, Pencil, Plus, ShieldCheck, UserX, Users, X, RotateCw } from "lucide-react";
+import { Car, Calendar, DoorOpen, Key, Pencil, Plus, Send, ShieldCheck, UserX, Users, X, RotateCw, Unlink } from "lucide-react";
+import QrLinkModal from "@/components/QrLinkModal";
 import { STAFF_PERMISSIONS, StaffPermission, StaffUser } from "@/types";
 import { getApiBaseUrl } from "@/lib/api";
 
@@ -9,6 +10,7 @@ const PERMISSION_INFO: Record<StaffPermission, { label: string; am: string; hint
   vehicles: { label: "Vehicles", am: "መኪኖች", hint: "Post, edit and delete listings", icon: Car },
   appointments: { label: "Appointments", am: "ቀጠሮዎች", hint: "Test drives & visits", icon: Calendar },
   rentals: { label: "Rentals", am: "ኪራይ", hint: "Bookings + drivers", icon: Key },
+  gate: { label: "Gate", am: "በር ጥበቃ", hint: "Gatekeeper: confirms cars leaving (Telegram or web)", icon: DoorOpen },
 };
 
 interface StaffForm {
@@ -77,6 +79,34 @@ export default function StaffManager() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
+
+  const [tgLink, setTgLink] = useState<{ user: StaffUser; url: string; expires: string } | null>(null);
+
+  const linkTelegram = async (u: StaffUser) => {
+    setBusyId(u.id);
+    try {
+      const r = await api(`/api/superadmin/staff/${u.id}/telegram-link`, { method: "POST" });
+      setTgLink({ user: u, url: r.url, expires: r.expires_at });
+    } catch (e) {
+      onToast((e as Error).message, "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const unlinkTelegram = async (u: StaffUser) => {
+    if (!confirm(`Unlink Telegram for ${u.full_name || u.phone_number}? Gate passes stop going to that chat.`)) return;
+    setBusyId(u.id);
+    try {
+      await api(`/api/superadmin/staff/${u.id}/telegram`, { method: "DELETE" });
+      upsert({ ...u, telegram_linked: false });
+      onToast("Telegram unlinked");
+    } catch (e) {
+      onToast((e as Error).message, "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const upsert = (u: StaffUser) => setStaff((prev) => (prev.some((s) => s.id === u.id) ? prev.map((s) => (s.id === u.id ? u : s)) : [u, ...prev]));
 
@@ -233,6 +263,36 @@ export default function StaffManager() {
               </div>
 
               {!u.is_superadmin && (
+                <div className="flex items-center gap-2 min-w-0">
+                  {u.telegram_linked ? (
+                    <>
+                      <span className="min-w-0 flex-1 truncate inline-flex items-center gap-1.5 text-xs font-bold text-sky-300">
+                        <Send size={13} className="shrink-0" /> Telegram linked ✓
+                      </span>
+                      <button
+                        type="button"
+                        disabled={busyId === u.id}
+                        onClick={() => unlinkTelegram(u)}
+                        aria-label={`Unlink Telegram for ${u.full_name || u.phone_number}`}
+                        className="h-11 px-3 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        <Unlink size={13} /> Unlink
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busyId === u.id || !u.is_active}
+                      onClick={() => linkTelegram(u)}
+                      className="w-full h-11 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40"
+                    >
+                      <Send size={14} /> Link Telegram
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {!u.is_superadmin && (
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -355,6 +415,30 @@ export default function StaffManager() {
             </div>
           </form>
         </div>
+      )}
+      {tgLink && (
+        <QrLinkModal
+          title={`Link Telegram: ${tgLink.user.full_name || displayPhone(tgLink.user.phone_number)}`}
+          subtitle="One-time link for THIS staff member's own Telegram"
+          url={tgLink.url}
+          onClose={() => setTgLink(null)}
+          note={
+            <>
+              Open it on their phone and tap <b>Start</b>. The bot answers &ldquo;Telegram linked&rdquo;. Works once, expires {tgLink.expires}.
+            </>
+          }
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setTgLink(null);
+              load();
+            }}
+            className="w-full h-11 rounded-xl bg-emerald-500/15 text-emerald-300 text-sm font-bold"
+          >
+            Done: refresh the list
+          </button>
+        </QrLinkModal>
       )}
     </section>
   );

@@ -37,11 +37,13 @@ import {
   UserCheck,
   FileText,
   Sparkles,
+  DoorOpen,
 } from "lucide-react";
 import { Vehicle, Appointment, User, Driver, RentalBooking, StaffPermission, STAFF_PERMISSIONS } from "@/types";
 import PrintFlyerModal from "@/components/admin/PrintFlyerModal";
 import ShowroomQrModal from "@/components/admin/ShowroomQrModal";
 import VehicleDocumentsSheet from "@/components/documents/VehicleDocumentsSheet";
+import GateDesk from "@/components/admin/GateDesk";
 import { isSuperadminUser } from "@/lib/documents";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
@@ -226,7 +228,7 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
 
   // Dashboard states
   const [staffTab, setActiveTab] = useState<
-    "inventory" | "appointments" | "rentals" | "drivers" | "settings"
+    "inventory" | "appointments" | "rentals" | "drivers" | "gate" | "settings"
   >("inventory");
 
   // Staff tabs follow the permissions the owner ticked in /superadmin -> Staff (the backend
@@ -240,6 +242,7 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
     appointments: "appointments",
     rentals: "rentals",
     drivers: "rentals",
+    gate: "gate",
   } as const;
   const allowedStaffTabs = (Object.keys(STAFF_TAB_PERMISSION) as (keyof typeof STAFF_TAB_PERMISSION)[]).filter(
     (tab) => can(STAFF_TAB_PERMISSION[tab])
@@ -1758,6 +1761,30 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
   )}&text=${encodeURIComponent(telegramShareText)}`;
 
   // Staff account with no permissions ticked yet.
+  // Gatekeeper with no other section: a plain Gate screen, nothing else.
+  if (!isOwnerPortal && allowedStaffTabs.length === 1 && allowedStaffTabs[0] === "gate") {
+    return (
+      <div className="min-h-screen bg-black text-white px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <div className="max-w-xl mx-auto space-y-4">
+          <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black truncate">{currentUser?.full_name || "Gate"}</p>
+              <p className="text-[11px] text-zinc-500 font-mono">+{currentUser?.phone_number}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="h-11 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold flex items-center gap-1.5"
+            >
+              <LogOut size={15} /> Log out
+            </button>
+          </div>
+          <GateDesk onUnauthorized={handleUnauthorized} />
+        </div>
+      </div>
+    );
+  }
+
   if (!isOwnerPortal && allowedStaffTabs.length === 0) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -1987,7 +2014,7 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
       </div>
 
       {/* Tabs */}
-      <div role="tablist" aria-label="Dashboard sections" className="sticky top-0 z-30 -mx-4 px-4 py-2 mb-4 bg-black/85 backdrop-blur-md flex gap-2 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-4 sm:static sm:mx-0 sm:px-0 sm:py-0 sm:mb-6 sm:bg-transparent sm:backdrop-blur-none sm:grid sm:grid-cols-4 sm:overflow-visible">
+      <div role="tablist" aria-label="Dashboard sections" className="sticky top-0 z-30 -mx-4 px-4 py-2 mb-4 bg-black/85 backdrop-blur-md flex gap-2 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-4 sm:static sm:mx-0 sm:px-0 sm:py-0 sm:mb-6 sm:bg-transparent sm:backdrop-blur-none sm:grid sm:grid-cols-5 sm:overflow-visible">
         {(allowedStaffTabs as string[]).includes("inventory") && (
           <button
             onClick={() => setActiveTab("inventory")}
@@ -2052,9 +2079,28 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
             <span className="truncate">Drivers ({drivers.length})</span>
           </button>
         )}
+        {(allowedStaffTabs as string[]).includes("gate") && (
+          <button
+            onClick={() => setActiveTab("gate")}
+            role="tab"
+            aria-selected={activeTab === "gate"}
+            data-admin-tab="gate"
+            className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
+              activeTab === "gate"
+                ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
+                : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+            }`}
+          >
+            <DoorOpen size={14} className="shrink-0" />
+            <span className="truncate">Gate</span>
+          </button>
+        )}
       </div>
       </>
       )}
+
+      {/* GATE TAB CONTENT (gatekeeper permission; owners have it too) */}
+      {!isOwnerPortal && activeTab === "gate" && <GateDesk onUnauthorized={handleUnauthorized} />}
 
       {/* INVENTORY TAB CONTENT */}
       {!isOwnerPortal && activeTab === "inventory" && (
