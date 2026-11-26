@@ -32,9 +32,9 @@ def get_admin_stats(
         models.Vehicle.listing_type.in_(["rent", "both"])
     ).count()
 
-    drivers_count = db.query(models.Driver).filter(
-        models.Driver.is_active == True
-    ).count()
+    # Team members with the Driver role (the old drivers table is no longer used).
+    drivers_count = sum(1 for u in db.query(models.User).filter(models.User.is_active == True).all()
+                        if not u.is_superadmin and u.has_role("driver"))
 
     appointments_count = db.query(models.Appointment).count()
     rentals_count = db.query(models.RentalBooking).count()
@@ -115,7 +115,7 @@ def switch_dealership_router(
             logo_url=target_dealer.logo_url,
             telegram_bot_token=target_dealer.telegram_bot_token,
             telegram_chat_id=target_dealer.telegram_chat_id,
-            telegram_bot_username=settings.TELEGRAM_PLATFORM_BOT_USERNAME,
+            telegram_bot_username=target_dealer.telegram_bot_username,
             is_active=target_dealer.is_active,
             subscription_plan=target_dealer.subscription_plan,
             max_vehicles=target_dealer.max_vehicles,

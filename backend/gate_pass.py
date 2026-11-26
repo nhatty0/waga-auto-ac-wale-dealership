@@ -20,6 +20,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 import models
+import tg_config
 from settings import settings, superadmin_phones
 
 logger = logging.getLogger(__name__)
@@ -131,15 +132,17 @@ def verify_url(gp: models.GatePass) -> str:
 
 
 def bot_token() -> str:
-    return (settings.TELEGRAM_PLATFORM_BOT_TOKEN or settings.TELEGRAM_BOT_TOKEN or "").strip()
+    """Settings token if set, else .env (see tg_config)."""
+    return tg_config.token()
 
 
 def bot_username() -> str:
-    return (settings.TELEGRAM_PLATFORM_BOT_USERNAME or settings.TELEGRAM_BOT_USERNAME or "").strip().lstrip("@")
+    """Username for t.me links ("" = not configured; never guess)."""
+    return tg_config.link_username()
 
 
-def driver_start_link(gp: models.GatePass) -> str:
-    return f"https://t.me/{bot_username()}?start=gp_{gp.verify_token}"
+def driver_start_link(gp: models.GatePass) -> Optional[str]:
+    return tg_config.start_link(f"gp_{gp.verify_token}")
 
 
 def public_view(db: Session, gp: models.GatePass) -> Dict:
@@ -234,11 +237,11 @@ def _edit_all(db: Session, gp: models.GatePass, footer_html: str):
 # ------------------------------------------------------------------ people
 
 def gate_recipients(db: Session) -> List[models.User]:
-    """Active staff with the Gate permission and a linked Telegram (owners excluded: they get notices)."""
+    """Active Team members with the Gatekeeper role and a linked Telegram (owners excluded: they get notices)."""
     out, seen = [], set()
     for u in db.query(models.User).filter(models.User.is_active.is_(True), models.User.telegram_chat_id.isnot(None)).all():
         chat = (u.telegram_chat_id or "").strip()
-        if not chat or chat in seen or u.is_superadmin or not u.has_permission("gate"):
+        if not chat or chat in seen or u.is_superadmin or not u.has_role("gatekeeper"):
             continue
         seen.add(chat)
         out.append(u)
@@ -263,7 +266,7 @@ def actor_for_chat(db: Session, chat_id: str) -> Optional[str]:
     """Name of an ACTIVE gatekeeper or owner using this Telegram chat; None = not authorized."""
     chat_id = str(chat_id)
     for u in db.query(models.User).filter(models.User.telegram_chat_id == chat_id).all():
-        if u.is_active and (u.is_superadmin or u.has_permission("gate")):
+        if u.is_active and (u.is_superadmin or u.has_role("gatekeeper")):
             return u.full_name or u.phone_number
     if settings.TELEGRAM_CHAT_ID and chat_id == settings.TELEGRAM_CHAT_ID.strip():
         return "Owner"
@@ -290,7 +293,7 @@ def send_pass(db: Session, gp: models.GatePass) -> Dict:
         raise GateError("Telegram is not configured (no bot token).")
     people = gate_recipients(db)
     if not people:
-        raise GateError("No gatekeeper has Telegram linked. In Staff, tick Gate and tap Link Telegram.")
+        raise GateError("No gatekeeper has Telegram linked. In Team, tick Gatekeeper and tap Link Telegram.")
     text_html = pass_message(db, gp)
     msgs = _messages(gp)
     sent, failed = [], []
@@ -410,7 +413,7 @@ def _handle_start(db: Session, chat_id: str, payload: str):
         user.telegram_chat_id = str(chat_id)
         db.commit()
         _say(chat_id, f"✅ <b>{html.escape(user.full_name or user.phone_number)}</b>: Telegram linked.\n"
-                      "የመውጫ ፓሶች እዚህ ይደርሱዎታል። / Gate passes will arrive here.")
+                      "ስራዎች እና ማሳወቂያዎች እዚህ ይደርሱዎታል። / Tasks and notices will arrive here.")
         logger.info(f"[gate] Telegram linked for user #{user.id}")
         return
     if payload.startswith("connect_"):
@@ -448,6 +451,10 @@ def _handle_callback(db: Session, cq: dict):
     cq_id = cq.get("id")
     chat_id = str((cq.get("from") or {}).get("id", ""))
     data = cq.get("data") or ""
+    if data.startswith("tk:"):
+        import tasks
+        tasks.handle_callback(db, cq)
+        return
     m = re.match(r"^gp:(ok|no):(\d+)$", data)
     if not m:
         tg("answerCallbackQuery", {"callback_query_id": cq_id, "text": "Unknown action."})
@@ -502,6 +509,9 @@ def process_update(db: Session, update: dict):
             return
         reply = msg.get("reply_to_message") or {}
         if reply:
+            import tasks
+            if tasks.handle_problem_reply(db, chat_id, text, reply.get("text") or ""):
+                return
             _handle_reject_note(db, chat_id, text, reply.get("text") or "")
     except Exception:
         db.rollback()

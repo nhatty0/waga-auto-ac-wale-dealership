@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
+import tg_config
 import models
 import schemas
 from settings import settings
@@ -121,11 +122,7 @@ async def create_public_rental_booking(
     db.refresh(booking)
 
     # 1. Fire Instant Telegram notification to AC Wale Cars desk
-    bot_token = (
-        (dealership.telegram_bot_token.strip() if dealership and dealership.telegram_bot_token else None)
-        or settings.TELEGRAM_PLATFORM_BOT_TOKEN
-        or settings.TELEGRAM_BOT_TOKEN
-    )
+    bot_token = tg_config.token(db)
     chat_id = (
         (dealership.telegram_chat_id.strip() if dealership and dealership.telegram_chat_id else None)
         or settings.TELEGRAM_CHAT_ID
@@ -164,10 +161,17 @@ async def create_public_rental_booking(
         except Exception as e:
             logger.error(f"Failed to dispatch SMS rental lead: {e}")
 
+    # 3. Optional team alert (Settings -> Telegram): members with Rentals. Fire and forget.
+    import asyncio
+    import team_alerts
+    asyncio.get_running_loop().run_in_executor(
+        None, team_alerts.send_standalone, "rental_alert", "rental", booking.id, vehicle_title)
+
     # Reload with vehicle relationship
     loaded_booking = db.query(models.RentalBooking).options(
         joinedload(models.RentalBooking.vehicle),
-        joinedload(models.RentalBooking.assigned_driver)
+        joinedload(models.RentalBooking.assigned_driver),
+        joinedload(models.RentalBooking.assigned_user)
     ).filter(models.RentalBooking.id == booking.id).first()
 
     return loaded_booking
@@ -176,6 +180,36 @@ async def create_public_rental_booking(
 # ==========================================
 # ADMIN RENTALS MANAGEMENT ENDPOINTS
 # ==========================================
+
+def team_drivers(db: Session) -> List[models.User]:
+    """Active Team members with the Driver role (owners excluded), by name."""
+    people = db.query(models.User).filter(models.User.is_active.is_(True)).all()
+    return sorted([u for u in people if not u.is_superadmin and u.has_role("driver")],
+                  key=lambda u: (u.full_name or u.phone_number or "").lower())
+
+
+def team_driver_or_400(db: Session, user_id: Optional[int], legacy_driver_id: Optional[int] = None) -> models.User:
+    if user_id is None:
+        detail = ("Drivers are now Team members: pick someone with the Driver role (user_id)."
+                  if legacy_driver_id is not None else "user_id is required.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+    u = db.query(models.User).filter(models.User.id == user_id).first()
+    if not u or u.is_superadmin or not u.has_role("driver"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That person doesn't have the Driver role.")
+    if not u.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{u.full_name or u.phone_number} is deactivated.")
+    return u
+
+
+@router.get("/api/admin/team/drivers", response_model=List[schemas.AssignedPersonOut])
+def list_team_drivers(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_rentals)
+):
+    """People who can be assigned to a rental (Team members with the Driver role)."""
+    return [schemas.AssignedPersonOut(id=u.id, full_name=u.full_name or u.phone_number, phone_number=u.phone_number,
+                                      telegram_linked=u.telegram_linked) for u in team_drivers(db)]
+
 
 @router.get(
     "/api/admin/rentals",
@@ -191,7 +225,8 @@ def get_admin_rentals(
     """
     query = db.query(models.RentalBooking).options(
         joinedload(models.RentalBooking.vehicle),
-        joinedload(models.RentalBooking.assigned_driver)
+        joinedload(models.RentalBooking.assigned_driver),
+        joinedload(models.RentalBooking.assigned_user)
     )
 
     # In single-tenant mode or dealer admin, filter by dealership
@@ -227,21 +262,10 @@ async def assign_driver_to_rental(
             detail=f"Rental booking with ID {booking_id} not found."
         )
 
-    driver = db.query(models.Driver).filter(models.Driver.id == payload.driver_id).first()
-    if not driver:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Driver with ID {payload.driver_id} not found."
-        )
-
-    if not driver.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Driver {driver.full_name} is marked inactive."
-        )
+    driver = team_driver_or_400(db, payload.user_id, payload.driver_id)
 
     # Update booking
-    booking.assigned_driver_id = driver.id
+    booking.assigned_user_id = driver.id
     booking.status = "driver_assigned"
     db.commit()
     db.refresh(booking)
@@ -258,7 +282,7 @@ async def assign_driver_to_rental(
         try:
             await send_driver_dispatch_sms(
                 driver_phone=driver.phone_number,
-                driver_name=driver.full_name,
+                driver_name=driver.full_name or driver.phone_number,
                 customer_name=booking.customer_name,
                 customer_phone=booking.customer_phone,
                 vehicle_title=vehicle_title,
@@ -269,15 +293,11 @@ async def assign_driver_to_rental(
                 delivery_address=booking.delivery_address
             )
         except Exception as e:
-            logger.error(f"Failed to dispatch SMS alert to driver {driver.id}: {e}")
+            logger.error(f"Failed to dispatch SMS alert to driver (user #{driver.id}): {e}")
 
     # 2. Fire Telegram dispatch alert to desk/channel
     dealership = get_target_dealership(db, booking.dealership_id)
-    bot_token = (
-        (dealership.telegram_bot_token.strip() if dealership and dealership.telegram_bot_token else None)
-        or settings.TELEGRAM_PLATFORM_BOT_TOKEN
-        or settings.TELEGRAM_BOT_TOKEN
-    )
+    bot_token = tg_config.token(db)
     chat_id = (
         (dealership.telegram_chat_id.strip() if dealership and dealership.telegram_chat_id else None)
         or settings.TELEGRAM_CHAT_ID
@@ -288,7 +308,7 @@ async def assign_driver_to_rental(
             await send_driver_dispatch_telegram(
                 bot_token=bot_token,
                 chat_id=chat_id,
-                driver_name=driver.full_name,
+                driver_name=driver.full_name or driver.phone_number,
                 driver_phone=driver.phone_number,
                 booking=booking,
                 vehicle_title=vehicle_title
@@ -299,7 +319,8 @@ async def assign_driver_to_rental(
     # Reload with driver relationship
     loaded = db.query(models.RentalBooking).options(
         joinedload(models.RentalBooking.vehicle),
-        joinedload(models.RentalBooking.assigned_driver)
+        joinedload(models.RentalBooking.assigned_driver),
+        joinedload(models.RentalBooking.assigned_user)
     ).filter(models.RentalBooking.id == booking.id).first()
 
     return loaded
@@ -339,7 +360,8 @@ def update_rental_status(
 
     loaded = db.query(models.RentalBooking).options(
         joinedload(models.RentalBooking.vehicle),
-        joinedload(models.RentalBooking.assigned_driver)
+        joinedload(models.RentalBooking.assigned_driver),
+        joinedload(models.RentalBooking.assigned_user)
     ).filter(models.RentalBooking.id == booking.id).first()
 
     return loaded

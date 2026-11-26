@@ -25,6 +25,8 @@ from database import engine, get_db
 from storage import upload_media_file, delete_media_file, UPLOAD_DIR
 from settings import settings, is_superadmin_phone
 from appointments import dispatch_lead_multichannel
+import tg_config
+import team_alerts
 from telegram import (
     send_telegram_lead,
     send_telegram_test_message,
@@ -48,6 +50,7 @@ from auth import (
 )
 import gate_pass
 from routers import rentals, drivers, admin, lot_operations, documents, gate
+from routers import tasks as tasks_router
 
 # JWT & Auth Configuration from settings
 JWT_SECRET_KEY = settings.JWT_SECRET_KEY
@@ -100,11 +103,7 @@ async def send_telegram_alert(
 
     try:
         dealership = db.query(models.Dealership).filter(models.Dealership.id == dealership_id).first()
-        bot_token = (
-            (dealership.telegram_bot_token.strip() if dealership and dealership.telegram_bot_token and dealership.telegram_bot_token.strip() else None)
-            or settings.TELEGRAM_PLATFORM_BOT_TOKEN
-            or settings.TELEGRAM_BOT_TOKEN
-        )
+        bot_token = tg_config.token(db)
         chat_id = (dealership.telegram_chat_id.strip() if dealership and dealership.telegram_chat_id else None) or settings.TELEGRAM_CHAT_ID
 
         if not bot_token or not chat_id:
@@ -146,6 +145,7 @@ app.include_router(admin.router)
 app.include_router(lot_operations.router)
 app.include_router(documents.router)
 app.include_router(gate.router)
+app.include_router(tasks_router.router)
 
 # CORS configuration to allow requests from the Next.js frontend
 app.add_middleware(
@@ -386,6 +386,9 @@ async def create_appointment(data: schemas.AppointmentCreate, db: Session = Depe
     db.refresh(new_appointment)
 
     await send_telegram_alert(new_appointment, car_title, car_price, dealership_id=dealership_id, db=db)
+    # Optional team alert (Settings -> Telegram): fire and forget, own DB session.
+    asyncio.get_running_loop().run_in_executor(
+        None, team_alerts.send_standalone, "appointment_alert", "appointment", new_appointment.id, car_title)
 
     # Attach vehicle_title to the output object
     setattr(new_appointment, "vehicle_title", car_title)
@@ -920,8 +923,8 @@ def get_admin_dealership(
             detail="Dealership record not found."
         )
 
-    # Attach central platform bot username for 1-click connect deep linking
-    setattr(dealer, "telegram_bot_username", settings.TELEGRAM_PLATFORM_BOT_USERNAME)
+    # telegram_bot_username is the value stored in Settings (empty = use .env). The bot actually
+    # used is shown by GET /api/superadmin/telegram/status.
     out = schemas.DealershipOut.model_validate(dealer)
     if not current_user.is_superadmin:
         # Staff need name/slug/logo/phones for the /admin header, flyers and share text,
@@ -972,11 +975,15 @@ def update_admin_dealership(
     if payload.telegram_chat_id is not None:
         dealer.telegram_chat_id = payload.telegram_chat_id.strip() if payload.telegram_chat_id.strip() else None
     if hasattr(payload, "telegram_bot_username") and payload.telegram_bot_username is not None:
-        clean_user = payload.telegram_bot_username.strip()
-        dealer.telegram_bot_username = clean_user if clean_user else None
+        raw_user = payload.telegram_bot_username.strip()
+        clean_user = tg_config.normalize_username(raw_user)
+        if raw_user and not clean_user:
+            raise HTTPException(status_code=400, detail=f"'{raw_user}' is not a valid bot username (e.g. AcWaleBot).")
+        dealer.telegram_bot_username = clean_user or None
 
     db.commit()
     db.refresh(dealer)
+    tg_config.invalidate()
     return dealer
 
 
@@ -1009,6 +1016,7 @@ def disconnect_dealership_telegram(
     dealer.telegram_bot_username = None
     db.commit()
     db.refresh(dealer)
+    tg_config.invalidate()
     logger.info(f"Telegram credentials successfully disconnected and cleared for dealership '{dealer.name}' (ID: {dealer.id})")
     return dealer
 
@@ -1073,7 +1081,7 @@ def switch_dealership(
             logo_url=target_dealer.logo_url,
             telegram_bot_token=target_dealer.telegram_bot_token,
             telegram_chat_id=target_dealer.telegram_chat_id,
-            telegram_bot_username=settings.TELEGRAM_PLATFORM_BOT_USERNAME,
+            telegram_bot_username=target_dealer.telegram_bot_username,
             is_active=target_dealer.is_active,
             subscription_plan=target_dealer.subscription_plan,
             max_vehicles=target_dealer.max_vehicles,
@@ -1150,7 +1158,7 @@ async def test_telegram_alert(
     if not bot_token and dealer.telegram_bot_token and dealer.telegram_bot_token.strip():
         bot_token = dealer.telegram_bot_token.strip()
     if not bot_token:
-        bot_token = settings.TELEGRAM_PLATFORM_BOT_TOKEN or settings.TELEGRAM_BOT_TOKEN
+        bot_token = tg_config.token(db)
 
     if not chat_id and dealer.telegram_chat_id:
         chat_id = dealer.telegram_chat_id.strip()
@@ -1233,9 +1241,9 @@ def get_superadmin_stats(
         models.Vehicle.listing_type.in_(["rent", "both"])
     ).count()
 
-    drivers_count = db.query(models.Driver).filter(
-        models.Driver.is_active == True
-    ).count()
+    # Team members with the Driver role (the old drivers table is no longer used).
+    drivers_count = sum(1 for u in db.query(models.User).filter(models.User.is_active == True).all()
+                        if not u.is_superadmin and u.has_role("driver"))
 
     appointments_count = db.query(models.Appointment).count()
     rentals_count = db.query(models.RentalBooking).count()
@@ -1278,9 +1286,9 @@ def get_superadmin_executive_stats(
     ).count()
 
     # Card 3: Registered Drivers (records in drivers where is_active == True)
-    drivers_count = db.query(models.Driver).filter(
-        models.Driver.is_active == True
-    ).count()
+    # Team members with the Driver role (the old drivers table is no longer used).
+    drivers_count = sum(1 for u in db.query(models.User).filter(models.User.is_active == True).all()
+                        if not u.is_superadmin and u.has_role("driver"))
 
     # Card 4: Total Customer Inquiries & Rental Bookings
     sales_inquiries = db.query(models.Appointment).count()
@@ -1331,6 +1339,29 @@ def _clean_permissions(perms) -> str:
     return models.encode_permissions(perms)
 
 
+def _apply_access(user: models.User, permissions=None, field_roles=None):
+    """
+    Web permissions (vehicles / appointments / rentals) + field roles (driver / gatekeeper).
+    The legacy "gate" permission is accepted and stored as the Gatekeeper role.
+    None = leave that part unchanged.
+    """
+    roles = set(user.field_roles)
+    if field_roles is not None:
+        unknown = [r for r in field_roles if r not in models.FIELD_ROLES]
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"Unknown role(s): {', '.join(unknown)}")
+        roles = set(field_roles)
+    if permissions is not None:
+        _clean_permissions(permissions)  # validates
+        if "gate" in permissions:
+            roles.add("gatekeeper")
+        user.permissions_json = models.encode_permissions([p for p in permissions if p in models.WEB_PERMISSIONS])
+    else:
+        # Drop a legacy "gate" entry: the role now lives in field_roles.
+        user.permissions_json = models.encode_permissions(user.web_permissions)
+    user.field_roles_json = models.encode_field_roles(roles)
+
+
 @app.get("/api/superadmin/staff", response_model=List[schemas.StaffUserOut])
 def get_superadmin_staff(
     db: Session = Depends(get_db),
@@ -1356,7 +1387,7 @@ def invite_or_create_staff(
     norm_phone = normalize_ethiopian_phone(payload.phone_number)
     if is_superadmin_phone(norm_phone):
         raise HTTPException(status_code=400, detail="This is an owner number (SUPERADMIN_PHONE); owners already have full access.")
-    perms = _clean_permissions(payload.permissions)
+    _clean_permissions(payload.permissions)
 
     primary_dealer = get_primary_dealership(db)
     dealer_id = primary_dealer.id if primary_dealer else 1
@@ -1368,7 +1399,7 @@ def invite_or_create_staff(
     if payload.full_name is not None:
         user.full_name = payload.full_name.strip() or None
     user.role = "dealer_admin"
-    user.permissions_json = perms
+    _apply_access(user, payload.permissions or [], payload.field_roles if payload.field_roles is not None else [])
     user.is_active = payload.is_active
     user.dealership_id = dealer_id
     db.commit()
@@ -1398,8 +1429,8 @@ def update_staff_member(
         user.phone_number = norm_phone
     if payload.full_name is not None:
         user.full_name = payload.full_name.strip() or None
-    if payload.permissions is not None:
-        user.permissions_json = _clean_permissions(payload.permissions)
+    if payload.permissions is not None or payload.field_roles is not None:
+        _apply_access(user, payload.permissions, payload.field_roles)
     if payload.is_active is not None:
         user.is_active = payload.is_active
     db.commit()

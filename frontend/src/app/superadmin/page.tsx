@@ -26,10 +26,13 @@ import {
   LayoutDashboard,
   Archive,
   Settings,
+  ClipboardList,
 } from "lucide-react";
 import { User, ExecutiveStats, RentalBooking } from "@/types";
 import AdminDashboard from "@/components/admin/AdminDashboard";
 import StaffManager from "@/components/admin/StaffManager";
+import TasksBoard from "@/components/tasks/TasksBoard";
+import TaskForm from "@/components/tasks/TaskForm";
 import DocumentCenter from "@/components/documents/DocumentCenter";
 import QrLinkModal from "@/components/QrLinkModal";
 import { getApiBaseUrl } from "@/lib/api";
@@ -44,14 +47,15 @@ const RENTAL_STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-zinc-800 text-zinc-400 border-zinc-700",
 };
 
-type HubSection = "overview" | "documents" | "settings" | "rentals" | "staff";
+type HubSection = "overview" | "tasks" | "documents" | "settings" | "rentals" | "staff";
 
 const HUB_SECTIONS: { id: HubSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "tasks", label: "Tasks", icon: ClipboardList },
   { id: "documents", label: "Documents", icon: Archive },
   { id: "settings", label: "Settings", icon: Settings },
   { id: "rentals", label: "Rental Deliveries", icon: Truck },
-  { id: "staff", label: "Staff", icon: Users },
+  { id: "staff", label: "Team", icon: Users },
 ];
 
 // Settings is the last desk still served by the shared AdminDashboard (owner portal).
@@ -94,6 +98,8 @@ export default function ExecutiveOwnerDashboard() {
   // Executive Data State
   const [stats, setStats] = useState<ExecutiveStats | null>(null);
   const [rentals, setRentals] = useState<RentalBooking[]>([]);
+  // "Assign driver" on a rental opens a pre-filled delivery task (pick the driver, save & send).
+  const [assignBooking, setAssignBooking] = useState<RentalBooking | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Toasts
@@ -303,7 +309,7 @@ export default function ExecutiveOwnerDashboard() {
         </div>
       </header>
 
-      {/* Section navigation: Overview | Documents | Settings | Rentals | Staff */}
+      {/* Section navigation: Overview | Tasks | Documents | Settings | Rentals | Team */}
       <nav
         role="tablist"
         aria-label="Owner hub sections"
@@ -498,14 +504,22 @@ export default function ExecutiveOwnerDashboard() {
                       <span className={`px-2 py-1 rounded font-bold ${booking.delivery_type === "doorstep_delivery" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "bg-zinc-800 text-zinc-300"}`}>
                         {booking.delivery_type === "doorstep_delivery" ? "🚚 ያሉበት ድረስ" : "🏢 ከሾውሩም"}
                       </span>
-                      {booking.assigned_driver ? (
+                      {booking.assigned_person ? (
                         <span className="flex items-center gap-1 text-white font-semibold">
-                          <UserCheck size={13} className="text-emerald-400" /> {booking.assigned_driver.full_name}
+                          <UserCheck size={13} className="text-emerald-400" /> {booking.assigned_person.full_name}
                         </span>
                       ) : (
                         <span className="text-amber-400/80 italic flex items-center gap-1"><Clock size={12} /> አልተመደበም (Unassigned)</span>
                       )}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setAssignBooking(booking)}
+                      data-assign-driver={booking.id}
+                      className="w-full h-11 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300 text-sm font-bold flex items-center justify-center gap-1.5"
+                    >
+                      <Truck size={15} /> {booking.assigned_person ? "Re-assign driver · ቀይር" : "Assign driver · ሹፌር መድብ"}
+                    </button>
                     {booking.delivery_address && (
                       <div className="text-xs text-zinc-400 break-words">📍 {booking.delivery_address}</div>
                     )}
@@ -572,14 +586,14 @@ export default function ExecutiveOwnerDashboard() {
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          {booking.assigned_driver ? (
+                          {booking.assigned_person ? (
                             <div>
                               <div className="font-bold text-white text-xs flex items-center gap-1.5">
                                 <UserCheck size={13} className="text-emerald-400" />
-                                {booking.assigned_driver.full_name}
+                                {booking.assigned_person.full_name}
                               </div>
                               <div className="text-[11px] text-zinc-400">
-                                {booking.assigned_driver.phone_number}
+                                {booking.assigned_person.phone_number}
                               </div>
                             </div>
                           ) : (
@@ -587,6 +601,14 @@ export default function ExecutiveOwnerDashboard() {
                               <Clock size={12} /> አልተመደበም (Unassigned)
                             </span>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => setAssignBooking(booking)}
+                            data-assign-driver={booking.id}
+                            className="mt-1.5 h-9 px-3 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-300 text-[11px] font-bold inline-flex items-center gap-1"
+                          >
+                            <Truck size={12} /> {booking.assigned_person ? "Re-assign" : "Assign driver"}
+                          </button>
                         </td>
                         <td className="px-6 py-4">
                           <span
@@ -629,6 +651,20 @@ export default function ExecutiveOwnerDashboard() {
 
         {/* STAFF: add / edit / permissions / active toggle (owner-only API) */}
         {section === "staff" && <StaffManager />}
+        {section === "tasks" && <TasksBoard />}
+        {assignBooking && (
+          <TaskForm
+            booking={assignBooking}
+            onClose={() => setAssignBooking(null)}
+            onSaved={(t) => {
+              showToast(
+                t.telegram?.sent ? `Delivery task #${t.id} sent to ${t.telegram.to}` : `Task #${t.id} saved (not sent)`,
+                t.telegram?.sent ? "success" : "error"
+              );
+              fetchDashboardData();
+            }}
+          />
+        )}
       </main>
 
     </div>

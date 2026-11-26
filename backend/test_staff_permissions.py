@@ -166,7 +166,9 @@ GUARDED = [
 
 
 def test_each_permission():
-    holders = {p: _staff(_phone(), [p])[1] for p in models.STAFF_PERMISSIONS}
+    # Web permissions only: a gate-only (field-only) account can't use the website at all
+    # (test_team_tasks.py covers that); /api/gate/* is covered by test_gate_pass.py.
+    holders = {p: _staff(_phone(), [p])[1] for p in models.WEB_PERMISSIONS}
     _, nobody = _staff(_phone(), [])
     owner = _owner_headers()
     for perm, method, path in GUARDED:
@@ -174,6 +176,8 @@ def test_each_permission():
             r = getattr(client, method)(path, headers=headers)
             if other == perm:
                 assert r.status_code != 403, f"{perm} holder got 403 on {method.upper()} {path}"
+            elif other == "none":
+                assert r.status_code == 401, f"no-permission staff on {method.upper()} {path}: {r.status_code}"
             else:
                 assert r.status_code == 403, f"'{other}' staff on {method.upper()} {path}: {r.status_code} {r.text}"
         r = getattr(client, method)(path, headers=owner)
@@ -185,9 +189,11 @@ def test_each_permission():
     assert client.get("/api/admin/appointments", headers=holders["appointments"]).status_code == 200
     assert client.get("/api/admin/rentals", headers=holders["rentals"]).status_code == 200
     assert client.get("/api/admin/drivers", headers=holders["rentals"]).status_code == 200
-    # Common endpoints stay open to every active staff member, even with no permissions.
+    # Common endpoints stay open to every staff member who can use the website; someone with
+    # no web permission is a field-only account and is refused (401) everywhere.
     for path in ("/api/admin/me", "/api/admin/dealership"):
-        assert client.get(path, headers=nobody).status_code == 200, path
+        assert client.get(path, headers=holders["vehicles"]).status_code == 200, path
+        assert client.get(path, headers=nobody).status_code == 401, path
     # Owner-only areas stay owner-only regardless of permissions.
     _, all_perms = _staff(_phone(), list(models.STAFF_PERMISSIONS))
     for path in ("/api/admin/lot-intakes", "/api/admin/handovers", "/api/superadmin/staff"):

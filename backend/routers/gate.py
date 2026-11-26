@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 import gate_pass as core
 import models
+import tg_config
 from auth import get_current_superadmin, require_permission
 from database import get_db
 from routers.lot_operations import get_target_dealership_id
@@ -56,7 +57,7 @@ def _links(db: Session, gp: models.GatePass) -> Dict:
     return {
         "status": core.pass_status(gp),
         "verify_url": core.verify_url(gp),
-        "driver_link": core.driver_start_link(gp) if core.bot_username() else None,
+        "driver_link": core.driver_start_link(gp),
         "share_text": share,
         "telegram_ready": bool(core.bot_token()),
         "gatekeepers": [_name(u) for u in core.gate_recipients(db)],
@@ -100,11 +101,12 @@ def _staff_or_404(db: Session, user_id: int) -> models.User:
 def staff_telegram_link(user_id: int, db: Session = Depends(get_db), user: models.User = Depends(get_current_superadmin)):
     """One-time link (48 h). Opening it in Telegram stores that chat on this staff member."""
     staff = _staff_or_404(db, user_id)
-    if not core.bot_username():
-        raise HTTPException(status_code=409, detail="Telegram bot username is not configured.")
+    username = core.bot_username()
+    if not username:
+        raise HTTPException(status_code=409, detail=tg_config.NOT_CONFIGURED)
     rec = core.create_link_token(db, "staff_link", user_id=staff.id)
-    return {"url": f"https://t.me/{core.bot_username()}?start=link_{rec.token}",
-            "expires_at": core.fmt_local(rec.expires_at), "bot_username": core.bot_username(),
+    return {"url": f"https://t.me/{username}?start=link_{rec.token}",
+            "expires_at": core.fmt_local(rec.expires_at), "bot_username": username,
             "telegram_ready": bool(core.bot_token())}
 
 
@@ -119,11 +121,12 @@ def staff_telegram_unlink(user_id: int, db: Session = Depends(get_db), user: mod
 @router.post("/api/superadmin/telegram/connect-link")
 def owner_connect_link(db: Session = Depends(get_db), user: models.User = Depends(get_current_superadmin)):
     """Replaces the old forgeable t.me/<bot>?start=connect_<dealership id> link."""
-    if not core.bot_username():
-        raise HTTPException(status_code=409, detail="Telegram bot username is not configured.")
+    username = core.bot_username()
+    if not username:
+        raise HTTPException(status_code=409, detail=tg_config.NOT_CONFIGURED)
     rec = core.create_link_token(db, "dealer_connect", user_id=user.id,
                                  dealership_id=get_target_dealership_id(db, user))
-    return {"url": f"https://t.me/{core.bot_username()}?start=connect_{rec.token}",
+    return {"url": f"https://t.me/{username}?start=connect_{rec.token}",
             "expires_at": core.fmt_local(rec.expires_at)}
 
 

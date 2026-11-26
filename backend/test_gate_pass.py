@@ -144,7 +144,7 @@ def _start(chat, payload):
 
 def test_token_link_flow():
     _, owner_h = _owner()
-    staff_id, staff_h = _user(["gate"], name="Linky")
+    staff_id, staff_h = _user(["vehicles", "gate"], name="Linky")
     # Staff can't make links; owner can.
     assert client.post(f"/api/superadmin/staff/{staff_id}/telegram-link", headers=staff_h).status_code == 403
     r = client.post(f"/api/superadmin/staff/{staff_id}/telegram-link", headers=owner_h)
@@ -247,7 +247,7 @@ def test_send_and_callback_auth():
 def test_expiry_cancel_reject():
     _, owner_h = _owner()
     gk_chat = _chat()
-    gk_id, gk_h = _user(["gate"], chat=gk_chat, name="Gate Kebede")
+    gk_id, gk_h = _user(["vehicles", "gate"], chat=gk_chat, name="Gate Kebede")
     _only_my_gatekeepers({gk_id})
 
     # Default validity: 23:59 Addis time on the pass date.
@@ -295,7 +295,7 @@ def test_expiry_cancel_reject():
 
 def test_gate_screen():
     _, owner_h = _owner()
-    gk_id, gk_h = _user(["gate"], name="Web Gate")
+    gk_id, gk_h = _user(["appointments", "gate"], name="Web Gate")
     _, other_h = _user(["vehicles"])
     gp, _ = _pass(owner_h)
     assert client.get("/api/gate/passes", headers=other_h).status_code == 403
@@ -329,7 +329,7 @@ def test_verify_page_privacy_and_limits():
     assert client.get("/api/public/verify/short").status_code == 404
 
     # Used: shows when and who, still nothing private
-    gk_id, gk_h = _user(["gate"], name="Verify Gate")
+    gk_id, gk_h = _user(["vehicles", "gate"], name="Verify Gate")
     client.post(f"/api/gate/passes/{gp['id']}/confirm", headers=gk_h)
     used = client.get(f"/api/public/verify/{token}").json()
     assert used["status"] == "used" and used["confirmed_by"] == "Verify Gate" and used["exited_at"]

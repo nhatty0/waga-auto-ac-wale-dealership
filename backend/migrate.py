@@ -47,6 +47,11 @@ ADDITIVE_COLUMNS = [
     ("gate_passes", "driver_chat_id", "VARCHAR(50)", "VARCHAR(50)"),
     ("gate_passes", "issued_by", "VARCHAR(150)", "VARCHAR(150)"),
     ("gate_passes", "sent_at", "DATETIME", "TIMESTAMP"),
+    # Team: field roles (Driver, Gatekeeper), Team-member drivers on bookings, alert toggles
+    ("users", "field_roles", "TEXT", "TEXT"),
+    ("rental_bookings", "assigned_user_id", "INTEGER", "INTEGER"),
+    ("dealerships", "alert_appointments_team", "BOOLEAN", "BOOLEAN"),
+    ("dealerships", "alert_rentals_team", "BOOLEAN", "BOOLEAN"),
     # Appointments clean-up (status dropdown + archive/restore)
     ("appointments", "archived_at", "DATETIME", "TIMESTAMP"),
     ("appointments", "archived_by", "VARCHAR(150)", "VARCHAR(150)"),

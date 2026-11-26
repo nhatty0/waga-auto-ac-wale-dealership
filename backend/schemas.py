@@ -311,6 +311,7 @@ class UserOut(BaseModel):
     dealership: Optional[DealershipPublicOut] = None
     is_superadmin: bool = False
     permissions: List[str] = []
+    field_roles: List[str] = []
     is_active: bool = True
     created_at: datetime
 
@@ -367,7 +368,17 @@ class RentalBookingCreate(BaseModel):
 
 
 class AssignDriverRequest(BaseModel):
-    driver_id: int
+    # Team member with the Driver role. (driver_id = the old drivers table, no longer accepted.)
+    user_id: Optional[int] = None
+    driver_id: Optional[int] = None
+
+
+class AssignedPersonOut(BaseModel):
+    id: int
+    full_name: str
+    phone_number: Optional[str] = None
+    telegram_linked: bool = False
+    source: str = "team"  # "team" (Team member) or "legacy" (old drivers table)
 
 
 class RentalBookingStatusUpdate(BaseModel):
@@ -386,11 +397,14 @@ class RentalBookingOut(BaseModel):
     delivery_type: str
     delivery_address: Optional[str] = None
     assigned_driver_id: Optional[int] = None
+    assigned_user_id: Optional[int] = None
     status: str
     dealership_id: Optional[int] = None
     created_at: datetime
     vehicle: Optional[VehicleOut] = None
     assigned_driver: Optional[DriverOut] = None
+    # Who drives it: the Team member, or the legacy driver for old bookings.
+    assigned_person: Optional[AssignedPersonOut] = None
 
     class Config:
         from_attributes = True
@@ -426,8 +440,13 @@ class StaffUserOut(BaseModel):
     role: str
     is_active: bool
     is_superadmin: bool = False
-    # Effective permissions ("vehicles", "appointments", "rentals"); owners have all.
+    # Effective permissions ("vehicles", "appointments", "rentals", + "gate" for gatekeepers).
     permissions: List[str] = []
+    # Website permissions only, and Telegram field roles ("driver", "gatekeeper").
+    web_permissions: List[str] = []
+    field_roles: List[str] = []
+    # False for field-only people: they can't log in to the website.
+    can_use_website: bool = True
     dealership_id: Optional[int] = None
     created_at: Optional[datetime] = None
     telegram_linked: bool = False
@@ -440,6 +459,7 @@ class StaffInviteRequest(BaseModel):
     phone_number: str
     full_name: Optional[str] = None
     permissions: List[str] = []
+    field_roles: Optional[List[str]] = None
     is_active: bool = True
     role: Optional[str] = None  # legacy field, ignored: access is decided by `permissions`
 
@@ -448,6 +468,7 @@ class StaffUpdateRequest(BaseModel):
     full_name: Optional[str] = None
     phone_number: Optional[str] = None
     permissions: Optional[List[str]] = None
+    field_roles: Optional[List[str]] = None
     is_active: Optional[bool] = None
 
 

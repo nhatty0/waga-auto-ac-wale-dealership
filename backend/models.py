@@ -6,15 +6,33 @@ from sqlalchemy import Column, Integer, String, Float, Boolean, Text, DateTime, 
 from sqlalchemy.orm import relationship
 from database import Base
 
-# Staff permissions an owner can tick in /superadmin -> Staff. Superadmins implicitly have all.
-# "gate" = gatekeeper: sees the Gate screen and confirms car exits (web or Telegram).
-STAFF_PERMISSIONS = ("vehicles", "appointments", "rentals", "gate")
+# Team access, set by the owner in /superadmin -> Team. Superadmins implicitly have everything.
+#   Web permissions: what a person may do on the website. At least one is needed to log in.
+#   Field roles: work done through Telegram only (no website login on their own).
+WEB_PERMISSIONS = ("vehicles", "appointments", "rentals")
+FIELD_ROLES = ("driver", "gatekeeper")
+# Effective permission vocabulary checked by require_permission(). "gate" = has the Gatekeeper
+# role (Gate screen in /admin when they can also log in; gate-pass buttons in Telegram).
+STAFF_PERMISSIONS = WEB_PERMISSIONS + ("gate",)
 
 
 def encode_permissions(perms) -> str:
     """Known permissions only, de-duplicated, in canonical order, as a JSON list."""
     wanted = set(perms or [])
     return json.dumps([p for p in STAFF_PERMISSIONS if p in wanted])
+
+
+def encode_field_roles(roles) -> str:
+    wanted = set(roles or [])
+    return json.dumps([r for r in FIELD_ROLES if r in wanted])
+
+
+def _json_list(raw) -> List[str]:
+    try:
+        v = json.loads(raw or "[]")
+    except (TypeError, ValueError):
+        return []
+    return v if isinstance(v, list) else []
 
 
 class VehicleStatus(str, enum.Enum):
@@ -54,6 +72,9 @@ class Dealership(Base):
     telegram_bot_token = Column(String(255), nullable=True)
     telegram_chat_id = Column(String(100), nullable=True)
     telegram_bot_username = Column(String(100), nullable=True)
+    # Optional Telegram alerts to the team (Settings). NULL = on (the default).
+    alert_appointments_team = Column(Boolean, nullable=True)
+    alert_rentals_team = Column(Boolean, nullable=True)
     is_active = Column(Boolean, default=True)
     subscription_plan = Column(String(50), default="starter")
     max_vehicles = Column(Integer, default=50)
@@ -164,17 +185,39 @@ class User(Base):
     # JSON list from STAFF_PERMISSIONS, e.g. '["vehicles","rentals"]'. NULL only on rows that
     # predate staff permissions; migrate.py backfills those with all permissions.
     permissions_json = Column("permissions", Text, nullable=True)
+    # JSON list from FIELD_ROLES, e.g. '["driver"]'. NULL = none (older rows).
+    field_roles_json = Column("field_roles", Text, nullable=True)
+
+    @property
+    def web_permissions(self) -> List[str]:
+        if self.is_superadmin:
+            return list(WEB_PERMISSIONS)
+        stored = _json_list(self.permissions_json)
+        return [p for p in WEB_PERMISSIONS if p in stored]
+
+    @property
+    def field_roles(self) -> List[str]:
+        """Driver / Gatekeeper. A legacy "gate" permission counts as the Gatekeeper role."""
+        stored = set(_json_list(self.field_roles_json))
+        if "gate" in _json_list(self.permissions_json):
+            stored.add("gatekeeper")
+        return [r for r in FIELD_ROLES if r in stored]
+
+    def has_role(self, role: str) -> bool:
+        return role in self.field_roles
+
+    @property
+    def can_use_website(self) -> bool:
+        """Owners, and people with at least one web permission. Field-only people use Telegram."""
+        return self.is_superadmin or bool(self.web_permissions)
 
     @property
     def permissions(self) -> List[str]:
-        """Effective permissions: everything for superadmins, otherwise the stored list."""
+        """Effective permissions: everything for superadmins; otherwise web permissions,
+        plus "gate" for gatekeepers."""
         if self.is_superadmin:
             return list(STAFF_PERMISSIONS)
-        try:
-            stored = json.loads(self.permissions_json or "[]")
-        except (TypeError, ValueError):
-            return []
-        return [p for p in STAFF_PERMISSIONS if isinstance(stored, list) and p in stored]
+        return self.web_permissions + (["gate"] if self.has_role("gatekeeper") else [])
 
     def has_permission(self, perm: str) -> bool:
         return perm in self.permissions
@@ -227,14 +270,31 @@ class RentalBooking(Base):
     total_price = Column(Float, nullable=False)
     delivery_type = Column(String(50), default="showroom_pickup", nullable=False)  # "showroom_pickup" or "doorstep_delivery"
     delivery_address = Column(String(255), nullable=True)                          # e.g. Bole, Old Airport, Kazanchis
+    # Legacy: the old drivers table (kept, no longer written). New assignments use assigned_user_id.
     assigned_driver_id = Column(Integer, ForeignKey("drivers.id"), nullable=True, index=True)
+    # Team member with the Driver role.
+    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     status = Column(String(50), default="pending", nullable=False)                # "pending", "confirmed", "driver_assigned", "delivered", "completed", "cancelled"
     dealership_id = Column(Integer, ForeignKey("dealerships.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     vehicle = relationship("Vehicle", back_populates="rentals")
     assigned_driver = relationship("Driver", back_populates="rentals")
+    assigned_user = relationship("User", foreign_keys=[assigned_user_id])
     dealership = relationship("Dealership", back_populates="rentals")
+
+    @property
+    def assigned_person(self):
+        """Who drives this booking: the Team member, else the legacy driver row (old bookings)."""
+        u = self.assigned_user
+        if u is not None:
+            return {"id": u.id, "full_name": u.full_name or u.phone_number, "phone_number": u.phone_number,
+                    "telegram_linked": u.telegram_linked, "source": "team"}
+        d = self.assigned_driver
+        if d is not None:
+            return {"id": d.id, "full_name": d.full_name, "phone_number": d.phone_number,
+                    "telegram_linked": False, "source": "legacy"}
+        return None
 
 
 class LotIntake(Base):
@@ -393,3 +453,54 @@ class TelegramLinkToken(Base):
     expires_at = Column(DateTime, nullable=False)
     used_at = Column(DateTime, nullable=True)
     used_chat_id = Column(String(50), nullable=True)
+
+
+# Task types and statuses (stored values). Labels live in tasks.py.
+TASK_TYPES = ("rental_delivery", "rental_pickup", "inspection", "move_car", "other")
+TASK_STATUSES = ("new", "accepted", "in_progress", "done", "problem", "cancelled")
+
+
+class Task(Base):
+    """A job for a Team member (superadmin only), sent to their Telegram with status buttons."""
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_type = Column(String(30), nullable=False, default="other")
+    status = Column(String(20), nullable=False, default="new", index=True)
+    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True, index=True)
+    vehicle_label = Column(String(200), nullable=True)            # snapshot or free text
+    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    scheduled_at = Column(DateTime, nullable=True, index=True)    # naive UTC
+    location = Column(String(255), nullable=True)
+    customer_name = Column(String(150), nullable=True)
+    customer_phone = Column(String(50), nullable=True)
+    notes = Column(Text, nullable=True)
+    problem_note = Column(Text, nullable=True)
+    rental_booking_id = Column(Integer, ForeignKey("rental_bookings.id"), nullable=True, index=True)
+    telegram_messages = Column(Text, nullable=True)               # JSON [{chat_id, message_id}]
+    sent_at = Column(DateTime, nullable=True)
+    created_by = Column(String(150), nullable=True)
+    dealership_id = Column(Integer, ForeignKey("dealerships.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+    vehicle = relationship("Vehicle")
+    assigned_user = relationship("User", foreign_keys=[assigned_user_id])
+    rental_booking = relationship("RentalBooking")
+    events = relationship("TaskEvent", back_populates="task", order_by="TaskEvent.id",
+                          cascade="all, delete-orphan")
+
+
+class TaskEvent(Base):
+    """History log: every create / send / status change / edit, with who and when."""
+    __tablename__ = "task_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False, index=True)
+    at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    actor = Column(String(150), nullable=True)
+    action = Column(String(30), nullable=False)                   # created / sent / status / edited / note
+    status = Column(String(20), nullable=True)
+    note = Column(Text, nullable=True)
+
+    task = relationship("Task", back_populates="events")

@@ -181,6 +181,14 @@ def get_current_admin(
             detail=ACCOUNT_DEACTIVATED_MSG if user else "User account inactive or not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # Same rule as the login lock, on every request: removing someone's last web permission
+    # ends an existing 30-day session too.
+    if not user.can_use_website:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=NO_WEB_ACCESS_MSG,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     # Deactivated dealership check:
     # Instantly reject any subsequent request by its users with HTTP 403
@@ -246,6 +254,9 @@ require_rentals = require_permission("rentals")
 # ==========================================
 NOT_REGISTERED_MSG = "ይህ ቁጥር አልተመዘገበም። ባለቤቱን ያነጋግሩ። (This number is not registered. Contact the owner.)"
 ACCOUNT_DEACTIVATED_MSG = "ይህ መለያ ታግዷል። ባለቤቱን ያነጋግሩ። (This account has been deactivated. Contact the owner.)"
+NO_WEB_ACCESS_MSG = ("ይህ ቁጥር የድረ-ገጽ መግቢያ የለውም፤ ስራዎች በቴሌግራም ይደርሱዎታል። "
+                     "(This number has no website access: drivers and gatekeepers work through Telegram. "
+                     "Ask the owner to tick a website permission.)")
 
 
 def find_user_by_phone(normalized_phone: str, db: Session) -> Optional[models.User]:
@@ -277,6 +288,9 @@ def ensure_login_allowed(normalized_phone: str, db: Session) -> models.User:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=NOT_REGISTERED_MSG)
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ACCOUNT_DEACTIVATED_MSG)
+    # Field-only Team members (Driver / Gatekeeper, no web permission) use Telegram only.
+    if not user.can_use_website:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=NO_WEB_ACCESS_MSG)
     return user
 
 
@@ -322,7 +336,8 @@ def resolve_telegram_chat_id(phone: str, db: Session) -> Optional[str]:
 
 async def dispatch_telegram_otp(chat_id: str, otp_code: str) -> bool:
     """Sends 6-digit numeric OTP via Platform Telegram Bot API."""
-    bot_token = settings.TELEGRAM_BOT_TOKEN
+    import tg_config
+    bot_token = tg_config.token()
     if not bot_token:
         print("⚠️ [AUTH TELEGRAM] TELEGRAM_BOT_TOKEN not configured in settings/env")
         return False

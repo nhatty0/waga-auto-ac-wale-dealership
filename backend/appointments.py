@@ -50,11 +50,8 @@ async def dispatch_lead_multichannel(
         return result
 
     # Resolve platform bot token (or dealer custom token if legacy record exists)
-    bot_token = (
-        (dealer.telegram_bot_token.strip() if dealer.telegram_bot_token and dealer.telegram_bot_token.strip() else None)
-        or settings.TELEGRAM_PLATFORM_BOT_TOKEN
-        or settings.TELEGRAM_BOT_TOKEN
-    )
+    import tg_config
+    bot_token = tg_config.token()
 
     customer_name = getattr(booking, "customer_name", "Valued Customer")
     customer_phone = getattr(booking, "phone_number", "")

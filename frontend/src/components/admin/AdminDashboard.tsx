@@ -39,11 +39,12 @@ import {
   Sparkles,
   DoorOpen,
 } from "lucide-react";
-import { Vehicle, Appointment, User, Driver, RentalBooking, StaffPermission, STAFF_PERMISSIONS } from "@/types";
+import { Vehicle, Appointment, User, AssignedPerson, RentalBooking, StaffPermission, STAFF_PERMISSIONS } from "@/types";
 import PrintFlyerModal from "@/components/admin/PrintFlyerModal";
 import ShowroomQrModal from "@/components/admin/ShowroomQrModal";
 import VehicleDocumentsSheet from "@/components/documents/VehicleDocumentsSheet";
 import GateDesk from "@/components/admin/GateDesk";
+import TelegramStatusCard from "@/components/admin/TelegramStatusCard";
 import AppointmentsPanel, { activeAppointmentCount } from "@/components/admin/AppointmentsPanel";
 import { isSuperadminUser } from "@/lib/documents";
 import { getApiBaseUrl } from "@/lib/api";
@@ -183,7 +184,7 @@ export type OwnerSection = "settings";
 
 interface AdminDashboardProps {
   /**
-   * "staff" (/admin): inventory, appointments, rentals, drivers.
+   * "staff" (/admin): inventory, appointments, rentals, gate. (Drivers are Team members: /superadmin -> Team.)
    * "owner" (embedded in /superadmin): settings. (Documents live in the Document Center.) The backend
    * enforces the same split (403 for non-superadmins), this only decides what is shown.
    */
@@ -229,7 +230,7 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
 
   // Dashboard states
   const [staffTab, setActiveTab] = useState<
-    "inventory" | "appointments" | "rentals" | "drivers" | "gate" | "settings"
+    "inventory" | "appointments" | "rentals" | "gate" | "settings"
   >("inventory");
 
   // Staff tabs follow the permissions the owner ticked in /superadmin -> Staff (the backend
@@ -242,7 +243,6 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
     inventory: "vehicles",
     appointments: "appointments",
     rentals: "rentals",
-    drivers: "rentals",
     gate: "gate",
   } as const;
   const allowedStaffTabs = (Object.keys(STAFF_TAB_PERMISSION) as (keyof typeof STAFF_TAB_PERMISSION)[]).filter(
@@ -269,7 +269,8 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
 
   // Car Rental & Driver Dispatch States
   const [rentals, setRentals] = useState<RentalBooking[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
+  // Team members with the Driver role (rental assignment).
+  const [drivers, setDrivers] = useState<AssignedPerson[]>([]);
   const [loadingRentals, setLoadingRentals] = useState(false);
   const [rentalStatusFilter, setRentalStatusFilter] = useState("all");
   const [assigningBooking, setAssigningBooking] = useState<RentalBooking | null>(null);
@@ -450,7 +451,9 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
           localStorage.removeItem("token");
           localStorage.removeItem("dealer_token");
           localStorage.removeItem("dealership");
-          handleUnauthorized();
+          // Show the server's reason (deactivated, or a Telegram-only Driver/Gatekeeper account).
+          const body = await res.json().catch(() => ({}));
+          handleUnauthorized(typeof body?.detail === "string" ? body.detail : undefined);
           return;
         }
 
@@ -780,9 +783,9 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
         console.error("Failed to fetch rentals", rErr);
       }
 
-      // Fetch Drivers
+      // Team members with the Driver role
       try {
-        const drRes = await fetch(`${baseApi}/api/admin/drivers`, { headers });
+        const drRes = await fetch(`${baseApi}/api/admin/team/drivers`, { headers });
         if (drRes.ok) {
           const drData = await drRes.json();
           setDrivers(Array.isArray(drData) ? drData : []);
@@ -827,7 +830,7 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ driver_id: driverId }),
+        body: JSON.stringify({ user_id: driverId }),
       });
 
       if (!res.ok) {
@@ -1991,22 +1994,6 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
             <span className="truncate">Rentals ({rentals.length})</span>
           </button>
         )}
-        {(allowedStaffTabs as string[]).includes("drivers") && (
-          <button
-            onClick={() => setActiveTab("drivers")}
-            role="tab"
-            aria-selected={activeTab === "drivers"}
-            data-admin-tab="drivers"
-            className={`shrink-0 snap-start h-11 flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 rounded-xl text-xs font-semibold border transition text-center whitespace-nowrap ${
-              activeTab === "drivers"
-                ? "bg-amber-500 border-amber-500 text-black shadow-md shadow-amber-500/20"
-                : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
-            }`}
-          >
-            <UserCheck size={14} className="shrink-0" />
-            <span className="truncate">Drivers ({drivers.length})</span>
-          </button>
-        )}
         {(allowedStaffTabs as string[]).includes("gate") && (
           <button
             onClick={() => setActiveTab("gate")}
@@ -2282,10 +2269,11 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
                       <div className="pt-2 border-t border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-2 min-w-0">
                           <span className="text-xs text-zinc-400 font-medium">የተመደበው አሽከርካሪ:</span>
-                          {booking.assigned_driver ? (
+                          {booking.assigned_person ? (
                             <span className="text-xs font-bold text-sky-400 bg-sky-500/10 border border-sky-500/30 px-2 py-0.5 rounded-lg flex items-center gap-1.5 break-words min-w-0">
                               <UserCheck size={13} />
-                              {booking.assigned_driver.full_name} ({booking.assigned_driver.phone_number})
+                              {booking.assigned_person.full_name}
+                              {booking.assigned_person.phone_number ? ` (${booking.assigned_person.phone_number})` : ""}
                             </span>
                           ) : (
                             <span className="text-xs text-zinc-500 italic">
@@ -2299,12 +2287,12 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
                             type="button"
                             onClick={() => {
                               setAssigningBooking(booking);
-                              setSelectedDriverId(booking.assigned_driver_id || "");
+                              setSelectedDriverId(booking.assigned_user_id || "");
                             }}
                             className="flex-1 sm:flex-none justify-center min-h-[44px] sm:min-h-0 px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 rounded-xl text-sm sm:text-xs font-bold transition flex items-center gap-1.5 active:scale-95"
                           >
                             <Truck size={13} />
-                            <span>{booking.assigned_driver ? "አሽከርካሪ ቀይር" : "አሽከርካሪ መድብ"}</span>
+                            <span>{booking.assigned_person ? "አሽከርካሪ ቀይር" : "አሽከርካሪ መድብ"}</span>
                           </button>
 
                           {/* Quick Status Dropdown */}
@@ -2329,87 +2317,8 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
         </div>
       )}
 
-      {/* DRIVERS ROSTER TAB CONTENT */}
-      {!isOwnerPortal && activeTab === "drivers" && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-900 border border-zinc-800 p-4 rounded-2xl">
-            <div className="min-w-0">
-              <h3 className="font-black text-sm text-white flex items-center gap-2">
-                <UserCheck size={18} className="text-amber-400 shrink-0" />
-                <span>የ AC Wale Cars አሽከርካሪዎች ስምሪት (Driver Roster)</span>
-              </h3>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                የተመዘገቡ አሽከርካሪዎችን ዝርዝር እና የስምሪት ሁኔታ ይቆጣጠሩ።
-              </p>
-            </div>
-
-            {isSuperadminUser(currentUser) ? (
-              <Link
-                href="/superadmin?section=staff"
-                className="min-h-[44px] py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-black font-black text-sm sm:text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 shrink-0"
-              >
-                <Pencil size={14} />
-                <span>Manage drivers · አስተዳድር</span>
-              </Link>
-            ) : (
-              <p className="text-[11px] text-zinc-500 sm:max-w-[14rem] sm:text-right">
-                Drivers are added by the owner. · አሽከርካሪዎችን የሚመዘግበው ባለቤቱ ነው።
-              </p>
-            )}
-          </div>
-
-          {drivers.length === 0 ? (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center space-y-3">
-              <UserCheck size={32} className="text-zinc-600 mx-auto" />
-              <p className="text-xs text-zinc-400 font-semibold">
-                ምንም የተመዘገበ አሽከርካሪ የለም። (No drivers registered yet)
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {drivers.map((d) => (
-                <div
-                  key={d.id}
-                  className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3 shadow-md flex flex-col justify-between"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h4 className="font-bold text-sm text-white break-words">{d.full_name}</h4>
-                      <div className="flex items-center gap-2 text-sm sm:text-xs text-amber-400 font-mono">
-                        <Phone size={12} />
-                        <a href={`tel:${d.phone_number}`} className="hover:underline inline-flex items-center min-h-[44px] sm:min-h-0 sm:mt-1">
-                          {d.phone_number}
-                        </a>
-                      </div>
-                      {d.license_number && (
-                        <p className="text-[11px] text-zinc-500 mt-0.5">
-                          መንጃ ፍቃድ: {d.license_number}
-                        </p>
-                      )}
-                    </div>
-
-                    <span
-                      className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                        d.is_active
-                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                          : "bg-zinc-800 text-zinc-500 border-zinc-700"
-                      }`}
-                    >
-                      {d.is_active ? "ንቁ (Active)" : "እረፍት (Inactive)"}
-                    </span>
-                  </div>
-
-                  <div className="pt-2 border-t border-zinc-800/80">
-                    <span className="text-[11px] text-zinc-500 font-mono">ID: #{d.id}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* SETTINGS TAB CONTENT */}
+      {isOwnerPortal && activeTab === "settings" && <TelegramStatusCard />}
       {isOwnerPortal && activeTab === "settings" && (
         <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-6 max-w-2xl">
           <div className="flex items-center justify-between pb-5 border-b border-zinc-800 mb-6">
@@ -3514,14 +3423,19 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
               >
                 <option value="">-- አሽከርካሪ ይምረጡ --</option>
-                {drivers
-                  .filter((d) => d.is_active)
-                  .map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.full_name} ({d.phone_number})
-                    </option>
-                  ))}
+                {drivers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.full_name}
+                    {d.phone_number ? ` (${d.phone_number})` : ""}
+                    {d.telegram_linked ? "" : " · no Telegram"}
+                  </option>
+                ))}
               </select>
+              {drivers.length === 0 && (
+                <p className="text-[11px] text-zinc-500 mt-2">
+                  No drivers yet. The owner adds them in SuperAdmin → Team (tick Driver). / ሹፌሮችን ባለቤቱ ይመዘግባል።
+                </p>
+              )}
             </div>
 
             <div className="flex gap-2 pt-2">

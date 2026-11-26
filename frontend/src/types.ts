@@ -138,8 +138,15 @@ export interface User {
   created_at: string;
 }
 
+/** Effective permissions; "gate" = has the Gatekeeper field role. */
 export type StaffPermission = "vehicles" | "appointments" | "rentals" | "gate";
 export const STAFF_PERMISSIONS: StaffPermission[] = ["vehicles", "appointments", "rentals", "gate"];
+/** What a person may do on the website. At least one is needed to log in. */
+export type WebPermission = "vehicles" | "appointments" | "rentals";
+export const WEB_PERMISSIONS: WebPermission[] = ["vehicles", "appointments", "rentals"];
+/** Work done through Telegram (no website login on their own). */
+export type FieldRole = "driver" | "gatekeeper";
+export const FIELD_ROLES: FieldRole[] = ["driver", "gatekeeper"];
 
 export interface Driver {
   id: number;
@@ -173,12 +180,25 @@ export interface RentalBooking {
   total_price: number;
   delivery_type: "showroom_pickup" | "doorstep_delivery";
   delivery_address?: string | null;
+  /** Legacy (old drivers table). */
   assigned_driver_id?: number | null;
+  /** Team member with the Driver role. */
+  assigned_user_id?: number | null;
   status: "pending" | "confirmed" | "driver_assigned" | "delivered" | "completed" | "cancelled";
   dealership_id?: number | null;
   created_at: string;
   vehicle?: Vehicle | null;
   assigned_driver?: Driver | null;
+  /** Who drives it: the Team member, or the legacy driver on old bookings. */
+  assigned_person?: AssignedPerson | null;
+}
+
+export interface AssignedPerson {
+  id: number;
+  full_name: string;
+  phone_number?: string | null;
+  telegram_linked?: boolean;
+  source?: "team" | "legacy";
 }
 
 export interface ExecutiveStats {
@@ -209,10 +229,58 @@ export interface StaffUser {
   /** Owners (SUPERADMIN_PHONE) are listed but can't be edited here. */
   is_superadmin?: boolean;
   permissions: StaffPermission[];
+  web_permissions?: WebPermission[];
+  field_roles?: FieldRole[];
+  /** False for field-only people (Driver / Gatekeeper without a web permission). */
+  can_use_website?: boolean;
   dealership_id?: number | null;
   created_at?: string | null;
-  /** A Telegram chat is linked (gate passes are sent there). */
+  /** A Telegram chat is linked (tasks and gate passes are sent there). */
   telegram_linked?: boolean;
+}
+
+export type TaskType = "rental_delivery" | "rental_pickup" | "inspection" | "move_car" | "other";
+export type TaskStatus = "new" | "accepted" | "in_progress" | "done" | "problem" | "cancelled";
+
+export interface TaskEvent {
+  at: string;
+  actor?: string | null;
+  action: "created" | "sent" | "status" | "edited" | "note" | string;
+  status?: TaskStatus | null;
+  status_label?: string | null;
+  note?: string | null;
+}
+
+export interface Task {
+  id: number;
+  task_type: TaskType;
+  type_label: string;
+  status: TaskStatus;
+  status_label: string;
+  vehicle_id?: number | null;
+  vehicle_label?: string | null;
+  vehicle_text: string;
+  assigned_user_id?: number | null;
+  assigned_name?: string | null;
+  assigned_phone?: string | null;
+  assigned_linked: boolean;
+  /** "2026-11-28T10:00" in Addis time (for a datetime-local input). */
+  scheduled_at: string;
+  scheduled_label: string;
+  location?: string | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  notes?: string | null;
+  problem_note?: string | null;
+  rental_booking_id?: number | null;
+  sent_at: string;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  copy_text: string;
+  events: TaskEvent[];
+  /** Only on create / edit / re-send answers. */
+  telegram?: { sent: boolean; reason?: string; to?: string };
 }
 
 export interface GatePass {

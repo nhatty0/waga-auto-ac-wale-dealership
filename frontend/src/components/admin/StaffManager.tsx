@@ -1,28 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Car, Calendar, DoorOpen, Key, Pencil, Plus, Send, ShieldCheck, Trash2, UserX, Users, X, RotateCw, Unlink } from "lucide-react";
+import { Car, Calendar, DoorOpen, Key, Pencil, Plus, Send, ShieldCheck, Trash2, Truck, UserX, Users, X, RotateCw, Unlink, Smartphone } from "lucide-react";
 import QrLinkModal from "@/components/QrLinkModal";
-import { STAFF_PERMISSIONS, StaffPermission, StaffUser } from "@/types";
+import { FIELD_ROLES, FieldRole, StaffUser, WEB_PERMISSIONS, WebPermission } from "@/types";
 import { getApiBaseUrl } from "@/lib/api";
-import DriversManager from "@/components/admin/DriversManager";
 
-const PERMISSION_INFO: Record<StaffPermission, { label: string; am: string; hint: string; icon: typeof Car }> = {
+const WEB_INFO: Record<WebPermission, { label: string; am: string; hint: string; icon: typeof Car }> = {
   vehicles: { label: "Vehicles", am: "መኪኖች", hint: "Post, edit and delete listings", icon: Car },
   appointments: { label: "Appointments", am: "ቀጠሮዎች", hint: "Test drives & visits", icon: Calendar },
   rentals: { label: "Rentals", am: "ኪራይ", hint: "Bookings + assign drivers", icon: Key },
-  gate: { label: "Gate", am: "በር ጥበቃ", hint: "Gatekeeper: confirms cars leaving (Telegram or web)", icon: DoorOpen },
+};
+
+const ROLE_INFO: Record<FieldRole, { label: string; am: string; hint: string; icon: typeof Car }> = {
+  driver: { label: "Driver", am: "ሹፌር", hint: "Gets delivery / move tasks in Telegram; can be assigned to rentals", icon: Truck },
+  gatekeeper: { label: "Gatekeeper", am: "በር ጥበቃ", hint: "Gets gate passes in Telegram and confirms cars leaving", icon: DoorOpen },
 };
 
 interface StaffForm {
   id: number | null;
   full_name: string;
   phone_number: string;
-  permissions: StaffPermission[];
+  permissions: WebPermission[];
+  field_roles: FieldRole[];
   is_active: boolean;
 }
 
-const EMPTY_FORM: StaffForm = { id: null, full_name: "", phone_number: "", permissions: [], is_active: true };
+const EMPTY_FORM: StaffForm = { id: null, full_name: "", phone_number: "", permissions: [], field_roles: [], is_active: true };
 
 const displayPhone = (p: string) => {
   const d = (p || "").replace(/\D/g, "");
@@ -32,12 +36,17 @@ const displayPhone = (p: string) => {
 const getToken = () =>
   typeof window === "undefined" ? null : localStorage.getItem("dealer_token") || localStorage.getItem("token");
 
+const webPerms = (u: StaffUser): WebPermission[] =>
+  u.web_permissions ?? (u.permissions.filter((p) => p !== "gate") as WebPermission[]);
+const roles = (u: StaffUser): FieldRole[] =>
+  u.field_roles ?? (u.permissions.includes("gate") ? ["gatekeeper"] : []);
+
 /**
- * Owner-only staff list (/superadmin -> Staff): cards with name, phone, permission chips and
- * an Active toggle; Add / Edit / Deactivate / Remove. Deactivate keeps the account (can be switched
- * back on); Remove deletes it for good. Names already printed on intake records, gate passes and
- * handover contracts are stored as text, so those keep them. The backend enforces every rule.
- * Below the staff list: the driver roster (also owner-only).
+ * Owner-only Team list (/superadmin -> Team). One person = website permissions (Vehicles,
+ * Appointments, Rentals) + field roles (Driver, Gatekeeper). Field-only people can't log in to the
+ * website: their work arrives in Telegram. Deactivate keeps the account; Remove deletes it for good
+ * (names already printed on documents are stored as text, so those keep them). The backend
+ * enforces every rule.
  */
 export default function StaffManager() {
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -52,18 +61,15 @@ export default function StaffManager() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const api = useCallback(
-    async (path: string, init?: RequestInit) => {
-      const res = await fetch(`${getApiBaseUrl()}${path}`, {
-        ...init,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken() || ""}`, ...(init?.headers || {}) },
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof body?.detail === "string" ? body.detail : "Request failed");
-      return body;
-    },
-    []
-  );
+  const api = useCallback(async (path: string, init?: RequestInit) => {
+    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken() || ""}`, ...(init?.headers || {}) },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof body?.detail === "string" ? body.detail : "Request failed");
+    return body;
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,7 +77,7 @@ export default function StaffManager() {
       const list: StaffUser[] = await api("/api/superadmin/staff");
       setStaff(Array.isArray(list) ? list : []);
     } catch (e) {
-      onToast((e as Error).message || "Could not load staff", "error");
+      onToast((e as Error).message, "error");
     } finally {
       setLoading(false);
     }
@@ -89,6 +95,9 @@ export default function StaffManager() {
     setBusyId(u.id);
     try {
       const r = await api(`/api/superadmin/staff/${u.id}/telegram-link`, { method: "POST" });
+      if (!r?.url || !/^https:\/\/t\.me\/[A-Za-z][A-Za-z0-9_]{3,31}\?start=/.test(r.url)) {
+        throw new Error("Bot username not configured. Check Settings → Telegram status.");
+      }
       setTgLink({ user: u, url: r.url, expires: r.expires_at });
     } catch (e) {
       onToast((e as Error).message, "error");
@@ -98,7 +107,7 @@ export default function StaffManager() {
   };
 
   const unlinkTelegram = async (u: StaffUser) => {
-    if (!confirm(`Unlink Telegram for ${u.full_name || u.phone_number}? Gate passes stop going to that chat.`)) return;
+    if (!confirm(`Unlink Telegram for ${u.full_name || displayPhone(u.phone_number)}? Tasks and gate passes stop reaching them until they link again.`)) return;
     setBusyId(u.id);
     try {
       await api(`/api/superadmin/staff/${u.id}/telegram`, { method: "DELETE" });
@@ -121,7 +130,7 @@ export default function StaffManager() {
         body: JSON.stringify({ is_active: !u.is_active }),
       });
       upsert(updated);
-      onToast(updated.is_active ? `${updated.full_name || "Staff"} can log in again` : `${updated.full_name || "Staff"} deactivated: blocked immediately`);
+      onToast(updated.is_active ? `${updated.full_name || "Member"} is active again` : `${updated.full_name || "Member"} deactivated: blocked immediately`);
     } catch (e) {
       onToast((e as Error).message, "error");
     } finally {
@@ -133,11 +142,7 @@ export default function StaffManager() {
     const who = u.full_name || displayPhone(u.phone_number);
     if (
       !confirm(
-        `Remove ${who} completely?
-
-Their login, permissions and Telegram link are deleted. This cannot be undone (you can add the number again later as a new staff member).
-
-${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይችልም።`
+        `Remove ${who} completely?\n\nTheir login, roles and Telegram link are deleted. This cannot be undone (you can add the number again later).\n\n${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይችልም።`
       )
     )
       return;
@@ -149,7 +154,7 @@ ${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይ�
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(typeof body?.detail === "string" ? body.detail : "Could not remove staff member");
+        throw new Error(typeof body?.detail === "string" ? body.detail : "Could not remove this person");
       }
       setStaff((prev) => prev.filter((s) => s.id !== u.id));
       onToast(`${who} removed`);
@@ -167,6 +172,10 @@ ${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይ�
       setFormError("Name and phone are required. / ስም እና ስልክ ያስገቡ።");
       return;
     }
+    if (form.permissions.length === 0 && form.field_roles.length === 0) {
+      setFormError("Tick at least one website permission or field role. / ቢያንስ አንድ ይምረጡ።");
+      return;
+    }
     setSaving(true);
     setFormError(null);
     try {
@@ -174,13 +183,20 @@ ${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይ�
         full_name: form.full_name.trim(),
         phone_number: form.phone_number.trim(),
         permissions: form.permissions,
+        field_roles: form.field_roles,
         is_active: form.is_active,
       });
       const saved: StaffUser = form.id
         ? await api(`/api/superadmin/staff/${form.id}`, { method: "PUT", body })
         : await api("/api/superadmin/staff", { method: "POST", body });
       upsert(saved);
-      onToast(form.id ? "Staff member updated" : `${saved.full_name} added. They can now log in with ${displayPhone(saved.phone_number)}`);
+      onToast(
+        form.id
+          ? "Team member updated"
+          : saved.can_use_website === false
+          ? `${saved.full_name} added. Tap Link Telegram so their tasks reach them.`
+          : `${saved.full_name} added. They can log in with ${displayPhone(saved.phone_number)}`
+      );
       setForm(null);
     } catch (err) {
       setFormError((err as Error).message);
@@ -189,10 +205,14 @@ ${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይ�
     }
   };
 
-  const togglePerm = (p: StaffPermission) =>
+  const togglePerm = (p: WebPermission) =>
     setForm((f) => (f ? { ...f, permissions: f.permissions.includes(p) ? f.permissions.filter((x) => x !== p) : [...f.permissions, p] } : f));
+  const toggleRole = (r: FieldRole) =>
+    setForm((f) => (f ? { ...f, field_roles: f.field_roles.includes(r) ? f.field_roles.filter((x) => x !== r) : [...f.field_roles, r] } : f));
 
-  const activeCount = staff.filter((s) => !s.is_superadmin && s.is_active).length;
+  const members = staff.filter((s) => !s.is_superadmin);
+  const activeCount = members.filter((s) => s.is_active).length;
+  const driverCount = members.filter((s) => s.is_active && roles(s).includes("driver")).length;
 
   return (
     <section className="space-y-4">
@@ -209,23 +229,24 @@ ${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይ�
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-base font-black text-white flex items-center gap-2">
-            <Users size={18} className="text-amber-400 shrink-0" /> ሰራተኞች (Staff)
+            <Users size={18} className="text-amber-400 shrink-0" /> ቡድን (Team)
           </h2>
           <p className="text-xs text-zinc-400 mt-0.5">
-            {activeCount} active · only these numbers (and owners) can log in
+            {activeCount} active · {driverCount} driver{driverCount === 1 ? "" : "s"}
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
           <button
             type="button"
             onClick={load}
-            aria-label="Refresh staff list"
+            aria-label="Refresh team list"
             className="h-11 w-11 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-center justify-center"
           >
             <RotateCw size={16} className={loading ? "animate-spin" : ""} />
           </button>
           <button
             type="button"
+            data-team-add
             onClick={() => {
               setFormError(null);
               setForm({ ...EMPTY_FORM });
@@ -242,137 +263,160 @@ ${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይ�
           <div className="w-7 h-7 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : staff.length === 0 ? (
-        <p className="py-10 text-center text-sm text-zinc-500">No staff yet. Tap Add to register the first one.</p>
+        <p className="py-10 text-center text-sm text-zinc-500">No team members yet. Tap Add to register the first one.</p>
       ) : (
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {staff.map((u) => (
-            <li
-              key={u.id}
-              className={`min-w-0 rounded-2xl border p-4 space-y-3 ${u.is_active ? "bg-zinc-900 border-zinc-800" : "bg-zinc-950 border-zinc-900 opacity-70"}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-bold text-white truncate">{u.full_name || "Unnamed"}</p>
-                  <a href={`tel:+${u.phone_number}`} className="text-xs text-zinc-400 font-mono tabular-nums">
-                    {displayPhone(u.phone_number)}
-                  </a>
-                </div>
-                {u.is_superadmin ? (
-                  <span className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-300 text-[11px] font-bold">
-                    <ShieldCheck size={12} /> Owner
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={u.is_active}
-                    aria-label={`${u.is_active ? "Deactivate" : "Activate"} ${u.full_name || u.phone_number}`}
-                    disabled={busyId === u.id}
-                    onClick={() => toggleActive(u)}
-                    className="shrink-0 h-11 flex items-center gap-2 text-[11px] font-bold disabled:opacity-50"
-                  >
-                    <span className={u.is_active ? "text-emerald-400" : "text-zinc-500"}>{u.is_active ? "Active" : "Off"}</span>
-                    <span className={`relative w-11 h-6 rounded-full transition ${u.is_active ? "bg-emerald-500" : "bg-zinc-700"}`}>
-                      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${u.is_active ? "left-[22px]" : "left-0.5"}`} />
+          {staff.map((u) => {
+            const wp = webPerms(u);
+            const fr = roles(u);
+            const fieldOnly = !u.is_superadmin && wp.length === 0;
+            return (
+              <li
+                key={u.id}
+                data-member-id={u.id}
+                className={`min-w-0 rounded-2xl border p-4 space-y-3 ${u.is_active ? "bg-zinc-900 border-zinc-800" : "bg-zinc-950 border-zinc-900 opacity-70"}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-white truncate">{u.full_name || "Unnamed"}</p>
+                    <a href={`tel:+${u.phone_number}`} className="text-xs text-zinc-400 font-mono tabular-nums">
+                      {displayPhone(u.phone_number)}
+                    </a>
+                  </div>
+                  {u.is_superadmin ? (
+                    <span className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-300 text-[11px] font-bold">
+                      <ShieldCheck size={12} /> Owner
                     </span>
-                  </button>
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-1.5">
-                {u.is_superadmin ? (
-                  <span className="px-2 py-1 rounded-lg bg-zinc-800 text-zinc-300 text-[11px] font-semibold">Everything</span>
-                ) : u.permissions.length === 0 ? (
-                  <span className="px-2 py-1 rounded-lg bg-zinc-800/60 text-zinc-500 text-[11px] font-semibold">No access yet</span>
-                ) : (
-                  u.permissions.map((p) => {
-                    const Info = PERMISSION_INFO[p];
-                    return (
-                      <span key={p} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-semibold">
-                        <Info.icon size={12} /> {Info.label}
+                  ) : (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={u.is_active}
+                      aria-label={`${u.is_active ? "Deactivate" : "Activate"} ${u.full_name || u.phone_number}`}
+                      disabled={busyId === u.id}
+                      onClick={() => toggleActive(u)}
+                      className="shrink-0 h-11 flex items-center gap-2 text-[11px] font-bold disabled:opacity-50"
+                    >
+                      <span className={u.is_active ? "text-emerald-400" : "text-zinc-500"}>{u.is_active ? "Active" : "Off"}</span>
+                      <span className={`relative w-11 h-6 rounded-full transition ${u.is_active ? "bg-emerald-500" : "bg-zinc-700"}`}>
+                        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${u.is_active ? "left-[22px]" : "left-0.5"}`} />
                       </span>
-                    );
-                  })
-                )}
-              </div>
+                    </button>
+                  )}
+                </div>
 
-              {!u.is_superadmin && (
-                <div className="flex items-center gap-2 min-w-0">
-                  {u.telegram_linked ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {u.is_superadmin ? (
+                    <span className="px-2 py-1 rounded-lg bg-zinc-800 text-zinc-300 text-[11px] font-semibold">Everything</span>
+                  ) : (
                     <>
-                      <span className="min-w-0 flex-1 truncate inline-flex items-center gap-1.5 text-xs font-bold text-sky-300">
-                        <Send size={13} className="shrink-0" /> Telegram linked ✓
-                      </span>
+                      {wp.map((p) => {
+                        const Info = WEB_INFO[p];
+                        return (
+                          <span key={p} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-semibold">
+                            <Info.icon size={12} /> {Info.label}
+                          </span>
+                        );
+                      })}
+                      {fr.map((r) => {
+                        const Info = ROLE_INFO[r];
+                        return (
+                          <span key={r} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-500/10 border border-sky-500/25 text-sky-300 text-[11px] font-semibold">
+                            <Info.icon size={12} /> {Info.label}
+                          </span>
+                        );
+                      })}
+                      {wp.length === 0 && fr.length === 0 && (
+                        <span className="px-2 py-1 rounded-lg bg-zinc-800/60 text-zinc-500 text-[11px] font-semibold">No access yet</span>
+                      )}
+                    </>
+                  )}
+                </div>
+                {fieldOnly && (
+                  <p className="text-[11px] text-zinc-400 flex items-center gap-1.5">
+                    <Smartphone size={12} className="shrink-0" /> Telegram only: no website login. / በቴሌግራም ብቻ
+                  </p>
+                )}
+
+                {!u.is_superadmin && (
+                  <div className="flex items-center gap-2 min-w-0">
+                    {u.telegram_linked ? (
+                      <>
+                        <span className="min-w-0 flex-1 truncate inline-flex items-center gap-1.5 text-xs font-bold text-sky-300">
+                          <Send size={13} className="shrink-0" /> Telegram linked ✓
+                        </span>
+                        <button
+                          type="button"
+                          disabled={busyId === u.id}
+                          onClick={() => unlinkTelegram(u)}
+                          aria-label={`Unlink Telegram for ${u.full_name || u.phone_number}`}
+                          className="h-11 px-3 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          <Unlink size={13} /> Unlink
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={busyId === u.id || !u.is_active}
+                        onClick={() => linkTelegram(u)}
+                        data-link-telegram={u.id}
+                        className="w-full h-11 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40"
+                      >
+                        <Send size={14} /> Link Telegram
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {!u.is_superadmin && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormError(null);
+                        setForm({ id: u.id, full_name: u.full_name || "", phone_number: displayPhone(u.phone_number), permissions: [...wp], field_roles: [...fr], is_active: u.is_active });
+                      }}
+                      className="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-bold flex items-center justify-center gap-1.5"
+                    >
+                      <Pencil size={14} /> Edit
+                    </button>
+                    {u.is_active ? (
                       <button
                         type="button"
                         disabled={busyId === u.id}
-                        onClick={() => unlinkTelegram(u)}
-                        aria-label={`Unlink Telegram for ${u.full_name || u.phone_number}`}
-                        className="h-11 px-3 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+                        onClick={() => {
+                          if (confirm(`Deactivate ${u.full_name || u.phone_number}? They are blocked on their next action. Their records stay.`)) toggleActive(u);
+                        }}
+                        className="h-11 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50"
                       >
-                        <Unlink size={13} /> Unlink
+                        <UserX size={14} /> Deactivate
                       </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={busyId === u.id || !u.is_active}
-                      onClick={() => linkTelegram(u)}
-                      className="w-full h-11 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40"
-                    >
-                      <Send size={14} /> Link Telegram
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {!u.is_superadmin && (
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormError(null);
-                      setForm({ id: u.id, full_name: u.full_name || "", phone_number: displayPhone(u.phone_number), permissions: [...u.permissions], is_active: u.is_active });
-                    }}
-                    className="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-bold flex items-center justify-center gap-1.5"
-                  >
-                    <Pencil size={14} /> Edit
-                  </button>
-                  {u.is_active ? (
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={busyId === u.id}
+                        onClick={() => toggleActive(u)}
+                        className="h-11 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold disabled:opacity-50"
+                      >
+                        Reactivate
+                      </button>
+                    )}
                     <button
                       type="button"
                       disabled={busyId === u.id}
-                      onClick={() => {
-                        if (confirm(`Deactivate ${u.full_name || u.phone_number}? They are logged out on their next action. Their records stay.`)) toggleActive(u);
-                      }}
-                      className="h-11 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      onClick={() => removeForever(u)}
+                      data-staff-remove={u.id}
+                      aria-label={`Remove ${u.full_name || u.phone_number} permanently`}
+                      className="h-11 rounded-xl bg-zinc-950 hover:bg-red-500/15 border border-red-500/40 text-red-400 text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
-                      <UserX size={14} /> Deactivate
+                      <Trash2 size={14} /> Remove
                     </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={busyId === u.id}
-                      onClick={() => toggleActive(u)}
-                      className="h-11 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold disabled:opacity-50"
-                    >
-                      Reactivate
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    disabled={busyId === u.id}
-                    onClick={() => removeForever(u)}
-                    data-staff-remove={u.id}
-                    aria-label={`Remove ${u.full_name || u.phone_number} permanently`}
-                    className="h-11 rounded-xl bg-zinc-950 hover:bg-red-500/15 border border-red-500/40 text-red-400 text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50"
-                  >
-                    <Trash2 size={14} /> Remove
-                  </button>
-                </div>
-              )}
-            </li>
-          ))}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -384,7 +428,7 @@ ${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይ�
             className="w-full sm:max-w-md max-h-[92vh] overflow-y-auto bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-4"
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-black text-white">{form.id ? "Edit staff" : "Add staff"}</h3>
+              <h3 className="text-base font-black text-white">{form.id ? "Edit team member" : "Add team member"}</h3>
               <button type="button" onClick={() => setForm(null)} aria-label="Close" className="h-11 w-11 -mr-2 flex items-center justify-center text-zinc-400">
                 <X size={18} />
               </button>
@@ -410,20 +454,19 @@ ${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይ�
                 autoComplete="tel"
                 className="w-full h-11 px-3.5 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-base sm:text-sm text-white font-mono focus:outline-none"
               />
-              <span className="block text-[11px] text-zinc-500">They log in at /admin with this number (code by SMS).</span>
             </label>
 
             <fieldset className="space-y-2">
-              <legend className="text-xs font-bold text-zinc-300 mb-1.5">ፈቃዶች (Permissions)</legend>
-              {STAFF_PERMISSIONS.map((p) => {
-                const Info = PERMISSION_INFO[p];
+              <legend className="text-xs font-bold text-zinc-300 mb-1.5">የድረ-ገጽ ፈቃዶች (Website permissions)</legend>
+              {WEB_PERMISSIONS.map((p) => {
+                const Info = WEB_INFO[p];
                 const on = form.permissions.includes(p);
                 return (
                   <label
                     key={p}
                     className={`flex items-center gap-3 min-h-12 px-3.5 py-2 rounded-xl border cursor-pointer transition ${on ? "bg-amber-500/10 border-amber-500/40" : "bg-zinc-950 border-zinc-800"}`}
                   >
-                    <input type="checkbox" checked={on} onChange={() => togglePerm(p)} className="w-5 h-5 accent-amber-500 shrink-0" />
+                    <input type="checkbox" checked={on} onChange={() => togglePerm(p)} data-perm={p} className="w-5 h-5 accent-amber-500 shrink-0" />
                     <Info.icon size={16} className={on ? "text-amber-400" : "text-zinc-500"} />
                     <span className="min-w-0">
                       <span className="block text-sm font-bold text-white">
@@ -434,11 +477,39 @@ ${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይ�
                   </label>
                 );
               })}
-              <p className="text-[11px] text-zinc-500">Settings, Lot &amp; Gate Pass, Documents and Staff are always owner-only.</p>
+            </fieldset>
+
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-bold text-zinc-300 mb-1.5">የመስክ ስራ (Field roles, via Telegram)</legend>
+              {FIELD_ROLES.map((r) => {
+                const Info = ROLE_INFO[r];
+                const on = form.field_roles.includes(r);
+                return (
+                  <label
+                    key={r}
+                    className={`flex items-center gap-3 min-h-12 px-3.5 py-2 rounded-xl border cursor-pointer transition ${on ? "bg-sky-500/10 border-sky-500/40" : "bg-zinc-950 border-zinc-800"}`}
+                  >
+                    <input type="checkbox" checked={on} onChange={() => toggleRole(r)} data-role={r} className="w-5 h-5 accent-sky-500 shrink-0" />
+                    <Info.icon size={16} className={on ? "text-sky-400" : "text-zinc-500"} />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-white">
+                        {Info.label} <span className="text-zinc-500 font-normal">· {Info.am}</span>
+                      </span>
+                      <span className="block text-[11px] text-zinc-400">{Info.hint}</span>
+                    </span>
+                  </label>
+                );
+              })}
+              <p className="text-[11px] text-zinc-500">
+                {form.permissions.length === 0
+                  ? "No website permission ticked: this person can't log in to the website. Tasks reach them in Telegram."
+                  : `Logs in at /admin with this number (code by SMS).`}{" "}
+                Settings, Documents, Tasks and Team are always owner-only.
+              </p>
             </fieldset>
 
             <label className="flex items-center justify-between gap-3 min-h-12 px-3.5 rounded-xl bg-zinc-950 border border-zinc-800 cursor-pointer">
-              <span className="text-sm font-bold text-white">Active (can log in)</span>
+              <span className="text-sm font-bold text-white">Active</span>
               <input
                 type="checkbox"
                 checked={form.is_active}
@@ -453,19 +524,17 @@ ${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይ�
               <button type="button" onClick={() => setForm(null)} className="h-12 rounded-xl bg-zinc-800 text-zinc-200 text-sm font-bold">
                 Cancel
               </button>
-              <button type="submit" disabled={saving} className="h-12 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-sm font-black disabled:opacity-60">
-                {saving ? "Saving…" : form.id ? "Save" : "Add staff"}
+              <button type="submit" disabled={saving} data-team-save className="h-12 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-sm font-black disabled:opacity-60">
+                {saving ? "Saving…" : form.id ? "Save" : "Add"}
               </button>
             </div>
           </form>
         </div>
       )}
-      <DriversManager />
-
       {tgLink && (
         <QrLinkModal
           title={`Link Telegram: ${tgLink.user.full_name || displayPhone(tgLink.user.phone_number)}`}
-          subtitle="One-time link for THIS staff member's own Telegram"
+          subtitle="One-time link for THIS person's own Telegram"
           url={tgLink.url}
           onClose={() => setTgLink(null)}
           note={

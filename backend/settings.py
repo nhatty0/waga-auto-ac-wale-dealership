@@ -41,10 +41,17 @@ class Settings:
         os.getenv("TELEGRAM_PLATFORM_BOT_TOKEN") or
         os.getenv("TELEGRAM_BOT_TOKEN", "")
     ).strip().strip("\"'")
+    # No hardcoded fallback: an empty value means "not configured" (tg_config shows that instead of
+    # building a t.me link to some other bot). tg_config also normalizes "@name" / "t.me/name".
     TELEGRAM_PLATFORM_BOT_USERNAME: str = (
         os.getenv("TELEGRAM_PLATFORM_BOT_USERNAME") or
-        os.getenv("TELEGRAM_BOT_USERNAME", "WagaCarsAlert_bot")
+        os.getenv("TELEGRAM_BOT_USERNAME") or ""
     ).strip().strip("\"'").lstrip("@")
+    # Webhook (Settings -> Telegram status -> Set webhook). TELEGRAM_WEBHOOK_URL wins; else
+    # PUBLIC_API_URL + /api/telegram/webhook (e.g. https://api.acwalecarmarket.com/v1).
+    TELEGRAM_WEBHOOK_SECRET: str = (os.getenv("TELEGRAM_WEBHOOK_SECRET") or "").strip().strip("\"'")
+    TELEGRAM_WEBHOOK_URL: str = (os.getenv("TELEGRAM_WEBHOOK_URL") or "").strip().strip("\"'")
+    PUBLIC_API_URL: str = (os.getenv("PUBLIC_API_URL") or "").strip().strip("\"'").rstrip("/")
 
     # Backwards compatibility aliases
     TELEGRAM_BOT_TOKEN: str = TELEGRAM_PLATFORM_BOT_TOKEN
