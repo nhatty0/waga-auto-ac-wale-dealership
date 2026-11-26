@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Car, Calendar, DoorOpen, Key, Pencil, Plus, Send, ShieldCheck, UserX, Users, X, RotateCw, Unlink } from "lucide-react";
+import { Car, Calendar, DoorOpen, Key, Pencil, Plus, Send, ShieldCheck, Trash2, UserX, Users, X, RotateCw, Unlink } from "lucide-react";
 import QrLinkModal from "@/components/QrLinkModal";
 import { STAFF_PERMISSIONS, StaffPermission, StaffUser } from "@/types";
 import { getApiBaseUrl } from "@/lib/api";
+import DriversManager from "@/components/admin/DriversManager";
 
 const PERMISSION_INFO: Record<StaffPermission, { label: string; am: string; hint: string; icon: typeof Car }> = {
   vehicles: { label: "Vehicles", am: "መኪኖች", hint: "Post, edit and delete listings", icon: Car },
   appointments: { label: "Appointments", am: "ቀጠሮዎች", hint: "Test drives & visits", icon: Calendar },
-  rentals: { label: "Rentals", am: "ኪራይ", hint: "Bookings + drivers", icon: Key },
+  rentals: { label: "Rentals", am: "ኪራይ", hint: "Bookings + assign drivers", icon: Key },
   gate: { label: "Gate", am: "በር ጥበቃ", hint: "Gatekeeper: confirms cars leaving (Telegram or web)", icon: DoorOpen },
 };
 
@@ -33,8 +34,10 @@ const getToken = () =>
 
 /**
  * Owner-only staff list (/superadmin -> Staff): cards with name, phone, permission chips and
- * an Active toggle; Add / Edit / Deactivate. Staff are never hard-deleted (their names stay on
- * intake records, gate passes and handover contracts). The backend enforces every rule.
+ * an Active toggle; Add / Edit / Deactivate / Remove. Deactivate keeps the account (can be switched
+ * back on); Remove deletes it for good. Names already printed on intake records, gate passes and
+ * handover contracts are stored as text, so those keep them. The backend enforces every rule.
+ * Below the staff list: the driver roster (also owner-only).
  */
 export default function StaffManager() {
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -119,6 +122,37 @@ export default function StaffManager() {
       });
       upsert(updated);
       onToast(updated.is_active ? `${updated.full_name || "Staff"} can log in again` : `${updated.full_name || "Staff"} deactivated: blocked immediately`);
+    } catch (e) {
+      onToast((e as Error).message, "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const removeForever = async (u: StaffUser) => {
+    const who = u.full_name || displayPhone(u.phone_number);
+    if (
+      !confirm(
+        `Remove ${who} completely?
+
+Their login, permissions and Telegram link are deleted. This cannot be undone (you can add the number again later as a new staff member).
+
+${who}ን ሙሉ በሙሉ ማስወገድ ይፈልጋሉ? ሊመለስ አይችልም።`
+      )
+    )
+      return;
+    setBusyId(u.id);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/superadmin/staff/${u.id}/permanent`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getToken() || ""}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(typeof body?.detail === "string" ? body.detail : "Could not remove staff member");
+      }
+      setStaff((prev) => prev.filter((s) => s.id !== u.id));
+      onToast(`${who} removed`);
     } catch (e) {
       onToast((e as Error).message, "error");
     } finally {
@@ -293,7 +327,7 @@ export default function StaffManager() {
               )}
 
               {!u.is_superadmin && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -325,6 +359,16 @@ export default function StaffManager() {
                       Reactivate
                     </button>
                   )}
+                  <button
+                    type="button"
+                    disabled={busyId === u.id}
+                    onClick={() => removeForever(u)}
+                    data-staff-remove={u.id}
+                    aria-label={`Remove ${u.full_name || u.phone_number} permanently`}
+                    className="h-11 rounded-xl bg-zinc-950 hover:bg-red-500/15 border border-red-500/40 text-red-400 text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Trash2 size={14} /> Remove
+                  </button>
                 </div>
               )}
             </li>
@@ -416,6 +460,8 @@ export default function StaffManager() {
           </form>
         </div>
       )}
+      <DriversManager />
+
       {tgLink && (
         <QrLinkModal
           title={`Link Telegram: ${tgLink.user.full_name || displayPhone(tgLink.user.phone_number)}`}

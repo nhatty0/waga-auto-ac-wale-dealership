@@ -70,8 +70,16 @@ def test_single_tenant_and_car_rental_engine():
     print(f"✓ [TEST 4] Admin rentals retrieved: {len(all_rentals)} booking(s)")
 
     # 6. Test GET /api/admin/drivers & POST /api/admin/drivers
+    # No drivers are seeded any more: register one directly if the roster is empty.
     drivers_res = client.get("/api/admin/drivers", headers=headers)
     assert drivers_res.status_code == 200
+    if not drivers_res.json():
+        db = SessionLocal()
+        db.add(models.Driver(full_name="Test Driver", phone_number="0910000000", is_active=True,
+                             dealership_id=admin_user.dealership_id))
+        db.commit()
+        db.close()
+        drivers_res = client.get("/api/admin/drivers", headers=headers)
     drivers_list = drivers_res.json()
     assert len(drivers_list) >= 1
     driver_id = drivers_list[0]["id"]

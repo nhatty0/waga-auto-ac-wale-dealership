@@ -181,6 +181,30 @@ def _sync_superadmins(db, primary_dealer_id: int):
     db.commit()
 
 
+# Exact (name, phone, licence) of the demo drivers seeded by builds up to 2026-11. Only rows
+# matching all three are removed, so a real driver can never be caught by this.
+DEMO_DRIVERS = (
+    ("Abebe Bikila", "0911223344", "AA-ET-98234"),
+    ("Dawit Kebede", "0922334455", "AA-ET-47120"),
+)
+
+
+def _remove_demo_drivers(db):
+    for name, phone, licence in DEMO_DRIVERS:
+        for d in db.query(models.Driver).filter(
+            models.Driver.full_name == name,
+            models.Driver.phone_number == phone,
+            models.Driver.license_number == licence,
+        ).all():
+            # A booking that had the demo driver goes back to "no driver" (shown as unassigned).
+            n = db.query(models.RentalBooking).filter(models.RentalBooking.assigned_driver_id == d.id).update(
+                {models.RentalBooking.assigned_driver_id: None}, synchronize_session=False
+            )
+            db.delete(d)
+            print(f"🧹 Removed demo driver #{d.id} '{name}'" + (f" (unassigned from {n} booking(s))" if n else ""))
+    db.commit()
+
+
 def _ensure_nullable_columns(is_sqlite: bool):
     insp = inspect(engine)
     existing_tables = set(insp.get_table_names())
@@ -287,15 +311,9 @@ def run_migrations():
         _backfill_document_fields(db)
         _backfill_gate_pass_tokens(db)
 
-        # 3. Seed active delivery personnel roster if empty
-        driver_count = db.query(models.Driver).count()
-        if driver_count == 0:
-            db.add_all([
-                models.Driver(full_name="Abebe Bikila", phone_number="0911223344", license_number="AA-ET-98234", is_active=True, dealership_id=primary_dealer.id),
-                models.Driver(full_name="Dawit Kebede", phone_number="0922334455", license_number="AA-ET-47120", is_active=True, dealership_id=primary_dealer.id),
-            ])
-            db.commit()
-            print("🚗 Initialized delivery drivers roster (2 active drivers).")
+        # 3. Remove the two demo drivers older builds seeded. Real drivers are added by the
+        #    owner in /superadmin -> Staff -> Drivers; nothing is seeded any more.
+        _remove_demo_drivers(db)
 
         dealer_count = db.query(models.Dealership).count()
         vehicle_count = db.query(models.Vehicle).count()

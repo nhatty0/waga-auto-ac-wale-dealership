@@ -276,16 +276,6 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
   const [selectedDriverId, setSelectedDriverId] = useState<number | "">("");
   const [assigningLoading, setAssigningLoading] = useState(false);
 
-  // Driver modal states
-  const [showDriverModal, setShowDriverModal] = useState(false);
-  const [driverFormData, setDriverFormData] = useState({
-    full_name: "",
-    phone_number: "",
-    license_number: "",
-    is_active: true,
-  });
-  const [savingDriver, setSavingDriver] = useState(false);
-
   // Dealership Settings State
   const [dealershipSettings, setDealershipSettings] = useState({
     id: 0,
@@ -884,69 +874,6 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
       showToast(`ሁኔታው ወደ "${newStatus}" ተቀይሯል!`);
     } catch (err: any) {
       alert(err.message || "Failed to update status");
-    }
-  };
-
-  const handleSaveDriver = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!driverFormData.full_name.trim() || !driverFormData.phone_number.trim()) {
-      alert("Please provide driver name and phone number");
-      return;
-    }
-
-    setSavingDriver(true);
-    const token = getAuthToken();
-    try {
-      const baseApi = getApiBaseUrl();
-      const res = await fetch(`${baseApi}/api/admin/drivers`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(driverFormData),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to register driver");
-      }
-
-      const newDriver: Driver = await res.json();
-      setDrivers((prev) => [...prev, newDriver]);
-      setShowDriverModal(false);
-      setDriverFormData({ full_name: "", phone_number: "", license_number: "", is_active: true });
-      showToast(`አሽከርካሪ "${newDriver.full_name}" በተሳካ ሁኔታ ተመዝግቧል!`);
-    } catch (err: any) {
-      alert(err.message || "Failed to save driver");
-    } finally {
-      setSavingDriver(false);
-    }
-  };
-
-  const handleToggleDriverStatus = async (driver: Driver) => {
-    const token = getAuthToken();
-    try {
-      const baseApi = getApiBaseUrl();
-      const res = await fetch(`${baseApi}/api/admin/drivers/${driver.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ is_active: !driver.is_active }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to update driver status");
-      }
-
-      const updated: Driver = await res.json();
-      setDrivers((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
-      showToast(`Driver ${driver.full_name} status updated.`);
-    } catch (err: any) {
-      alert(err.message || "Failed to update driver");
     }
   };
 
@@ -2416,14 +2343,19 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowDriverModal(true)}
-              className="min-h-[44px] py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-black font-black text-sm sm:text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition shrink-0"
-            >
-              <Plus size={15} />
-              <span>አዲስ አሽከርካሪ መዝግብ</span>
-            </button>
+            {isSuperadminUser(currentUser) ? (
+              <Link
+                href="/superadmin?section=staff"
+                className="min-h-[44px] py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-black font-black text-sm sm:text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 shrink-0"
+              >
+                <Pencil size={14} />
+                <span>Manage drivers · አስተዳድር</span>
+              </Link>
+            ) : (
+              <p className="text-[11px] text-zinc-500 sm:max-w-[14rem] sm:text-right">
+                Drivers are added by the owner. · አሽከርካሪዎችን የሚመዘግበው ባለቤቱ ነው።
+              </p>
+            )}
           </div>
 
           {drivers.length === 0 ? (
@@ -2432,13 +2364,6 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
               <p className="text-xs text-zinc-400 font-semibold">
                 ምንም የተመዘገበ አሽከርካሪ የለም። (No drivers registered yet)
               </p>
-              <button
-                type="button"
-                onClick={() => setShowDriverModal(true)}
-                className="py-2 px-4 bg-amber-500 text-black font-bold text-xs rounded-xl inline-flex items-center gap-1.5"
-              >
-                <Plus size={14} /> አሽከርካሪ አክል
-              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2474,19 +2399,8 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
                     </span>
                   </div>
 
-                  <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-3">
+                  <div className="pt-2 border-t border-zinc-800/80">
                     <span className="text-[11px] text-zinc-500 font-mono">ID: #{d.id}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleDriverStatus(d)}
-                      className={`min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-xl text-sm sm:text-xs font-semibold border transition ${
-                        d.is_active
-                          ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700"
-                          : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border-emerald-500/30 font-bold"
-                      }`}
-                    >
-                      {d.is_active ? "አቦዝን (Deactivate)" : "አንቃ (Activate)"}
-                    </button>
                   </div>
                 </div>
               ))}
@@ -3631,81 +3545,6 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
                 {assigningLoading ? "ስምሪት እየተከናወነ ነው..." : "ስምሪት አረጋግጥ (Dispatch)"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ADD DRIVER MODAL */}
-      {showDriverModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] max-w-md w-full max-h-[92dvh] overflow-y-auto shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-              <h3 className="font-bold text-base text-white flex items-center gap-2">
-                <UserCheck size={18} className="text-amber-400" />
-                <span>አዲስ አሽከርካሪ መዝግብ (Register Driver)</span>
-              </h3>
-              <button
-                onClick={() => setShowDriverModal(false)}
-                aria-label="Close"
-                className="h-11 w-11 -mr-2 shrink-0 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-zinc-800"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveDriver} className="space-y-3">
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">ሙሉ ስም (Full Name) *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Abebe Bikila"
-                  value={driverFormData.full_name}
-                  onChange={(e) => setDriverFormData({ ...driverFormData, full_name: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">ስልክ ቁጥር (Phone Number) *</label>
-                <input
-                  type="tel"
-                  required
-                  placeholder="0911 223 344"
-                  value={driverFormData.phone_number}
-                  onChange={(e) => setDriverFormData({ ...driverFormData, phone_number: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-zinc-400 block mb-1">መንጃ ፍቃድ ቁጥር (License Number)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. AA-ET-89123"
-                  value={driverFormData.license_number}
-                  onChange={(e) => setDriverFormData({ ...driverFormData, license_number: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setShowDriverModal(false)}
-                  className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold"
-                >
-                  ይቅር (Cancel)
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingDriver}
-                  className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black text-xs shadow-md shadow-amber-500/20"
-                >
-                  {savingDriver ? "በመመዝገብ ላይ..." : "መዝግብ (Save Driver)"}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

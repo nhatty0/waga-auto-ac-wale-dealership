@@ -8,10 +8,12 @@ from database import get_db
 import models
 import schemas
 from settings import settings
-from auth import require_rentals
+from auth import require_rentals, get_current_superadmin
 
 logger = logging.getLogger(__name__)
 
+# Reading the roster needs the Rentals permission (staff assign drivers to bookings).
+# Creating, editing and removing drivers is owner-only (/superadmin -> Staff -> Drivers).
 router = APIRouter(prefix="/api/admin/drivers", tags=["drivers"])
 
 
@@ -44,7 +46,7 @@ def list_drivers(
 def create_driver(
     payload: schemas.DriverCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_rentals)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     Register a new driver in AC Wale Cars roster.
@@ -97,7 +99,7 @@ def update_driver(
     driver_id: int,
     payload: schemas.DriverUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_rentals)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     Update driver details or toggle active status.
@@ -127,7 +129,7 @@ def update_driver(
 def delete_or_deactivate_driver(
     driver_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_rentals)
+    current_user: models.User = Depends(get_current_superadmin)
 ):
     """
     Deactivates or removes a driver from the roster.

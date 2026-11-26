@@ -87,8 +87,8 @@ export default function AppointmentsPanel({
         throw new Error(err?.detail || `Request failed (${res.status})`);
       }
       return res;
-    } catch (e: any) {
-      alert(e?.message || "Something went wrong");
+    } catch (e) {
+      alert((e as Error)?.message || "Something went wrong");
       return null;
     } finally {
       setBusyId(null);

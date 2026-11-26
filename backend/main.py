@@ -1442,6 +1442,27 @@ def delete_staff_member(
     return user
 
 
+@app.delete("/api/superadmin/staff/{user_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+def remove_staff_member_permanently(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin)
+):
+    """
+    Owner only: remove a staff account completely (login, permissions, Telegram link, OTPs).
+    Names already printed on intake records, gate passes and handovers are stored as text,
+    so those documents keep them. Owners can't be removed.
+    """
+    user = _staff_or_404(db, user_id)
+    _reject_owner_edit(user)
+    db.query(models.TelegramLinkToken).filter(models.TelegramLinkToken.user_id == user.id).delete(synchronize_session=False)
+    db.query(models.OTPVerification).filter(models.OTPVerification.phone_number == user.phone_number).delete(synchronize_session=False)
+    db.delete(user)
+    db.commit()
+    logger.info(f"Staff #{user_id} permanently removed by owner #{current_user.id}")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.get("/api/superadmin/dealerships", response_model=List[schemas.SuperAdminDealershipOut])
 def get_superadmin_dealerships(
     db: Session = Depends(get_db),

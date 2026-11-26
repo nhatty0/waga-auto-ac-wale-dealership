@@ -160,10 +160,8 @@ GUARDED = [
     ("rentals", "put", "/api/admin/rentals/999999/assign-driver"),
     ("rentals", "put", "/api/admin/rentals/999999/status"),
     ("rentals", "get", "/api/admin/drivers"),
-    ("rentals", "post", "/api/admin/drivers"),
     ("rentals", "get", "/api/admin/drivers/999999"),
-    ("rentals", "put", "/api/admin/drivers/999999"),
-    ("rentals", "delete", "/api/admin/drivers/999999"),
+    # Creating / editing / removing drivers is owner-only (see test_drivers_and_staff_removal.py).
 ]
 
 
