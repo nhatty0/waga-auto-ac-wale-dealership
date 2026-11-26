@@ -71,11 +71,16 @@ export default function StaffManager() {
     return body;
   }, []);
 
+  const [meId, setMeId] = useState<number | null>(null);
+  const [ownerName, setOwnerName] = useState<string | null>(null);
+  const [savingName, setSavingName] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list: StaffUser[] = await api("/api/superadmin/staff");
+      const [list, me] = await Promise.all([api("/api/superadmin/staff"), api("/api/admin/me").catch(() => null)]);
       setStaff(Array.isArray(list) ? list : []);
+      if (me?.id) setMeId(me.id);
     } catch (e) {
       onToast((e as Error).message, "error");
     } finally {
@@ -162,6 +167,22 @@ export default function StaffManager() {
       onToast((e as Error).message, "error");
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const saveOwnerName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ownerName?.trim()) return;
+    setSavingName(true);
+    try {
+      const saved: StaffUser = await api("/api/superadmin/me", { method: "PUT", body: JSON.stringify({ full_name: ownerName.trim() }) });
+      upsert(saved);
+      setOwnerName(null);
+      onToast("Name saved");
+    } catch (err) {
+      onToast((err as Error).message, "error");
+    } finally {
+      setSavingName(false);
     }
   };
 
@@ -278,7 +299,9 @@ export default function StaffManager() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-bold text-white truncate">{u.full_name || "Unnamed"}</p>
+                    <p className={`font-bold truncate ${u.full_name ? "text-white" : "text-zinc-500 italic"}`}>
+                      {u.full_name || (u.is_superadmin ? "Owner (no name yet)" : "Unnamed")}
+                    </p>
                     <a href={`tel:+${u.phone_number}`} className="text-xs text-zinc-400 font-mono tabular-nums">
                       {displayPhone(u.phone_number)}
                     </a>
@@ -307,7 +330,7 @@ export default function StaffManager() {
 
                 <div className="flex flex-wrap gap-1.5">
                   {u.is_superadmin ? (
-                    <span className="px-2 py-1 rounded-lg bg-zinc-800 text-zinc-300 text-[11px] font-semibold">Everything</span>
+                    <span className="px-2 py-1 rounded-lg bg-zinc-800 text-zinc-300 text-[11px] font-semibold">Everything (set by SUPERADMIN_PHONE)</span>
                   ) : (
                     <>
                       {wp.map((p) => {
@@ -336,6 +359,17 @@ export default function StaffManager() {
                   <p className="text-[11px] text-zinc-400 flex items-center gap-1.5">
                     <Smartphone size={12} className="shrink-0" /> Telegram only: no website login. / በቴሌግራም ብቻ
                   </p>
+                )}
+
+                {u.is_superadmin && u.id === meId && (
+                  <button
+                    type="button"
+                    data-owner-edit-name
+                    onClick={() => setOwnerName(u.full_name || "")}
+                    className="w-full h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-bold flex items-center justify-center gap-1.5"
+                  >
+                    <Pencil size={14} /> Edit my name · ስሜን አስተካክል
+                  </button>
                 )}
 
                 {!u.is_superadmin && (
@@ -526,6 +560,41 @@ export default function StaffManager() {
               </button>
               <button type="submit" disabled={saving} data-team-save className="h-12 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-sm font-black disabled:opacity-60">
                 {saving ? "Saving…" : form.id ? "Save" : "Add"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {ownerName !== null && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <form
+            onSubmit={saveOwnerName}
+            className="w-full sm:max-w-md bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-black text-white">Your display name</h3>
+              <button type="button" onClick={() => setOwnerName(null)} aria-label="Close" className="h-11 w-11 -mr-2 flex items-center justify-center text-zinc-400">
+                <X size={18} />
+              </button>
+            </div>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-bold text-zinc-300">ሙሉ ስም (Name)</span>
+              <input
+                value={ownerName}
+                onChange={(e) => setOwnerName(e.target.value)}
+                autoFocus
+                autoComplete="name"
+                data-owner-name-input
+                className="w-full h-11 px-3.5 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-base sm:text-sm text-white focus:outline-none"
+              />
+              <span className="block text-[11px] text-zinc-500">Shown in Team, on task history and in Telegram notices. Owner permissions can&apos;t be changed here.</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setOwnerName(null)} className="h-12 rounded-xl bg-zinc-800 text-zinc-200 text-sm font-bold">
+                Cancel
+              </button>
+              <button type="submit" disabled={savingName || !ownerName.trim()} data-owner-name-save className="h-12 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-sm font-black disabled:opacity-60">
+                {savingName ? "Saving…" : "Save"}
               </button>
             </div>
           </form>

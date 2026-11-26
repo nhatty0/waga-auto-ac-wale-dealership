@@ -17,6 +17,14 @@ def normalize_ethiopian_phone_digits(phone: str) -> str:
     return raw_digits
 
 
+def _md_safe(value) -> str:
+    """Strip characters that open Telegram (legacy) Markdown entities."""
+    s = str(value or "")
+    for ch in "*`[]":
+        s = s.replace(ch, "")
+    return s.replace("_", " ")
+
+
 def format_booking_lead_caption(
     booking: Any,
     vehicle_title: Optional[str] = None,
@@ -31,7 +39,7 @@ def format_booking_lead_caption(
     intl_phone = normalize_ethiopian_phone_digits(raw_phone)
 
     customer_name = getattr(booking, "customer_name", "Valued Customer")
-    safe_name = str(customer_name).replace("*", "").replace("_", " ")
+    safe_name = _md_safe(customer_name)
 
     appointment_type = getattr(booking, "appointment_type", "Test Drive")
     appointment_type_str = getattr(appointment_type, "value", str(appointment_type))
@@ -48,7 +56,7 @@ def format_booking_lead_caption(
         f"🚗 *አዲስ የደንበኛ ቀጠሮ (New Booking Lead)*\n"
         f"{dealer_header}"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"🚘 *መኪና:* {vehicle_title or 'General Showroom Inquiry'}\n"
+        f"🚘 *መኪና:* {_md_safe(vehicle_title or 'General Showroom Inquiry')}\n"
         f"👤 *ደንበኛ:* {safe_name} (`+{intl_phone}`)\n"
         f"📅 *ቀን:* {schedule_display}\n"
         f"💬 *መንገድ (Channel):* {preferred_channel}\n"
@@ -58,7 +66,7 @@ def format_booking_lead_caption(
 
     notes = getattr(booking, "notes", None)
     if notes:
-        safe_notes = str(notes).replace("*", "").replace("_", " ")
+        safe_notes = _md_safe(notes)
         message_text += f"📝 *ማስታወሻ (Notes):* _{safe_notes}_\n"
 
     reply_markup = {

@@ -406,6 +406,8 @@ def get_or_create_user_stub(phone: str, db: Session) -> tuple:
                 role="dealer_admin",
                 dealership_id=primary_dealer.id,
                 is_active=True,
+                # Explicit empty list: the legacy NULL backfill must never touch a new row.
+                permissions_json="[]",
                 created_at=datetime.utcnow()
             )
             db.add(user)

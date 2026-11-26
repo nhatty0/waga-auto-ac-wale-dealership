@@ -28,10 +28,11 @@ import {
   Settings,
   ClipboardList,
 } from "lucide-react";
-import { User, ExecutiveStats, RentalBooking } from "@/types";
+import { User, ExecutiveStats, RentalBooking, Appointment, Vehicle } from "@/types";
 import AdminDashboard from "@/components/admin/AdminDashboard";
 import StaffManager from "@/components/admin/StaffManager";
 import TasksBoard from "@/components/tasks/TasksBoard";
+import AppointmentsPanel, { isUpcoming } from "@/components/admin/AppointmentsPanel";
 import TaskForm from "@/components/tasks/TaskForm";
 import DocumentCenter from "@/components/documents/DocumentCenter";
 import QrLinkModal from "@/components/QrLinkModal";
@@ -47,10 +48,11 @@ const RENTAL_STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-zinc-800 text-zinc-400 border-zinc-700",
 };
 
-type HubSection = "overview" | "tasks" | "documents" | "settings" | "rentals" | "staff";
+type HubSection = "overview" | "appointments" | "tasks" | "documents" | "settings" | "rentals" | "staff";
 
 const HUB_SECTIONS: { id: HubSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "appointments", label: "Appointments", icon: Calendar },
   { id: "tasks", label: "Tasks", icon: ClipboardList },
   { id: "documents", label: "Documents", icon: Archive },
   { id: "settings", label: "Settings", icon: Settings },
@@ -98,6 +100,12 @@ export default function ExecutiveOwnerDashboard() {
   // Executive Data State
   const [stats, setStats] = useState<ExecutiveStats | null>(null);
   const [rentals, setRentals] = useState<RentalBooking[]>([]);
+  // Appointments (same list component as /admin) + vehicles for its car names.
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const upcomingAppointments = appointments
+    .filter((a) => isUpcoming(a))
+    .sort((x, y) => `${x.date} ${x.time_slot}`.localeCompare(`${y.date} ${y.time_slot}`));
   // "Assign driver" on a rental opens a pre-filled delivery task (pick the driver, save & send).
   const [assignBooking, setAssignBooking] = useState<RentalBooking | null>(null);
   const [loading, setLoading] = useState(true);
@@ -169,12 +177,23 @@ export default function ExecutiveOwnerDashboard() {
       setLoading(true);
       const headers = { Authorization: `Bearer ${token}` };
 
-      const [statsRes, rentalsRes] = await Promise.all([
+      const [statsRes, rentalsRes, apptRes, vehRes] = await Promise.all([
         fetch(`${getApiBaseUrl()}/api/admin/stats`, { headers })
           .then((r) => (r.ok ? r : fetch(`${getApiBaseUrl()}/api/superadmin/stats`, { headers })))
           .then((r) => (r.ok ? r : fetch(`${getApiBaseUrl()}/api/superadmin/executive-stats`, { headers }))),
         fetch(`${getApiBaseUrl()}/api/admin/rentals`, { headers }),
+        fetch(`${getApiBaseUrl()}/api/admin/appointments`, { headers }),
+        fetch(`${getApiBaseUrl()}/api/admin/vehicles`, { headers }),
       ]);
+
+      if (apptRes.ok) {
+        const a = await apptRes.json();
+        setAppointments(Array.isArray(a) ? a : []);
+      }
+      if (vehRes.ok) {
+        const v = await vehRes.json();
+        setVehicles(Array.isArray(v) ? v : []);
+      }
 
       if (statsRes.ok) {
         const statsData = await statsRes.json();
@@ -309,7 +328,7 @@ export default function ExecutiveOwnerDashboard() {
         </div>
       </header>
 
-      {/* Section navigation: Overview | Tasks | Documents | Settings | Rentals | Team */}
+      {/* Section navigation: Overview | Appointments | Tasks | Documents | Settings | Rentals | Team */}
       <nav
         role="tablist"
         aria-label="Owner hub sections"
@@ -331,7 +350,10 @@ export default function ExecutiveOwnerDashboard() {
               }`}
             >
               <Icon size={14} className="shrink-0" />
-              <span>{label}</span>
+              <span>
+                {label}
+                {id === "appointments" ? ` (${upcomingAppointments.length})` : ""}
+              </span>
             </button>
           ))}
         </div>
@@ -434,6 +456,69 @@ export default function ExecutiveOwnerDashboard() {
             </div>
           </div>
         </section>
+
+        {/* NEXT APPOINTMENTS (overview) */}
+        <section className={section === "overview" ? "" : "hidden"} data-next-appointments>
+          <div className="bg-zinc-900/80 border border-zinc-800/90 rounded-2xl p-4 sm:p-5 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2 min-w-0">
+                <Calendar size={16} className="text-amber-400 shrink-0" />
+                <span className="truncate">የሚቀጥሉ ቀጠሮዎች (Next appointments)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => selectSection("appointments")}
+                className="shrink-0 h-11 px-3 rounded-xl text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1"
+              >
+                All ({upcomingAppointments.length}) <ChevronRight size={14} />
+              </button>
+            </div>
+            {upcomingAppointments.length === 0 ? (
+              <p className="text-xs text-zinc-500 py-2">No upcoming appointments. · የሚመጣ ቀጠሮ የለም።</p>
+            ) : (
+              <ul className="divide-y divide-zinc-800/70">
+                {upcomingAppointments.slice(0, 3).map((a) => {
+                  const car = vehicles.find((v) => v.id === a.vehicle_id);
+                  return (
+                    <li key={a.id} className="py-2.5 flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{a.customer_name}</p>
+                        <p className="text-xs text-zinc-400 truncate">
+                          {a.vehicle_title || (car ? `${car.year} ${car.make} ${car.model}` : "General inquiry")}
+                        </p>
+                        <a href={`tel:${a.phone_number}`} className="text-xs text-amber-400 inline-flex items-center gap-1 min-h-[32px]">
+                          <Phone size={11} /> {a.phone_number}
+                        </a>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-xs font-bold text-zinc-200">{a.date}</p>
+                        <p className="text-[11px] text-zinc-400">{a.time_slot}</p>
+                        {a.status === "Confirmed" && <p className="text-[10px] font-bold text-sky-300">Confirmed</p>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </section>
+
+        {section === "appointments" && (
+          <section className="space-y-3" data-owner-appointments>
+            <h2 className="text-base font-black text-white flex items-center gap-2">
+              <Calendar size={18} className="text-amber-400 shrink-0" /> ቀጠሮዎች (Appointments)
+            </h2>
+            <AppointmentsPanel
+              appointments={appointments}
+              setAppointments={setAppointments}
+              vehicles={vehicles}
+              isSuperadmin
+              getAuthToken={getAuthToken}
+              onUnauthorized={() => router.push("/admin")}
+              showToast={(m) => showToast(m)}
+            />
+          </section>
+        )}
 
         {/* OPERATIONAL TABLE 1: RECENT RENTAL DELIVERIES & DRIVER ASSIGNMENTS */}
         <section className={`bg-zinc-900/80 border border-zinc-800/90 rounded-2xl overflow-hidden shadow-2xl ${section === "rentals" ? "" : "hidden"}`}>

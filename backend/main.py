@@ -12,6 +12,7 @@ import httpx
 import jwt
 from fastapi import FastAPI, Depends, HTTPException, Query, status, UploadFile, File, Body, Header
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer
@@ -1394,7 +1395,9 @@ def invite_or_create_staff(
 
     user = find_user_by_phone(norm_phone, db)
     if user is None:
-        user = models.User(phone_number=norm_phone, role="dealer_admin", created_at=datetime.utcnow())
+        # New members start with nothing ticked (Appointments OFF until the owner ticks it).
+        user = models.User(phone_number=norm_phone, role="dealer_admin", permissions_json="[]",
+                           created_at=datetime.utcnow())
         db.add(user)
     if payload.full_name is not None:
         user.full_name = payload.full_name.strip() or None
@@ -1471,6 +1474,27 @@ def delete_staff_member(
     db.commit()
     db.refresh(user)
     return user
+
+
+class OwnerProfileUpdate(BaseModel):
+    full_name: str
+
+
+@app.put("/api/superadmin/me", response_model=schemas.StaffUserOut)
+def update_own_owner_profile(
+    payload: OwnerProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin)
+):
+    """A superadmin sets their OWN display name. Owner permissions come from SUPERADMIN_PHONE
+    and can't be edited; other owners' names are theirs to change."""
+    name = (payload.full_name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name can't be empty.")
+    current_user.full_name = name[:150]
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 
 @app.delete("/api/superadmin/staff/{user_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)

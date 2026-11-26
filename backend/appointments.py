@@ -31,9 +31,13 @@ async def dispatch_lead_multichannel(
         local_db = True
 
     dealer = None
+    owner_chats = []
     try:
         if dealership_id:
             dealer = db.query(models.Dealership).filter(models.Dealership.id == dealership_id).first()
+        if dealer:
+            import gate_pass
+            owner_chats = gate_pass.owner_chats(db)
     finally:
         if local_db and db:
             db.close()
@@ -57,26 +61,31 @@ async def dispatch_lead_multichannel(
     customer_phone = getattr(booking, "phone_number", "")
 
     # ==========================================
-    # Priority 1: Telegram Notification
+    # Priority 1: Telegram Notification to every owner chat
+    # (dealership chat, TELEGRAM_CHAT_ID, owners who linked their own Telegram)
     # ==========================================
-    if dealer.telegram_chat_id and dealer.telegram_chat_id.strip() and bot_token:
-        chat_id = dealer.telegram_chat_id.strip()
-        success, info = await send_telegram_lead(
-            bot_token=bot_token,
-            chat_id=chat_id,
-            booking=booking,
-            vehicle_title=vehicle_title,
-            vehicle_price=vehicle_price,
-            dealer_name=dealer.name
-        )
-        if success:
+    result["chats"] = []
+    if owner_chats and bot_token:
+        for chat_id in owner_chats:
+            success, info = await send_telegram_lead(
+                bot_token=bot_token,
+                chat_id=chat_id,
+                booking=booking,
+                vehicle_title=vehicle_title,
+                vehicle_price=vehicle_price,
+                dealer_name=dealer.name
+            )
+            if success:
+                result["chats"].append(chat_id)
+            else:
+                logger.warning(f"⚠️ [LEAD DISPATCH] Telegram to {chat_id} failed: {info}")
+                result["error"] = info
+        if result["chats"]:
             result["telegram_sent"] = True
             result["channel"] = "telegram"
-            logger.info(f"✓ [LEAD DISPATCH] Priority 1 (Telegram) succeeded for {dealer.name} (Chat: {chat_id})")
+            logger.info(f"✓ [LEAD DISPATCH] Telegram delivered to {len(result['chats'])} owner chat(s) for {dealer.name}")
             return result
-        else:
-            logger.warning(f"⚠️ [LEAD DISPATCH] Priority 1 (Telegram) failed: {info}. Falling back to Priority 2 (SMS).")
-            result["error"] = info
+        logger.warning("⚠️ [LEAD DISPATCH] Telegram reached no owner chat. Falling back to Priority 2 (SMS).")
 
     # ==========================================
     # Priority 2: SMS Fallback via AfroMessage
