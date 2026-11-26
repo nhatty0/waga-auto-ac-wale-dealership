@@ -159,9 +159,15 @@ class AppointmentOut(AppointmentCreate):
     dealership_id: Optional[int] = None
     vehicle_title: Optional[str] = None
     created_at: datetime
+    archived_at: Optional[datetime] = None
+    archived_by: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class AppointmentStatusUpdate(BaseModel):
+    status: str
 
 
 # ==========================================

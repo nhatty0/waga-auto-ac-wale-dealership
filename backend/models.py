@@ -23,6 +23,9 @@ class VehicleStatus(str, enum.Enum):
     SOLD = "Sold"
     IN_TRANSIT = "In Transit"
 
+# Appointment statuses. "Pending" is the stored value for New so existing rows need no rewrite.
+APPOINTMENT_STATUSES = ("Pending", "Confirmed", "Done", "Cancelled", "No-show")
+
 class AppointmentType(str, enum.Enum):
     TEST_DRIVE = "In-Person Test Drive"
     VIRTUAL_WALKTHROUGH = "Virtual Video Tour"
@@ -135,8 +138,12 @@ class Appointment(Base):
     date = Column(String(50), nullable=False)
     time_slot = Column(String(50), nullable=False)
     notes = Column(Text, nullable=True)
+    # "Pending" (shown as New), "Confirmed", "Done", "Cancelled", "No-show": see APPOINTMENT_STATUSES.
     status = Column(String(50), default="Pending")
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Soft delete: archived rows are hidden from Upcoming/Past and the tab count, and can be restored.
+    archived_at = Column(DateTime, nullable=True)
+    archived_by = Column(String(150), nullable=True)
 
     vehicle = relationship("Vehicle", back_populates="appointments")
     dealership_id = Column(Integer, ForeignKey("dealerships.id"), nullable=True, index=True)

@@ -44,6 +44,7 @@ import PrintFlyerModal from "@/components/admin/PrintFlyerModal";
 import ShowroomQrModal from "@/components/admin/ShowroomQrModal";
 import VehicleDocumentsSheet from "@/components/documents/VehicleDocumentsSheet";
 import GateDesk from "@/components/admin/GateDesk";
+import AppointmentsPanel, { activeAppointmentCount } from "@/components/admin/AppointmentsPanel";
 import { isSuperadminUser } from "@/lib/documents";
 import { getApiBaseUrl } from "@/lib/api";
 import { resolveImageUrl } from "@/lib/images";
@@ -2044,7 +2045,7 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
             }`}
           >
             <Calendar size={14} className="shrink-0" />
-            <span className="truncate">Appointments ({appointments.length})</span>
+            <span className="truncate">Appointments ({activeAppointmentCount(appointments)})</span>
           </button>
         )}
         {(allowedStaffTabs as string[]).includes("rentals") && (
@@ -2208,71 +2209,15 @@ export default function AdminDashboard({ portal = "staff", ownerSection = "setti
 
       {/* APPOINTMENTS TAB CONTENT */}
       {!isOwnerPortal && activeTab === "appointments" && (
-        <div className="space-y-3">
-          {appointments.length === 0 ? (
-            <p className="text-zinc-500 text-xs text-center py-10">
-              No customer bookings received yet.
-            </p>
-          ) : (
-            appointments.map((a) => {
-              const matchedCar = vehicles.find((v) => v.id === a.vehicle_id);
-              const vehicleDisplay =
-                (a as any).vehicle_title ||
-                (matchedCar
-                  ? `${matchedCar.year} ${matchedCar.make} ${matchedCar.model}`
-                  : a.vehicle_id
-                  ? `Vehicle #${a.vehicle_id}`
-                  : "General Showroom Inquiry");
-
-              return (
-                <div
-                  key={a.id}
-                  className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2.5"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <h3 className="font-bold text-sm text-white break-words min-w-0">
-                          {a.customer_name}
-                        </h3>
-                        <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">
-                          #{a.id}
-                        </span>
-                      </div>
-                      <p className="text-sm sm:text-xs text-amber-400 font-medium flex flex-wrap items-center gap-x-2">
-                        <a href={`tel:${a.phone_number}`} className="inline-flex items-center min-h-[44px] sm:min-h-0">📞 {a.phone_number}</a>
-                        <span className="text-zinc-500">•</span>
-                        <span className="text-zinc-300 font-normal">
-                          {a.preferred_channel}
-                        </span>
-                      </p>
-                      <div className="flex items-center gap-1.5 text-xs text-amber-300 font-semibold bg-black/40 border border-zinc-800/80 px-2 py-1 rounded-lg w-fit max-w-full mt-1">
-                        <Car size={13} className="text-amber-400 shrink-0" />
-                        <span className="break-words min-w-0">{vehicleDisplay}</span>
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-semibold bg-zinc-800 border border-zinc-700/60 px-2.5 py-1 rounded-lg text-zinc-300 shrink-0 self-start">
-                      {a.appointment_type}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400 pt-2 border-t border-zinc-800/60">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar size={13} className="text-amber-400" /> {a.date}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Clock size={13} className="text-amber-400" /> {a.time_slot}
-                    </span>
-                  </div>
-                  {a.notes && (
-                    <p className="text-xs text-zinc-400 italic bg-zinc-950/60 p-2 rounded-lg border border-zinc-800/40 break-words">
-                      "{a.notes}"
-                    </p>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
+        <AppointmentsPanel
+          appointments={appointments}
+          setAppointments={setAppointments}
+          vehicles={vehicles}
+          isSuperadmin={isSuperadminUser(currentUser)}
+          getAuthToken={getAuthToken}
+          onUnauthorized={handleUnauthorized}
+          showToast={showToast}
+        />
       )}
 
       {/* RENTALS & DISPATCH TAB CONTENT */}

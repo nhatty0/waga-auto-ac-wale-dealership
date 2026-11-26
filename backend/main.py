@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import httpx
 import jwt
 from fastapi import FastAPI, Depends, HTTPException, Query, status, UploadFile, File, Body, Header
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer
@@ -805,11 +805,89 @@ def get_all_appointments(
         query = query.filter(models.Appointment.dealership_id == target_id)
     appointments = query.order_by(models.Appointment.created_at.desc()).all()
     for a in appointments:
-        if a.vehicle:
-            setattr(a, "vehicle_title", f"{a.vehicle.year} {a.vehicle.make} {a.vehicle.model}")
-        else:
-            setattr(a, "vehicle_title", "General Showroom Inquiry")
+        _attach_vehicle_title(a)
     return appointments
+
+
+def _attach_vehicle_title(a: models.Appointment) -> models.Appointment:
+    if a.vehicle:
+        setattr(a, "vehicle_title", f"{a.vehicle.year} {a.vehicle.make} {a.vehicle.model}")
+    else:
+        setattr(a, "vehicle_title", "General Showroom Inquiry")
+    return a
+
+
+def _appointment_for_user(appointment_id: int, db: Session, user: models.User) -> models.Appointment:
+    """The appointment, if it belongs to the user's dealership (superadmins: any). Else 404."""
+    a = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
+    if not a or (not user.is_superadmin and a.dealership_id != user.dealership_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found.")
+    return a
+
+
+@app.patch("/api/admin/appointments/{appointment_id}/status", response_model=schemas.AppointmentOut)
+def update_appointment_status(
+    appointment_id: int,
+    payload: schemas.AppointmentStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_appointments)
+):
+    """New (stored as "Pending") / Confirmed / Done / Cancelled / No-show."""
+    value = (payload.status or "").strip()
+    if value.lower() == "new":
+        value = "Pending"
+    if value not in models.APPOINTMENT_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Unknown status '{payload.status}'.")
+    a = _appointment_for_user(appointment_id, db, current_user)
+    a.status = value
+    db.commit()
+    db.refresh(a)
+    return _attach_vehicle_title(a)
+
+
+@app.post("/api/admin/appointments/{appointment_id}/archive", response_model=schemas.AppointmentOut)
+def archive_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_appointments)
+):
+    """Soft delete: hidden from Upcoming/Past and the tab count; Restore brings it back."""
+    a = _appointment_for_user(appointment_id, db, current_user)
+    if a.archived_at is None:
+        a.archived_at = datetime.utcnow()
+        a.archived_by = current_user.full_name or current_user.phone_number
+        db.commit()
+        db.refresh(a)
+    return _attach_vehicle_title(a)
+
+
+@app.post("/api/admin/appointments/{appointment_id}/restore", response_model=schemas.AppointmentOut)
+def restore_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_appointments)
+):
+    a = _appointment_for_user(appointment_id, db, current_user)
+    a.archived_at = None
+    a.archived_by = None
+    db.commit()
+    db.refresh(a)
+    return _attach_vehicle_title(a)
+
+
+@app.delete("/api/admin/appointments/{appointment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_appointment_permanently(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin)
+):
+    """Owner only, and only for an archived appointment (archive first, then delete)."""
+    a = _appointment_for_user(appointment_id, db, current_user)
+    if a.archived_at is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Archive the appointment before deleting it permanently.")
+    db.delete(a)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ==========================================

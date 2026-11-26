@@ -70,11 +70,18 @@ export interface AppointmentPayload {
 }
 
 // Added the missing Appointment model returned from the backend
+/** Stored appointment statuses; "Pending" is shown as New. */
+export type AppointmentStatus = "Pending" | "Confirmed" | "Done" | "Cancelled" | "No-show";
+
 export interface Appointment extends AppointmentPayload {
   id: number;
   dealership_id?: number | null;
   status: string;
   created_at: string;
+  vehicle_title?: string | null;
+  /** Soft delete: set when archived, null when active. */
+  archived_at?: string | null;
+  archived_by?: string | null;
 }
 
 export interface Dealership {

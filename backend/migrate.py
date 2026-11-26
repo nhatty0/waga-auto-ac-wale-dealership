@@ -47,6 +47,9 @@ ADDITIVE_COLUMNS = [
     ("gate_passes", "driver_chat_id", "VARCHAR(50)", "VARCHAR(50)"),
     ("gate_passes", "issued_by", "VARCHAR(150)", "VARCHAR(150)"),
     ("gate_passes", "sent_at", "DATETIME", "TIMESTAMP"),
+    # Appointments clean-up (status dropdown + archive/restore)
+    ("appointments", "archived_at", "DATETIME", "TIMESTAMP"),
+    ("appointments", "archived_by", "VARCHAR(150)", "VARCHAR(150)"),
     ("gate_passes", "telegram_messages", "TEXT", "TEXT"),
     ("gate_passes", "exited_at", "DATETIME", "TIMESTAMP"),
     ("gate_passes", "confirmed_by", "VARCHAR(150)", "VARCHAR(150)"),
