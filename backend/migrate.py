@@ -63,6 +63,19 @@ ADDITIVE_COLUMNS = [
     ("gate_passes", "reject_note", "TEXT", "TEXT"),
     ("gate_passes", "cancelled_at", "DATETIME", "TIMESTAMP"),
     ("gate_passes", "cancelled_by", "VARCHAR(150)", "VARCHAR(150)"),
+    # Company stamp on printed documents
+    ("lot_intakes", "stamped", "BOOLEAN", "BOOLEAN"),
+    ("lot_intakes", "stamped_by", "VARCHAR(150)", "VARCHAR(150)"),
+    ("lot_intakes", "stamped_at", "DATETIME", "TIMESTAMP"),
+    ("gate_passes", "stamped", "BOOLEAN", "BOOLEAN"),
+    ("gate_passes", "stamped_by", "VARCHAR(150)", "VARCHAR(150)"),
+    ("gate_passes", "stamped_at", "DATETIME", "TIMESTAMP"),
+    ("vehicle_handovers", "stamped", "BOOLEAN", "BOOLEAN"),
+    ("vehicle_handovers", "stamped_by", "VARCHAR(150)", "VARCHAR(150)"),
+    ("vehicle_handovers", "stamped_at", "DATETIME", "TIMESTAMP"),
+    ("documents", "stamped", "BOOLEAN", "BOOLEAN"),
+    ("documents", "stamped_by", "VARCHAR(150)", "VARCHAR(150)"),
+    ("documents", "stamped_at", "DATETIME", "TIMESTAMP"),
 ]
 
 

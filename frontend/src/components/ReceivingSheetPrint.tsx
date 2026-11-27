@@ -5,6 +5,8 @@ import { Calendar } from "lucide-react";
 import PrintModalShell from "@/components/print/PrintModalShell";
 import ScaledPreview, { A4_LANDSCAPE_PX } from "@/components/print/ScaledPreview";
 import { LotIntake } from "@/types";
+import { StampMark, StampToggle } from "@/components/print/Stamp";
+import { markStamped, nextPaint, useDocStamp } from "@/lib/stamp";
 
 interface ReceivingSheetPrintProps {
   intakes: LotIntake[];
@@ -12,6 +14,12 @@ interface ReceivingSheetPrintProps {
   dealershipName?: string;
   /** YYYY-MM-DD sheet to open (reprint from the Documents archive). Defaults to today. */
   initialDate?: string;
+  /** The form's "Stamp" toggle (default ON). The stamp only prints when every row is final. */
+  initialStamp?: boolean;
+  /** Only the owner's Document Center offers the stamp. */
+  stampEnabled?: boolean;
+  /** Called after a stamped copy was printed (the list can refresh its "stamped" marks). */
+  onStampedPrint?: () => void;
 }
 
 export default function ReceivingSheetPrint({
@@ -19,6 +27,9 @@ export default function ReceivingSheetPrint({
   onClose,
   dealershipName = "AC WALE MARKET",
   initialDate,
+  initialStamp = true,
+  stampEnabled = false,
+  onStampedPrint,
 }: ReceivingSheetPrintProps) {
   const [mounted, setMounted] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -30,12 +41,6 @@ export default function ReceivingSheetPrint({
     setMounted(true);
   }, []);
 
-  const handlePrint = () => {
-    setTimeout(() => {
-      window.print();
-    }, 150);
-  };
-
   // Filter records based on selected date or show all
   const filteredIntakes = useMemo(() => {
     if (showAllDates) return intakes;
@@ -45,6 +50,20 @@ export default function ReceivingSheetPrint({
       return itemDate === selectedDate;
     });
   }, [intakes, selectedDate, showAllDates]);
+
+  // The stamp certifies the whole sheet, so it is only offered when no row on it is a draft.
+  const allFinal = filteredIntakes.length > 0 && filteredIntakes.every((i) => i.doc_status !== "draft");
+  const stamp = useDocStamp(stampEnabled && allFinal, initialStamp);
+
+  const handlePrint = async () => {
+    if (!stamp.ready) return;
+    await nextPaint();
+    const stampedIds = stamp.src ? filteredIntakes.filter((i) => !i.archived_at).map((i) => i.id) : [];
+    setTimeout(() => {
+      window.print();
+      if (stampedIds.length) markStamped("intake", stampedIds).then(() => onStampedPrint?.()).catch(() => {});
+    }, 150);
+  };
 
   // Statistics for the sheet
   const inLotCount = filteredIntakes.filter((i) => i.is_in_lot).length;
@@ -181,7 +200,13 @@ export default function ReceivingSheetPrint({
           <p className="text-[10px] text-gray-600">ስም: ____________________________</p>
         </div>
 
-        <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-400 p-3 rounded text-center bg-gray-50/50">
+        <div
+          className={`flex flex-col justify-center border-2 border-dashed border-gray-400 p-3 rounded bg-gray-50/50 ${
+            stamp.src ? "items-start text-left pl-4" : "items-center text-center"
+          }`}
+          style={{ position: "relative" }}
+        >
+          <StampMark src={stamp.src} widthMm={35} style={{ right: "6mm", top: "50%", marginTop: "-17.5mm" }} />
           <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700">
             ማህተም (OFFICIAL STAMP)
           </span>
@@ -246,6 +271,8 @@ export default function ReceivingSheetPrint({
         }
         onClose={onClose}
         onPrint={handlePrint}
+        printing={!stamp.ready}
+        headerActions={stampEnabled ? <StampToggle stamp={stamp} /> : undefined}
         printTitle="ሰነዱን አትም (Print / Save A4 PDF)"
         maxWidthClass="sm:max-w-6xl"
         toolbar={

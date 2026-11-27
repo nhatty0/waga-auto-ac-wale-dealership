@@ -152,7 +152,15 @@ def _vehicle_label(v: Optional[models.Vehicle]) -> str:
 # ------------------------------------------------------------------ serializers
 
 def _item(doc_type: str, rec) -> Dict[str, Any]:
-    """Uniform list row for any type."""
+    """Uniform list row for any type (plus whether a stamped copy was printed)."""
+    out = _item_base(doc_type, rec)
+    out["stamped"] = bool(getattr(rec, "stamped", False))
+    out["stamped_by"] = getattr(rec, "stamped_by", None)
+    out["stamped_at"] = _iso(getattr(rec, "stamped_at", None))
+    return out
+
+
+def _item_base(doc_type: str, rec) -> Dict[str, Any]:
     if doc_type == "intake":
         return {
             "type": doc_type, "id": rec.id, "number": rec.doc_number or f"IN-{rec.id:04d}",
@@ -793,6 +801,29 @@ def update_document(doc_type: str, doc_id: int, payload: DocumentSave, db: Sessi
     db.commit()
     db.refresh(rec)
     return _detail(doc_type, rec)
+
+
+@router.post("/{doc_type}/{doc_id}/stamped")
+def mark_stamped(doc_type: str, doc_id: int, db: Session = Depends(get_db),
+                 user: models.User = Depends(get_current_superadmin)):
+    """
+    Called when a copy is printed WITH the company stamp. Only final documents can carry the stamp
+    (a draft is refused), so stamped=true always means "a stamped final copy exists".
+    """
+    _check_type(doc_type)
+    rec = _get(db, doc_type, doc_id)
+    if rec.archived_at is not None:
+        raise HTTPException(status_code=409, detail="Archived documents are not printed with the stamp.")
+    raw = rec.status if doc_type in DOC_PREFIX else rec.doc_status
+    if _status_of(raw, None) != "final":
+        raise HTTPException(status_code=409, detail="Only final documents get the stamp; drafts print unstamped.")
+    rec.stamped = True
+    rec.stamped_by = _archiver_name(user)
+    rec.stamped_at = datetime.utcnow()
+    db.commit()
+    db.refresh(rec)
+    logger.info(f"🔏 {doc_type} {_item(doc_type, rec)['number']} printed with the stamp by {rec.stamped_by}")
+    return _item(doc_type, rec)
 
 
 @router.post("/{doc_type}/{doc_id}/archive")

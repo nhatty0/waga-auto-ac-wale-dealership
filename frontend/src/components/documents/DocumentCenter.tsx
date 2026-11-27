@@ -55,6 +55,7 @@ import GatePassModal from "@/components/GatePassModal";
 import HandoverPrintModal from "@/components/HandoverPrintModal";
 import ReceivingSheetPrint from "@/components/ReceivingSheetPrint";
 import BatchGatePassModal from "@/components/BatchGatePassModal";
+import { markStamped } from "@/lib/stamp";
 
 const ICONS: Record<DocType, typeof ClipboardList> = {
   intake: ClipboardList,
@@ -88,6 +89,8 @@ interface FormState {
 interface PrintState {
   doc: DocDetail;
   auto: boolean;
+  /** The form's "Stamp" toggle (default ON); only final documents get it. */
+  stamp: boolean;
 }
 
 interface PassLinks {
@@ -168,7 +171,7 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
     return t && DOC_TYPES.includes(t) && !readParam("vehicle") ? { type: t } : null;
   });
   const [print, setPrint] = useState<PrintState | null>(null);
-  const [sheetIntakes, setSheetIntakes] = useState<{ list: LotIntake[]; day: string } | null>(null);
+  const [sheetIntakes, setSheetIntakes] = useState<{ list: LotIntake[]; day: string; stamp: boolean } | null>(null);
   const [batchIntakes, setBatchIntakes] = useState<LotIntake[] | null>(null);
   const [batchPicker, setBatchPicker] = useState<LotIntake[] | null>(null);
   const [dealership, setDealership] = useState<Dealership | null>(null);
@@ -200,7 +203,7 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
     const vehicleId = Number(readParam("vehicle"));
     const t = readParam("doc") as DocType | null;
     if (t && DOC_TYPES.includes(t) && openId) {
-      docApi<DocDetail>(`/${t}/${openId}`).then((d) => setPrint({ doc: d, auto: false })).catch((e) => showToast(e.message, true));
+      docApi<DocDetail>(`/${t}/${openId}`).then((d) => setPrint({ doc: d, auto: false, stamp: true })).catch((e) => showToast(e.message, true));
     } else if (newType && DOC_TYPES.includes(newType)) {
       if (vehicleId) {
         docApi<LookupHit[]>(`/lookup?vehicle_id=${vehicleId}`)
@@ -259,7 +262,7 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
     }
   };
 
-  const showPrint = async (d: DocDetail, auto: boolean) => {
+  const showPrint = async (d: DocDetail, auto: boolean, stamp = true) => {
     if (d.type === "intake") {
       // Form 1 is the daily receiving sheet: print the whole day this car arrived.
       const res = await fetch(`${getApiBaseUrl()}/api/admin/lot-intakes?include_archived=true`, {
@@ -267,10 +270,15 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
       });
       const list: LotIntake[] = res.ok ? await res.json() : [];
       const day = receivingSheetDayKey({ received_date: str(d.data.date) } as LotIntake);
-      setSheetIntakes({ list, day });
+      setSheetIntakes({ list, day, stamp });
       return;
     }
-    setPrint({ doc: d, auto });
+    setPrint({ doc: d, auto, stamp });
+  };
+
+  /** A final document was printed with the stamp: record stamped / stamped_by. */
+  const stampedPrint = (d: DocDetail) => () => {
+    markStamped(d.type, [d.id]).then(refresh).catch(() => {});
   };
 
   const share = async (it: DocItem) => {
@@ -586,30 +594,60 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
           userName={userName}
           dealerPhone={dealership?.phone_number || ""}
           onClose={() => setForm(null)}
-          onSaved={(d, doPrint, note) => {
+          onSaved={(d, doPrint, note, stamp) => {
             setForm(null);
             showToast(`${d.number} saved${d.status === "draft" ? " as draft" : ""}${note ? `. ${note}` : ""}`, !!note && note.startsWith("Not sent"));
             refresh();
-            if (doPrint) showPrint(d, true).catch(() => {});
+            if (doPrint) showPrint(d, true, stamp !== false).catch(() => {});
           }}
         />
       )}
 
       {/* Print / view */}
       {print && print.doc.type === "gatepass" && (
-        <GatePassModal pass={toGatePass(print.doc)} vehicleName={str(print.doc.data.vehicle_name) || print.doc.title || ""} onClose={() => setPrint(null)} />
+        <GatePassModal
+          pass={toGatePass(print.doc)}
+          vehicleName={str(print.doc.data.vehicle_name) || print.doc.title || ""}
+          onClose={() => setPrint(null)}
+          stampAllowed={print.doc.status === "final"}
+          initialStamp={print.stamp}
+          onStampedPrint={stampedPrint(print.doc)}
+        />
       )}
       {print && print.doc.type === "handover" && (
-        <HandoverPrintModal handover={toHandover(print.doc)} dealership={dealership} onClose={() => setPrint(null)} />
+        <HandoverPrintModal
+          handover={toHandover(print.doc)}
+          dealership={dealership}
+          onClose={() => setPrint(null)}
+          stampAllowed={print.doc.status === "final"}
+          initialStamp={print.stamp}
+          onStampedPrint={stampedPrint(print.doc)}
+        />
       )}
       {print && print.doc.type === "downpayment" && (
-        <DocPrintModal title={DOC_INFO.downpayment.am} number={print.doc.number} autoPrint={print.auto} onClose={() => setPrint(null)}>
-          <DownPaymentSheet number={print.doc.number} data={print.doc.data} dealership={dealership} />
+        <DocPrintModal
+          title={DOC_INFO.downpayment.am}
+          number={print.doc.number}
+          autoPrint={print.auto}
+          onClose={() => setPrint(null)}
+          stampAllowed={print.doc.status === "final"}
+          initialStamp={print.stamp}
+          onStampedPrint={stampedPrint(print.doc)}
+        >
+          {(stampSrc) => <DownPaymentSheet number={print.doc.number} data={print.doc.data} dealership={dealership} stamp={stampSrc} />}
         </DocPrintModal>
       )}
       {print && print.doc.type === "rental" && (
-        <DocPrintModal title={DOC_INFO.rental.am} number={print.doc.number} autoPrint={print.auto} onClose={() => setPrint(null)}>
-          <RentalAgreementSheet number={print.doc.number} data={print.doc.data} dealership={dealership} />
+        <DocPrintModal
+          title={DOC_INFO.rental.am}
+          number={print.doc.number}
+          autoPrint={print.auto}
+          onClose={() => setPrint(null)}
+          stampAllowed={print.doc.status === "final"}
+          initialStamp={print.stamp}
+          onStampedPrint={stampedPrint(print.doc)}
+        >
+          {(stampSrc) => <RentalAgreementSheet number={print.doc.number} data={print.doc.data} dealership={dealership} stamp={stampSrc} />}
         </DocPrintModal>
       )}
       {sheetIntakes && (
@@ -618,6 +656,9 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
           initialDate={sheetIntakes.day}
           dealershipName={dealership?.name || "AC WALE MARKET"}
           onClose={() => setSheetIntakes(null)}
+          stampEnabled
+          initialStamp={sheetIntakes.stamp}
+          onStampedPrint={refresh}
         />
       )}
 
@@ -799,6 +840,14 @@ function DocRow({
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${STATUS_BADGE[it.status]}`}>
               {it.status === "draft" ? "Draft" : it.status === "final" ? "Final" : "Archived"}
             </span>
+            {it.stamped && (
+              <span
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30"
+                title={`Printed with the company stamp${it.stamped_by ? ` by ${it.stamped_by}` : ""}`}
+              >
+                Stamped
+              </span>
+            )}
             {passStatus && !archived && passStatus !== "draft" && (
               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded uppercase ${PASS_BADGE[passStatus] || ""}`}>{passStatus}</span>
             )}

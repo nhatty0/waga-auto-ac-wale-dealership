@@ -4,6 +4,8 @@ import { createPortal } from "react-dom";
 import { Printer, Loader2, CheckCircle2, AlertCircle, Copy } from "lucide-react";
 import PrintModalShell from "@/components/print/PrintModalShell";
 import ScaledPreview, { A4_PORTRAIT_PX } from "@/components/print/ScaledPreview";
+import { StampMark, StampToggle } from "@/components/print/Stamp";
+import { loadStampDataUrl, markStamped, nextPaint, useDocStamp } from "@/lib/stamp";
 import { GatePass, LotIntake, User } from "@/types";
 
 interface BatchGatePassModalProps {
@@ -11,6 +13,8 @@ interface BatchGatePassModalProps {
   currentUser?: User | null;
   onClose: () => void;
   onSuccess: () => Promise<void> | void;
+  /** The form's "Stamp" toggle (default ON). Batch passes are always final. */
+  initialStamp?: boolean;
 }
 
 interface RowFormData {
@@ -39,7 +43,11 @@ export default function BatchGatePassModal({
   currentUser,
   onClose,
   onSuccess,
+  initialStamp = true,
 }: BatchGatePassModalProps) {
+  const stamp = useDocStamp(true, initialStamp);
+  const stampRef = React.useRef(stamp);
+  stampRef.current = stamp;
   const [mounted, setMounted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,9 +169,12 @@ export default function BatchGatePassModal({
         await onSuccess();
       }
 
-      // Automatically open print dialog after short tick
+      // Automatically open print dialog after short tick (after the stamp has loaded, if wanted)
+      if (stampRef.current.on) await loadStampDataUrl();
+      await nextPaint();
       setTimeout(() => {
         window.print();
+        if (stampRef.current.src) markStamped("gatepass", results.map((r) => r.pass.id)).catch(() => {});
       }, 300);
     } catch (err: any) {
       // Passes saved before the failure are real (those cars are already released): show and
@@ -185,8 +196,11 @@ export default function BatchGatePassModal({
   };
 
   const handlePrint = () => {
+    if (!stamp.ready) return;
+    const stamped = !!stamp.src;
     setTimeout(() => {
       window.print();
+      if (stamped) markStamped("gatepass", generatedPasses.map((g) => g.pass.id)).catch(() => {});
     }, 150);
   };
 
@@ -318,8 +332,9 @@ export default function BatchGatePassModal({
               </span>
             </div>
 
-            {/* 5. ፊርማ */}
-            <div className="flex items-baseline gap-1 pt-0.5">
+            {/* 5. ፊርማ (the company stamp sits on this line, right side) */}
+            <div className="flex items-baseline gap-1 pt-0.5" style={{ position: "relative" }}>
+              <StampMark src={stamp.src} widthMm={25} style={{ right: "2mm", top: "-4mm" }} />
               <span className="text-[10px] font-bold text-black whitespace-nowrap min-w-[82px]">
                 ፊርማ:
               </span>
@@ -413,6 +428,8 @@ export default function BatchGatePassModal({
         }
         onClose={onClose}
         onPrint={isGenerated ? handlePrint : undefined}
+        printing={isGenerated && !stamp.ready}
+        headerActions={<StampToggle stamp={stamp} />}
         printTitle="A4 ሰነድ አትም (Print 2x2 Grid)"
         maxWidthClass="sm:max-w-4xl"
         footer={

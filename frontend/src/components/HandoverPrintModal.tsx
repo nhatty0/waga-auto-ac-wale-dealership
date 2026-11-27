@@ -4,6 +4,8 @@ import { createPortal } from "react-dom";
 import { Copy, Check, FileText } from "lucide-react";
 import PrintModalShell from "@/components/print/PrintModalShell";
 import ScaledPreview from "@/components/print/ScaledPreview";
+import { StampMark, StampToggle } from "@/components/print/Stamp";
+import { nextPaint, useDocStamp } from "@/lib/stamp";
 import { Dealership, VehicleHandover, HandoverBelonging } from "@/types";
 import { dealerPhonesText } from "@/lib/contact";
 
@@ -15,9 +17,24 @@ interface HandoverPrintModalProps {
   /** The contract header prints this dealership's phones. */
   dealership?: Dealership | null;
   onClose: () => void;
+  /** Final contracts may carry the company stamp (drafts never do). */
+  stampAllowed?: boolean;
+  /** The form's "Stamp" toggle (default ON). */
+  initialStamp?: boolean;
+  /** Called after the contract was sent to print WITH the stamp. */
+  onStampedPrint?: () => void;
 }
 
-export default function HandoverPrintModal({ handover, dealership, onClose }: HandoverPrintModalProps) {
+export default function HandoverPrintModal({
+  handover,
+  dealership,
+  onClose,
+  stampAllowed = false,
+  initialStamp = true,
+  onStampedPrint,
+}: HandoverPrintModalProps) {
+  const stamp = useDocStamp(stampAllowed, initialStamp);
+
   const phonesText = dealerPhonesText(dealership);
   const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -26,8 +43,11 @@ export default function HandoverPrintModal({ handover, dealership, onClose }: Ha
     setMounted(true);
   }, []);
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    if (!stamp.ready) return;
+    await nextPaint();
     const printArea = document.getElementById("handover-print-area");
+    if (printArea && stamp.src && printArea.querySelector("img.doc-stamp")) onStampedPrint?.();
     if (!printArea) {
       window.print();
       return;
@@ -419,13 +439,18 @@ export default function HandoverPrintModal({ handover, dealership, onClose }: Ha
           <div className="pt-6 border-b-2 border-black w-44 sm:w-52" />
           <p className="text-[10px] text-zinc-500">ፊርማ / Signature</p>
         </div>
-        <div className="space-y-1 text-right flex flex-col items-end">
+        <div
+          className="space-y-1 text-right flex flex-col items-end"
+          // With the stamp, the block reserves its height so it never crosses a page break.
+          style={{ position: "relative", minHeight: stamp.src ? "46mm" : undefined, breakInside: "avoid" }}
+        >
           <p className="font-black text-black text-xs sm:text-sm">የተረካቢ ስምና ፊርማ (Received By):</p>
           <p className="text-zinc-800 text-[11px] sm:text-xs">
             ስም፡ <span className="font-black underline">ኤሲ ዋለ መኪና መሸጫ (አስቻለው ዋለ)</span>
           </p>
           <div className="pt-6 border-b-2 border-black w-44 sm:w-52" />
           <p className="text-[10px] text-zinc-500">ፊርማና ማህተም / Seal & Signature</p>
+          <StampMark src={stamp.src} widthMm={35} style={{ right: "54mm", top: "6mm" }} />
         </div>
       </div>
     </div>
@@ -454,9 +479,12 @@ export default function HandoverPrintModal({ handover, dealership, onClose }: Ha
       }
       onClose={onClose}
       onPrint={handlePrint}
+      printing={!stamp.ready}
       printTitle="ውል አትም (Print Contract)"
       maxWidthClass="sm:max-w-4xl"
       headerActions={
+        <>
+        <StampToggle stamp={stamp} />
         <button
           type="button"
           onClick={handleCopyNumber}
@@ -467,6 +495,7 @@ export default function HandoverPrintModal({ handover, dealership, onClose }: Ha
           {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
           <span className="hidden sm:inline">{copied ? "ተቀድቷል" : "ቁጥር ቅዳ"}</span>
         </button>
+        </>
       }
     >
       {/* Screen preview. #handover-print-area itself is untouched (its outerHTML is what prints);

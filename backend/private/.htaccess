@@ -1,0 +1,9 @@
+# Defense in depth: nothing in backend/private/ is ever served by the web server.
+# The app serves the stamp only through GET /api/superadmin/stamp (superadmin token required).
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+</IfModule>

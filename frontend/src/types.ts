@@ -318,6 +318,9 @@ export interface LotIntake {
   created_at?: string;
   archived_at?: string | null;
   archived_by?: string | null;
+  doc_number?: string | null;
+  /** "draft" | "final" (null on old rows = final). */
+  doc_status?: string | null;
   gate_passes?: GatePass[];
 }
 

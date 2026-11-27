@@ -320,6 +320,10 @@ class LotIntake(Base):
     # Soft archive (legal record: never hard-deleted from the UI). NULL = active.
     archived_at = Column(DateTime, nullable=True)
     archived_by = Column(String(150), nullable=True)
+    # Printed with the company stamp (Document Center): who printed the last stamped copy, and when.
+    stamped = Column(Boolean, nullable=True, default=False)
+    stamped_by = Column(String(150), nullable=True)
+    stamped_at = Column(DateTime, nullable=True)
 
     dealership = relationship("Dealership", back_populates="lot_intakes")
     # Document Center: "IN-0001" (backfilled by migrate.py) and draft/final (NULL = final).
@@ -353,6 +357,10 @@ class GatePass(Base):
     doc_status = Column(String(20), nullable=True, default="final")   # draft passes don't release the car
     archived_at = Column(DateTime, nullable=True)
     archived_by = Column(String(150), nullable=True)
+    # Printed with the company stamp (Document Center): who printed the last stamped copy, and when.
+    stamped = Column(Boolean, nullable=True, default=False)
+    stamped_by = Column(String(150), nullable=True)
+    stamped_at = Column(DateTime, nullable=True)
     # Remote release (Telegram gate pass). Status is derived: see gate_pass.pass_status().
     verify_token = Column(String(64), nullable=True, index=True)   # random, for /verify/<token> and t.me ?start=gp_<token>
     valid_until = Column(DateTime, nullable=True)                  # UTC; default 23:59 Addis time on the pass date
@@ -401,6 +409,10 @@ class VehicleHandover(Base):
     # Soft archive (legal record: never hard-deleted from the UI). NULL = active.
     archived_at = Column(DateTime, nullable=True)
     archived_by = Column(String(150), nullable=True)
+    # Printed with the company stamp (Document Center): who printed the last stamped copy, and when.
+    stamped = Column(Boolean, nullable=True, default=False)
+    stamped_by = Column(String(150), nullable=True)
+    stamped_at = Column(DateTime, nullable=True)
 
     doc_status = Column(String(20), nullable=True, default="final")
 
@@ -435,6 +447,10 @@ class Document(Base):
     updated_at = Column(DateTime, default=datetime.utcnow)
     archived_at = Column(DateTime, nullable=True)
     archived_by = Column(String(150), nullable=True)
+    # Printed with the company stamp (Document Center): who printed the last stamped copy, and when.
+    stamped = Column(Boolean, nullable=True, default=False)
+    stamped_by = Column(String(150), nullable=True)
+    stamped_at = Column(DateTime, nullable=True)
 
 
 class TelegramLinkToken(Base):

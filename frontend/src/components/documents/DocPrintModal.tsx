@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { FileText } from "lucide-react";
 import PrintModalShell from "@/components/print/PrintModalShell";
 import ScaledPreview, { A4_PORTRAIT_PX } from "@/components/print/ScaledPreview";
+import { StampToggle } from "@/components/print/Stamp";
+import { nextPaint, useDocStamp } from "@/lib/stamp";
 
 /**
  * Self-contained print styles for the Document Center sheets (Down-payment Receipt, Rental
@@ -113,7 +115,14 @@ interface DocPrintModalProps {
   /** Open the system print dialog as soon as the sheet is ready (the "Print / PDF" button). */
   autoPrint?: boolean;
   headerActions?: React.ReactNode;
-  children: React.ReactNode;
+  /** Final documents may carry the company stamp (drafts never do). */
+  stampAllowed?: boolean;
+  /** The form's "Stamp" toggle (default ON). */
+  initialStamp?: boolean;
+  /** Called after a copy was sent to print WITH the stamp (records stamped / stamped_by). */
+  onStampedPrint?: () => void;
+  /** The sheet; given the stamp data: URL (or null) to place on the company's signature. */
+  children: (stampSrc: string | null) => React.ReactNode;
 }
 
 /** Print an element's HTML in a hidden iframe with only the sheet styles. */
@@ -142,23 +151,38 @@ export function printSheet(el: HTMLElement, docTitle: string) {
   ).then(() => setTimeout(go, 150));
 }
 
-export default function DocPrintModal({ title, number, onClose, autoPrint, headerActions, children }: DocPrintModalProps) {
+export default function DocPrintModal({
+  title,
+  number,
+  onClose,
+  autoPrint,
+  headerActions,
+  stampAllowed = false,
+  initialStamp = true,
+  onStampedPrint,
+  children,
+}: DocPrintModalProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const printed = useRef(false);
+  const stamp = useDocStamp(stampAllowed, initialStamp);
 
-
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    if (!stamp.ready) return;
+    await nextPaint();
     const el = sheetRef.current?.querySelector<HTMLElement>(".ds-sheet");
-    if (el) printSheet(el, `${number} ${title}`);
+    if (!el) return;
+    printSheet(el, `${number} ${title}`);
+    if (stamp.src && el.querySelector("img.doc-stamp")) onStampedPrint?.();
   };
 
+  // Auto print waits for the stamp so a final copy never goes out unstamped by accident.
   useEffect(() => {
-    if (!autoPrint || printed.current) return;
+    if (!autoPrint || printed.current || !stamp.ready) return;
     printed.current = true;
     const t = setTimeout(handlePrint, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPrint]);
+  }, [autoPrint, stamp.ready]);
 
   if (typeof document === "undefined") return null;
   return createPortal(
@@ -169,13 +193,19 @@ export default function DocPrintModal({ title, number, onClose, autoPrint, heade
       badge={<span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">{number}</span>}
       onClose={onClose}
       onPrint={handlePrint}
+      printing={!stamp.ready}
       printTitle="Print / PDF (ማተም)"
-      headerActions={headerActions}
+      headerActions={
+        <>
+          <StampToggle stamp={stamp} />
+          {headerActions}
+        </>
+      }
       maxWidthClass="sm:max-w-4xl"
     >
       <style>{DOC_SHEET_CSS}</style>
       <div className="p-3 sm:p-5 bg-zinc-800/40" ref={sheetRef}>
-        <ScaledPreview designWidth={A4_PORTRAIT_PX}>{children}</ScaledPreview>
+        <ScaledPreview designWidth={A4_PORTRAIT_PX}>{children(stamp.src)}</ScaledPreview>
       </div>
     </PrintModalShell>,
     document.body

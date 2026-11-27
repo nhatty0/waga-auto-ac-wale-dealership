@@ -52,6 +52,7 @@ from auth import (
 import gate_pass
 from routers import rentals, drivers, admin, lot_operations, documents, gate
 from routers import tasks as tasks_router
+from routers import stamp as stamp_router
 
 # JWT & Auth Configuration from settings
 JWT_SECRET_KEY = settings.JWT_SECRET_KEY
@@ -147,6 +148,7 @@ app.include_router(lot_operations.router)
 app.include_router(documents.router)
 app.include_router(gate.router)
 app.include_router(tasks_router.router)
+app.include_router(stamp_router.router)
 
 # CORS configuration to allow requests from the Next.js frontend
 app.add_middleware(

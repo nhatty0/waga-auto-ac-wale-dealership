@@ -23,6 +23,10 @@ export interface DocItem {
   archived_at: string | null;
   archived_by: string | null;
   created_at: string | null;
+  /** A copy was printed with the company stamp (final documents only). */
+  stamped?: boolean;
+  stamped_by?: string | null;
+  stamped_at?: string | null;
   extra: Record<string, unknown>;
 }
 

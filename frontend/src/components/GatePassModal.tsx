@@ -5,6 +5,8 @@ import { Check, Copy } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import PrintModalShell from "@/components/print/PrintModalShell";
 import ScaledPreview from "@/components/print/ScaledPreview";
+import { StampMark, StampToggle } from "@/components/print/Stamp";
+import { nextPaint, useDocStamp } from "@/lib/stamp";
 
 import { GatePass } from "@/types";
 
@@ -15,9 +17,16 @@ interface GatePassModalProps {
   pass: GatePass;
   vehicleName?: string;
   onClose: () => void;
+  /** Final passes may carry the company stamp (drafts never do). */
+  stampAllowed?: boolean;
+  /** The form's "Stamp" toggle (default ON). */
+  initialStamp?: boolean;
+  /** Called after the pass was sent to print WITH the stamp. */
+  onStampedPrint?: () => void;
 }
 
-export default function GatePassModal({ pass, vehicleName, onClose }: GatePassModalProps) {
+export default function GatePassModal({ pass, vehicleName, onClose, stampAllowed = false, initialStamp = true, onStampedPrint }: GatePassModalProps) {
+  const stamp = useDocStamp(stampAllowed, initialStamp);
   // Same origin as the app: in production the public site, locally http://localhost:3000.
   const verifyUrl =
     pass.verify_token && typeof window !== "undefined" ? `${window.location.origin}/verify/${pass.verify_token}` : "";
@@ -36,9 +45,13 @@ export default function GatePassModal({ pass, vehicleName, onClose }: GatePassMo
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    if (!stamp.ready) return;
+    await nextPaint();
+    const stamped = !!stamp.src;
     setTimeout(() => {
       window.print();
+      if (stamped) onStampedPrint?.();
     }, 150);
   };
 
@@ -159,8 +172,9 @@ export default function GatePassModal({ pass, vehicleName, onClose }: GatePassMo
             </span>
           </div>
 
-          {/* 5. ፊርማ */}
-          <div className="flex items-baseline gap-1.5 pt-0.5">
+          {/* 5. ፊርማ (the company stamp sits on this line, right side) */}
+          <div className="flex items-baseline gap-1.5 pt-0.5" style={{ position: "relative" }}>
+            <StampMark src={stamp.src} widthMm={25} style={{ right: "2mm", top: "-2mm" }} />
             <span className="text-[11px] font-bold text-black whitespace-nowrap min-w-[90px]">
               ፊርማ:
             </span>
@@ -264,6 +278,8 @@ export default function GatePassModal({ pass, vehicleName, onClose }: GatePassMo
         }
         onClose={onClose}
         onPrint={handlePrint}
+        printing={!stamp.ready}
+        headerActions={<StampToggle stamp={stamp} />}
         printTitle="መውጫ ፓስ አትም (Print Release Pass)"
         maxWidthClass="sm:max-w-md"
         footer={

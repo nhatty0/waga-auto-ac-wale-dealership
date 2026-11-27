@@ -9,6 +9,7 @@ import type { Dealership } from "@/types";
 import { DocData, RENTAL_CHECKLIST, docDate, str } from "@/lib/docCenter";
 import { birrInAmharicWords, formatBirr } from "@/lib/amharicNumber";
 import { CONTACT_EMAIL, dealerPhoneLines } from "@/lib/contact";
+import { StampMark } from "@/components/print/Stamp";
 
 const Fill = ({ v, cls = "" }: { v?: unknown; cls?: string }) => (
   <span className={`ds-fill ${cls}`}>{str(v) || " "}</span>
@@ -63,7 +64,9 @@ function Meta({ number, date }: { number: string; date?: unknown }) {
 
 // ------------------------------------------------------------------ Down-payment receipt
 
-export function DownPaymentSheet({ number, data, dealership }: { number: string; data: DocData; dealership?: Dealership | null }) {
+/** `stamp`: the company stamp as a data: URL (final documents only), placed on the seller's
+ * (the dealership's) signature. */
+export function DownPaymentSheet({ number, data, dealership, stamp = null }: { number: string; data: DocData; dealership?: Dealership | null; stamp?: string | null }) {
   const amount = str(data.amount);
   const figures = amount ? `${formatBirr(amount)} ብር` : "";
   const words = str(data.amount_words) || birrInAmharicWords(amount);
@@ -126,10 +129,12 @@ export function DownPaymentSheet({ number, data, dealership }: { number: string;
       </p>
 
       <div className="ds-signs ds-block">
-        <div>
+        {/* With the stamp, the column reserves its height so the stamp never crosses a page break. */}
+        <div style={{ position: "relative", minHeight: stamp ? "44mm" : undefined }}>
           <div className="ds-label">የሻጭ/ቀብድ ተከፋይ ስምና ፊርማ</div>
           <div className="ds-sign-name">{str(data.seller_name)}</div>
           <div className="ds-sign-line" />
+          <StampMark src={stamp} widthMm={35} style={{ right: 0, top: 30 }} />
         </div>
         <div>
           <div className="ds-label">የገዢ/ ቀብድ ከፋይ ስምና ፊርማ</div>
@@ -205,7 +210,8 @@ const CarEnd = ({ rear }: { rear?: boolean }) => (
   </svg>
 );
 
-export function RentalAgreementSheet({ number, data, dealership }: { number: string; data: DocData; dealership?: Dealership | null }) {
+/** `stamp`: the company stamp as a data: URL (final only), placed on the lessor's (dealership's) signature. */
+export function RentalAgreementSheet({ number, data, dealership, stamp = null }: { number: string; data: DocData; dealership?: Dealership | null; stamp?: string | null }) {
   const checklist = (data.checklist as Record<string, string>) || {};
   const mark = (k: string) => (checklist[k] === "ok" ? "✓" : checklist[k] === "no" ? "X" : "");
   const money = (v: unknown) => (str(v) ? `${formatBirr(str(v))} ብር` : "");
@@ -367,8 +373,9 @@ export function RentalAgreementSheet({ number, data, dealership }: { number: str
         {[
           ["የተከራይ ስም", data.renter_name],
           ["የአከራይ ስም", data.lessor_name],
-        ].map(([label, name]) => (
-          <div key={label as string}>
+        ].map(([label, name], i) => (
+          <div key={label as string} style={{ position: "relative", minHeight: i === 1 && stamp ? "37mm" : undefined }}>
+            {i === 1 && <StampMark src={stamp} widthMm={35} style={{ right: 0, top: 4 }} />}
             <Row>
               <span className="ds-label">{label as string}</span>
               <Fill v={name} cls="ds-grow" />

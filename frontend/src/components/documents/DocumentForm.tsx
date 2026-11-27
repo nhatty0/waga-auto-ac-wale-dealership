@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Car, Check, Loader2, Plus, Printer, Save, Search, Trash2, X, CalendarClock } from "lucide-react";
+import { Car, Check, Loader2, Plus, Printer, Save, Search, Stamp, Trash2, X, CalendarClock } from "lucide-react";
 import {
   DOC_FORMS,
   DOC_INFO,
@@ -31,8 +31,9 @@ interface DocumentFormProps {
   userName?: string;
   dealerPhone?: string;
   onClose: () => void;
-  /** note: extra message for the toast (e.g. "Sent to 2 gatekeepers"). */
-  onSaved: (doc: DocDetail, print: boolean, note?: string) => void;
+  /** note: extra message for the toast (e.g. "Sent to 2 gatekeepers").
+   * stamp: the "Stamp" toggle: print the final copy with the company stamp. */
+  onSaved: (doc: DocDetail, print: boolean, note?: string, stamp?: boolean) => void;
 }
 
 const inputCls =
@@ -64,6 +65,8 @@ export default function DocumentForm({ type, docId, prefill, userName, dealerPho
   const sections = DOC_FORMS[type];
   const [loading, setLoading] = useState(!!docId);
   const [saving, setSaving] = useState<"draft" | "final" | null>(null);
+  // Final copies print with the company stamp unless the owner turns it off (drafts never do).
+  const [stampOn, setStampOn] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
   const [doc, setDoc] = useState<DocDetail | null>(null);
@@ -131,7 +134,7 @@ export default function DocumentForm({ type, docId, prefill, userName, dealerPho
       if (type === "gatepass" && !docId && status === "final" && data.send_telegram === true) {
         note = await sendPassToGate(saved.id);
       }
-      onSaved(saved, print, note);
+      onSaved(saved, print, note, stampOn);
     } catch (e) {
       const err = e as DocApiError;
       setError(err.message);
@@ -251,6 +254,23 @@ export default function DocumentForm({ type, docId, prefill, userName, dealerPho
               {missing.length > 0 && <span className="block mt-0.5 text-red-200">{missing.map((k) => labelFor[k] || k).join(" · ")}</span>}
             </div>
           )}
+          <label className="flex items-center justify-between gap-3 rounded-xl bg-zinc-900 border border-zinc-800 px-3 min-h-11 cursor-pointer select-none">
+            <span className="flex items-center gap-2 text-xs text-zinc-300">
+              <Stamp size={15} className={stampOn ? "text-sky-300" : "text-zinc-500"} />
+              <span>
+                <b className="text-white">Stamp</b> · ማህተም
+                <span className="text-zinc-500"> · on the final printed copy (drafts never get it)</span>
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={stampOn}
+              onChange={(e) => setStampOn(e.target.checked)}
+              className="h-5 w-5 shrink-0 accent-sky-500"
+              aria-label="Print the final copy with the company stamp"
+            />
+          </label>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
