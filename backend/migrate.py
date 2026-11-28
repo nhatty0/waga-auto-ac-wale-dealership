@@ -52,6 +52,8 @@ ADDITIVE_COLUMNS = [
     ("rental_bookings", "assigned_user_id", "INTEGER", "INTEGER"),
     ("dealerships", "alert_appointments_team", "BOOLEAN", "BOOLEAN"),
     ("dealerships", "alert_rentals_team", "BOOLEAN", "BOOLEAN"),
+    # Staff (HR) documents linked to a Team member
+    ("documents", "staff_user_id", "INTEGER", "INTEGER"),
     # Appointments clean-up (status dropdown + archive/restore)
     ("appointments", "archived_at", "DATETIME", "TIMESTAMP"),
     ("appointments", "archived_by", "VARCHAR(150)", "VARCHAR(150)"),

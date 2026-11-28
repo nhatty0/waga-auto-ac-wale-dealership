@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ExternalLink, FileText, Loader2, Plus, X } from "lucide-react";
 import type { Vehicle } from "@/types";
-import { DOC_INFO, DOC_TYPES, DocItem, DocType, docApi, docDate } from "@/lib/docCenter";
+import { DOC_INFO, VEHICLE_DOC_TYPES, DocItem, DocType, docApi, docDate } from "@/lib/docCenter";
 
 interface Props {
   vehicle: Vehicle;
@@ -52,7 +52,7 @@ export default function VehicleDocumentsSheet({ vehicle, onClose }: Props) {
             </div>
           )}
           {docs &&
-            DOC_TYPES.map((t) => (
+            VEHICLE_DOC_TYPES.map((t) => (
               <section key={t} className="rounded-xl border border-zinc-800 bg-zinc-900 p-2.5 min-w-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <p className="min-w-0 flex-1 text-xs font-bold truncate">

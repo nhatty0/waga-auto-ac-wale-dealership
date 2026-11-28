@@ -7,6 +7,9 @@ One API over five document types:
   handover    Handover Contract (የርክክብ ውል)           table vehicle_handovers  AC-rec-0001 (existing series)
   downpayment Down-payment Receipt (የቀብድ መቀበያ ፎርም)  table documents         DP-0001
   rental      Car Rental Agreement (የመኪና ኪራይ ውል)     table documents         RA-0001
+Staff (HR) documents, not linked to vehicles, optionally linked to a Team member (staff_user_id):
+  employment  Employment Contract (የሰራተኛ የስራ ቅጥር የውል ስምምነት)  table documents  EC-0001
+  property    Property Handover (ንብረት መረካከቢያ ፎርም)              table documents  PH-0001
 
 Every record is numbered on create, has a date and a status (draft / final). Archive is a soft
 delete (archived_at) with restore; a permanent delete is only possible for an archived record.
@@ -39,8 +42,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/superadmin/documents", tags=["documents"])
 
-DOC_TYPES = ("intake", "gatepass", "handover", "downpayment", "rental")
-DOC_PREFIX = {"downpayment": "DP", "rental": "RA"}
+DOC_TYPES = ("intake", "gatepass", "handover", "downpayment", "rental", "employment", "property")
+DOC_PREFIX = {"downpayment": "DP", "rental": "RA", "employment": "EC", "property": "PH"}
+STAFF_TYPES = ("employment", "property")
 
 DEFAULT_SELLER = "ኤሲ ዋለ መኪና መሸጫ"
 
@@ -57,6 +61,8 @@ REQUIRED_FINAL = {
     "handover": ["owner_full_name", "owner_phone", "vehicle_type", "plate_number"],
     "downpayment": ["buyer_name", "plate_number", "amount"],
     "rental": ["renter_name", "plate_number", "pickup_date"],
+    "employment": ["employee_name", "job_position", "salary"],
+    "property": ["staff_name", "items"],
 }
 
 
@@ -131,7 +137,13 @@ def _want_status(payload: DocumentSave, current: Optional[str] = None) -> str:
 
 
 def _require_final_fields(doc_type: str, data: Dict[str, Any]):
-    missing = [f for f in REQUIRED_FINAL[doc_type] if not _s(data.get(f)) or (f == "amount" and not (_num(data.get(f)) or 0) > 0)]
+    def empty(f):
+        if f == "items":
+            return not any(isinstance(i, dict) and _s(i.get("item")) for i in (data.get("items") or []))
+        if f in ("amount", "salary"):
+            return not (_num(data.get(f)) or 0) > 0
+        return not _s(data.get(f))
+    missing = [f for f in REQUIRED_FINAL[doc_type] if empty(f)]
     if missing:
         raise HTTPException(
             status_code=422,
@@ -205,6 +217,22 @@ def _item_base(doc_type: str, rec) -> Dict[str, Any]:
             "created_at": _iso(rec.created_at), "extra": {},
         }
     data = _load(rec.data_json)
+    if doc_type in STAFF_TYPES:
+        extra: Dict[str, Any] = {"staff_user_id": rec.staff_user_id}
+        if doc_type == "property":
+            items = [i for i in data.get("items") or [] if isinstance(i, dict) and _s(i.get("item"))]
+            extra["item_count"] = len(items)
+            extra["holding"] = sum(1 for i in items if not i.get("returned"))
+        title = data.get("job_position") if doc_type == "employment" else data.get("staff_position")
+        return {
+            "type": doc_type, "id": rec.id, "number": rec.doc_number,
+            "date": _iso(rec.doc_date), "status": _status_of(rec.status, rec.archived_at),
+            "title": _s(title), "plate_number": None,
+            "party_name": rec.party_name, "party_phone": rec.party_phone,
+            "amount": rec.amount, "vehicle_id": None,
+            "archived_at": _iso(rec.archived_at), "archived_by": rec.archived_by,
+            "created_at": _iso(rec.created_at), "extra": extra,
+        }
     return {
         "type": doc_type, "id": rec.id, "number": rec.doc_number,
         "date": _iso(rec.doc_date), "status": _status_of(rec.status, rec.archived_at),
@@ -260,6 +288,9 @@ def _data(doc_type: str, rec) -> Dict[str, Any]:
         }
     d = _load(rec.data_json)
     d["date"] = _iso(rec.doc_date)
+    if doc_type in STAFF_TYPES:
+        d["staff_user_id"] = rec.staff_user_id
+        return d
     d["vehicle_id"] = rec.vehicle_id
     if doc_type == "rental":
         d["rental_booking_id"] = rec.rental_booking_id
@@ -496,9 +527,12 @@ def _write_generic(db: Session, user, doc_type: str, rec: Optional[models.Docume
     creating = rec is None
     merged = {} if creating else _load(rec.data_json)
     for k, v in data.items():
-        if k in ("date", "vehicle_id", "rental_booking_id"):
+        if k in ("date", "vehicle_id", "rental_booking_id", "staff_user_id"):
             continue
         merged[k] = v
+
+    if doc_type in STAFF_TYPES:
+        return _write_staff(db, user, doc_type, rec, data, merged, st)
 
     if doc_type == "downpayment":
         if creating and not _s(merged.get("seller_name")):
@@ -542,6 +576,71 @@ def _write_generic(db: Session, user, doc_type: str, rec: Optional[models.Docume
         rec.rental_booking_id = _int(data.get("rental_booking_id"))
     rec.data_json = json.dumps(merged, ensure_ascii=False)
     rec.plate_number = _s(merged.get("plate_number")) or None
+    rec.party_name = party_name or None
+    rec.party_phone = party_phone or None
+    rec.amount = amount
+    rec.status = st
+    rec.updated_at = datetime.utcnow()
+    return rec
+
+
+def _staff_user(db: Session, user_id) -> Optional[models.User]:
+    uid = _int(user_id)
+    if not uid:
+        return None
+    u = db.query(models.User).filter(models.User.id == uid).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="That team member was not found.")
+    return u
+
+
+def _clean_items(items) -> List[Dict[str, Any]]:
+    """Property handover rows; rows without an item name are dropped. Order = ተ.ቁ."""
+    out = []
+    for i in items or []:
+        if not isinstance(i, dict) or not _s(i.get("item")):
+            continue
+        returned = i.get("returned") is True
+        out.append({
+            "item": _s(i.get("item")), "handed_by": _s(i.get("handed_by")),
+            "received_by": _s(i.get("received_by")), "time": _s(i.get("time")),
+            "remarks": _s(i.get("remarks")), "returned": returned,
+            "returned_date": _s(i.get("returned_date")) if returned else "",
+        })
+    return out
+
+
+def _write_staff(db: Session, user, doc_type: str, rec: Optional[models.Document], data: Dict[str, Any],
+                 merged: Dict[str, Any], st: str):
+    creating = rec is None
+    linked = _staff_user(db, data.get("staff_user_id")) if "staff_user_id" in data else None
+    if doc_type == "employment":
+        if creating and not _s(merged.get("employer_name")):
+            merged["employer_name"] = DEFAULT_SELLER
+        party_name, party_phone = _s(merged.get("employee_name")), _s(merged.get("employee_phone"))
+        amount = _num(merged.get("salary"))
+    else:
+        merged["items"] = _clean_items(merged.get("items"))
+        party_name, party_phone = _s(merged.get("staff_name")), _s(merged.get("staff_phone"))
+        amount = None
+    if linked:
+        # The picker pre-fills these; a typed value wins.
+        party_name = party_name or (linked.full_name or "")
+        party_phone = party_phone or (linked.phone_number or "")
+    if creating:
+        rec = models.Document(
+            doc_type=doc_type, doc_number=_next_doc_number(db, doc_type),
+            dealership_id=_dealer_id(db, user), created_by=_archiver_name(user),
+            created_at=datetime.utcnow(),
+        )
+        db.add(rec)
+    if "staff_user_id" in data:
+        rec.staff_user_id = linked.id if linked else None
+    if "date" in data or creating:
+        rec.doc_date = _parse_dt(data.get("date")) or rec.doc_date or datetime.utcnow()
+    rec.data_json = json.dumps(merged, ensure_ascii=False)
+    rec.plate_number = None
+    rec.vehicle_id = None
     rec.party_name = party_name or None
     rec.party_phone = party_phone or None
     rec.amount = amount
@@ -712,6 +811,47 @@ def vehicle_documents(vehicle_id: int, db: Session = Depends(get_db),
     out += [_item(d.doc_type, d) for d in db.query(models.Document).filter(or_(*dconds)).all()]
     out.sort(key=lambda r: (r["date"] or "", r["id"]), reverse=True)
     return {"vehicle_id": vehicle_id, "label": _vehicle_label(v), "plate_number": plate, "documents": out}
+
+
+@router.get("/staff-summary")
+def staff_documents_summary(db: Session = Depends(get_db), user: models.User = Depends(get_current_superadmin)):
+    """Per Team member: active staff documents and items still held (not returned), for the Team cards."""
+    out: Dict[str, Dict[str, int]] = {}
+    rows = db.query(models.Document).filter(
+        models.Document.doc_type.in_(STAFF_TYPES), models.Document.archived_at.is_(None),
+        models.Document.staff_user_id.isnot(None),
+    ).all()
+    for d in rows:
+        s = out.setdefault(str(d.staff_user_id), {"documents": 0, "holding": 0})
+        s["documents"] += 1
+        if d.doc_type == "property":
+            s["holding"] += _item("property", d)["extra"]["holding"]
+    return out
+
+
+@router.get("/staff/{user_id}")
+def staff_member_documents(user_id: int, include_archived: bool = False, db: Session = Depends(get_db),
+                           user: models.User = Depends(get_current_superadmin)):
+    """Staff documents linked to one Team member, newest first, plus the items they still hold."""
+    member = db.query(models.User).filter(models.User.id == user_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Team member not found.")
+    q = db.query(models.Document).filter(models.Document.doc_type.in_(STAFF_TYPES),
+                                         models.Document.staff_user_id == user_id)
+    if not include_archived:
+        q = q.filter(models.Document.archived_at.is_(None))
+    docs = q.order_by(models.Document.doc_date.desc(), models.Document.id.desc()).all()
+    holding_items: List[Dict[str, Any]] = []
+    for d in docs:
+        if d.doc_type == "property" and d.archived_at is None:
+            for i in _load(d.data_json).get("items") or []:
+                if isinstance(i, dict) and _s(i.get("item")) and not i.get("returned"):
+                    holding_items.append({"item": i.get("item"), "document": d.doc_number, "document_id": d.id})
+    return {
+        "user_id": user_id, "name": member.full_name, "phone": member.phone_number,
+        "documents": [_item(d.doc_type, d) for d in docs],
+        "holding": len(holding_items), "holding_items": holding_items,
+    }
 
 
 # ------------------------------------------------------------------ routes per type

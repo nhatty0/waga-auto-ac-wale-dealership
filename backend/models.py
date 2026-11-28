@@ -436,6 +436,9 @@ class Document(Base):
     status = Column(String(20), nullable=False, default="draft")      # "draft" | "final"
     vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True, index=True)
     rental_booking_id = Column(Integer, ForeignKey("rental_bookings.id"), nullable=True, index=True)
+    # Staff documents (employment / property): the Team member (users.id) this is about. Plain
+    # integer (no FK) so removing a staff member keeps the document; the link is cleared then.
+    staff_user_id = Column(Integer, nullable=True, index=True)
     plate_number = Column(String(50), nullable=True, index=True)
     party_name = Column(String(200), nullable=True)
     party_phone = Column(String(50), nullable=True)

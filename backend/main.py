@@ -1514,6 +1514,9 @@ def remove_staff_member_permanently(
     _reject_owner_edit(user)
     db.query(models.TelegramLinkToken).filter(models.TelegramLinkToken.user_id == user.id).delete(synchronize_session=False)
     db.query(models.OTPVerification).filter(models.OTPVerification.phone_number == user.phone_number).delete(synchronize_session=False)
+    # Staff documents keep the person's name as text; only the Team link is cleared.
+    db.query(models.Document).filter(models.Document.staff_user_id == user.id).update(
+        {models.Document.staff_user_id: None}, synchronize_session=False)
     db.delete(user)
     db.commit()
     logger.info(f"Staff #{user_id} permanently removed by owner #{current_user.id}")

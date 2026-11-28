@@ -26,7 +26,7 @@ from settings import superadmin_phones
 client = TestClient(app)
 OWNER = superadmin_phones()[0]
 BASE = "/api/superadmin/documents"
-TYPES = ("intake", "gatepass", "handover", "downpayment", "rental")
+TYPES = ("intake", "gatepass", "handover", "downpayment", "rental", "employment", "property")
 
 
 def _owner():

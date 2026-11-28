@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Car, Calendar, DoorOpen, Key, Pencil, Plus, Send, ShieldCheck, Trash2, Truck, UserX, Users, X, RotateCw, Unlink, Smartphone } from "lucide-react";
+import { Car, Calendar, DoorOpen, FileText, Key, PackageCheck, Pencil, Plus, Send, ShieldCheck, Trash2, Truck, UserX, Users, X, RotateCw, Unlink, Smartphone } from "lucide-react";
 import QrLinkModal from "@/components/QrLinkModal";
+import StaffDocumentsSheet from "@/components/documents/StaffDocumentsSheet";
+import { docApi } from "@/lib/docCenter";
 import { FIELD_ROLES, FieldRole, StaffUser, WEB_PERMISSIONS, WebPermission } from "@/types";
 import { getApiBaseUrl } from "@/lib/api";
 
@@ -75,11 +77,20 @@ export default function StaffManager() {
   const [ownerName, setOwnerName] = useState<string | null>(null);
   const [savingName, setSavingName] = useState(false);
 
+  // Staff documents per member (Team card: "Documents (n)" and "Holding N items").
+  const [docStats, setDocStats] = useState<Record<string, { documents: number; holding: number }>>({});
+  const [docsFor, setDocsFor] = useState<StaffUser | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [list, me] = await Promise.all([api("/api/superadmin/staff"), api("/api/admin/me").catch(() => null)]);
+      const [list, me, stats] = await Promise.all([
+        api("/api/superadmin/staff"),
+        api("/api/admin/me").catch(() => null),
+        docApi<Record<string, { documents: number; holding: number }>>("/staff-summary").catch(() => ({})),
+      ]);
       setStaff(Array.isArray(list) ? list : []);
+      setDocStats(stats || {});
       if (me?.id) setMeId(me.id);
     } catch (e) {
       onToast((e as Error).message, "error");
@@ -361,6 +372,29 @@ export default function StaffManager() {
                   </p>
                 )}
 
+                {!u.is_superadmin && (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <button
+                      type="button"
+                      data-staff-docs={u.id}
+                      onClick={() => setDocsFor(u)}
+                      className="h-11 px-3 flex-1 min-w-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-bold flex items-center justify-center gap-1.5"
+                    >
+                      <FileText size={14} className="shrink-0" /> Documents · ሰነዶች
+                      {docStats[String(u.id)]?.documents ? <span className="text-zinc-400">({docStats[String(u.id)].documents})</span> : null}
+                    </button>
+                    {docStats[String(u.id)]?.holding ? (
+                      <span
+                        data-staff-holding={u.id}
+                        className="h-11 px-2.5 shrink-0 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 text-[11px] font-bold inline-flex items-center gap-1"
+                        title="Items handed over and not yet returned"
+                      >
+                        <PackageCheck size={13} /> Holding {docStats[String(u.id)].holding} item{docStats[String(u.id)].holding === 1 ? "" : "s"}
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+
                 {u.is_superadmin && u.id === meId && (
                   <button
                     type="button"
@@ -599,6 +633,9 @@ export default function StaffManager() {
             </div>
           </form>
         </div>
+      )}
+      {docsFor && (
+        <StaffDocumentsSheet userId={docsFor.id} title={docsFor.full_name || displayPhone(docsFor.phone_number)} onClose={() => setDocsFor(null)} />
       )}
       {tgLink && (
         <QrLinkModal

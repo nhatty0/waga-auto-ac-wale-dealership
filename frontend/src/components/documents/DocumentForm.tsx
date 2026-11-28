@@ -2,7 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Car, Check, Loader2, Plus, Printer, Save, Search, Stamp, Trash2, X, CalendarClock } from "lucide-react";
+import { Car, Check, Loader2, Plus, Printer, Save, Search, Stamp, Trash2, X, CalendarClock, UserRound } from "lucide-react";
+import type { StaffUser } from "@/types";
 import {
   DOC_FORMS,
   DOC_INFO,
@@ -10,8 +11,10 @@ import {
   DocData,
   DocDetail,
   DocType,
+  EMPTY_PROPERTY_ITEM,
   FieldDef,
   LookupHit,
+  PropertyItem,
   RENTAL_CHECKLIST,
   docApi,
   getDocToken,
@@ -44,6 +47,24 @@ const num = (v: unknown) => {
   return str(v).trim() !== "" && isFinite(n) ? n : null;
 };
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+
+/** [words field, figures field]: the words follow the figures until typed over. */
+const WORDS_FIELD: Partial<Record<DocType, [string, string]>> = {
+  downpayment: ["amount_words", "amount"],
+  employment: ["salary_words", "salary"],
+};
+
+/** Which form fields a picked Team member fills, per staff document. */
+const STAFF_KEYS: Partial<Record<DocType, { name: string; phone: string }>> = {
+  employment: { name: "employee_name", phone: "employee_phone" },
+  property: { name: "staff_name", phone: "staff_phone" },
+};
+
+/** "251911…" -> "0911 …" */
+export const localPhone = (p: string) => {
+  const d = (p || "").replace(/\D/g, "");
+  return /^251\d{9}$/.test(d) ? `0${d.slice(3, 6)} ${d.slice(6, 9)} ${d.slice(9)}` : p;
+};
 
 /** Rental: days from the dates, total = rate x days, balance = total - deposit (unless typed). */
 function rentalCalc(d: DocData, balanceManual: boolean): DocData {
@@ -86,7 +107,8 @@ export default function DocumentForm({ type, docId, prefill, userName, dealerPho
         const loaded = { ...d.data };
         origDate.current = str(loaded.date);
         if (loaded.date) loaded.date = str(loaded.date).slice(0, 10);
-        wordsManual.current = !!str(loaded.amount_words) && str(loaded.amount_words) !== birrInAmharicWords(str(loaded.amount));
+        const [wk, ak] = WORDS_FIELD[type] || ["amount_words", "amount"];
+        wordsManual.current = !!str(loaded[wk]) && str(loaded[wk]) !== birrInAmharicWords(str(loaded[ak]));
         balanceManual.current = type === "rental" && !!str(loaded.balance);
         setData(loaded);
       })
@@ -100,8 +122,9 @@ export default function DocumentForm({ type, docId, prefill, userName, dealerPho
   const set = (patch: DocData) => {
     setData((prev) => {
       let next = { ...prev, ...patch };
-      if (type === "downpayment" && "amount" in patch && !wordsManual.current) {
-        next.amount_words = birrInAmharicWords(str(next.amount));
+      const wf = WORDS_FIELD[type];
+      if (wf && wf[1] in patch && !wordsManual.current) {
+        next[wf[0]] = birrInAmharicWords(str(next[wf[1]]));
       }
       if (type === "rental") {
         if ("pickup_date" in patch || "return_date" in patch) next.days = "";
@@ -113,7 +136,7 @@ export default function DocumentForm({ type, docId, prefill, userName, dealerPho
   };
 
   const onField = (f: FieldDef, value: string) => {
-    if (f.key === "amount_words") wordsManual.current = value.trim() !== "";
+    if (f.key === "amount_words" || f.key === "salary_words") wordsManual.current = value.trim() !== "";
     if (f.key === "balance") balanceManual.current = value.trim() !== "";
     set({ [f.key]: value });
   };
@@ -149,6 +172,7 @@ export default function DocumentForm({ type, docId, prefill, userName, dealerPho
   const labelFor = useMemo(() => {
     const m: Record<string, string> = {};
     sections.forEach((s) => s.fields.forEach((f) => (m[f.key] = `${f.am} (${f.en})`)));
+    m.items = "ቢያንስ አንድ ንብረት (at least one item)";
     return m;
   }, [sections]);
 
@@ -198,6 +222,25 @@ export default function DocumentForm({ type, docId, prefill, userName, dealerPho
                 {sec.special === "booking" && <BookingPicker selected={data.rental_booking_id as number | undefined} onPick={(d) => { balanceManual.current = false; set(d); }} />}
                 {sec.special === "belongings" && <Belongings value={(data.belongings as { item_name: string; quantity: string }[]) || []} onChange={(b) => set({ belongings: b })} />}
                 {sec.special === "checklist" && <Checklist value={(data.checklist as Record<string, string>) || {}} onChange={(c) => set({ checklist: c })} />}
+                {sec.special === "staff" && STAFF_KEYS[type] && (
+                  <TeamPicker
+                    selected={(data.staff_user_id as number | null | undefined) ?? null}
+                    currentName={str(data[STAFF_KEYS[type]!.name])}
+                    onPick={(u) => {
+                      const k = STAFF_KEYS[type]!;
+                      set(u ? { staff_user_id: u.id, [k.name]: u.full_name || "", [k.phone]: localPhone(u.phone_number) } : { staff_user_id: null });
+                    }}
+                  />
+                )}
+                {sec.special === "items" && (
+                  <PropertyItems
+                    value={(data.items as PropertyItem[]) || []}
+                    defaultHandedBy={str(data.handover_by)}
+                    defaultReceivedBy={str(data.staff_name)}
+                    invalid={missing.includes("items")}
+                    onChange={(items) => set({ items })}
+                  />
+                )}
                 {sec.fields.length > 0 && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {sec.fields.map((f) => (
@@ -575,6 +618,138 @@ function Checklist({ value, onChange }: { value: Record<string, string>; onChang
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Optional Team member link for staff documents. Picking someone fills the name and phone (still
+ * editable). A document opened with only staff_user_id (from a Team card) fills the name itself.
+ */
+function TeamPicker({ selected, currentName, onPick }: { selected: number | null; currentName: string; onPick: (u: StaffUser | null) => void }) {
+  const [rows, setRows] = useState<StaffUser[] | null>(null);
+  const filled = useRef(false);
+
+  useEffect(() => {
+    fetch(`${getApiBaseUrl()}/api/superadmin/staff`, { headers: { Authorization: `Bearer ${getDocToken() || ""}` } })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setRows(Array.isArray(d) ? (d as StaffUser[]).filter((u) => !u.is_superadmin) : []))
+      .catch(() => setRows([]));
+  }, []);
+
+  useEffect(() => {
+    if (filled.current || !rows || !selected || currentName.trim()) return;
+    const u = rows.find((r) => r.id === selected);
+    if (u) {
+      filled.current = true;
+      onPick(u);
+    }
+  }, [rows, selected, currentName, onPick]);
+
+  return (
+    <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950/60 p-2.5 space-y-1.5">
+      <label htmlFor="docf-staff" className="flex items-center gap-1.5 text-xs font-bold text-zinc-200">
+        <UserRound size={14} className="text-amber-500" /> Team member <span className="font-normal text-zinc-500">· optional</span>
+      </label>
+      <select
+        id="docf-staff"
+        value={selected ? String(selected) : ""}
+        onChange={(e) => onPick(rows?.find((u) => String(u.id) === e.target.value) || null)}
+        className={inputCls}
+      >
+        <option value="">{rows === null ? "Loading…" : rows.length ? "— Not linked (type the details below) —" : "No team members yet"}</option>
+        {selected && rows && !rows.some((u) => u.id === selected) && <option value={selected}>Member #{selected}</option>}
+        {(rows || []).map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.full_name || "Unnamed"} · {localPhone(u.phone_number)}
+            {u.is_active ? "" : " (inactive)"}
+          </option>
+        ))}
+      </select>
+      <p className="text-[11px] text-zinc-500">Linked documents show on that person&apos;s Team card.</p>
+    </div>
+  );
+}
+
+/** Property handover rows (ንብረት መረካከቢያ ፎርም). ተ.ቁ is the row order. */
+function PropertyItems({
+  value,
+  defaultHandedBy,
+  defaultReceivedBy,
+  invalid,
+  onChange,
+}: {
+  value: PropertyItem[];
+  defaultHandedBy: string;
+  defaultReceivedBy: string;
+  invalid: boolean;
+  onChange: (v: PropertyItem[]) => void;
+}) {
+  const update = (i: number, patch: Partial<PropertyItem>) => onChange(value.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const today = new Date().toISOString().slice(0, 10);
+  const held = value.filter((r) => str(r.item).trim() && !r.returned).length;
+  return (
+    <div className="space-y-2.5">
+      <p className={`text-[11px] ${invalid ? "text-red-400 font-bold" : "text-zinc-400"}`}>
+        {value.filter((r) => str(r.item).trim()).length} item(s) · <span className="text-amber-300">{held} still held</span> · tick Returned when it comes back
+      </p>
+      {value.map((r, i) => (
+        <div key={i} className={`rounded-xl border p-2.5 space-y-2 min-w-0 ${r.returned ? "border-emerald-500/30 bg-emerald-500/5" : "border-zinc-800 bg-zinc-950"}`}>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="h-11 w-9 shrink-0 rounded-lg bg-zinc-800 text-xs font-black flex items-center justify-center" aria-hidden>
+              {i + 1}
+            </span>
+            <input
+              value={r.item}
+              onChange={(e) => update(i, { item: e.target.value })}
+              placeholder="የንብረቱ ዓይነት · Item"
+              aria-label={`Item ${i + 1}`}
+              className={`${inputCls} flex-1 min-w-0 ${invalid && i === 0 && !str(r.item).trim() ? "!border-red-500" : ""}`}
+            />
+            <button
+              type="button"
+              onClick={() => onChange(value.filter((_, j) => j !== i))}
+              aria-label={`Remove item ${i + 1}`}
+              className="h-11 w-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-red-500/20 text-zinc-400 hover:text-red-300 flex items-center justify-center"
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input value={r.handed_by} onChange={(e) => update(i, { handed_by: e.target.value })} placeholder="ያስረከበው · Handed by" aria-label={`Handed over by, item ${i + 1}`} className={`${inputCls} min-w-0`} />
+            <input value={r.received_by} onChange={(e) => update(i, { received_by: e.target.value })} placeholder="የተረከበው · Received by" aria-label={`Received by, item ${i + 1}`} className={`${inputCls} min-w-0`} />
+            <input type="time" value={r.time} onChange={(e) => update(i, { time: e.target.value })} aria-label={`Time, item ${i + 1}`} className={`${inputCls} min-w-0`} />
+            <input value={r.remarks} onChange={(e) => update(i, { remarks: e.target.value })} placeholder="ማብራሪያ · Remarks" aria-label={`Remarks, item ${i + 1}`} className={`${inputCls} min-w-0`} />
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <label className="flex items-center gap-2 h-11 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-bold cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                className="h-5 w-5 accent-emerald-500"
+                checked={r.returned}
+                onChange={(e) => update(i, { returned: e.target.checked, returned_date: e.target.checked ? r.returned_date || today : "" })}
+              />
+              Returned · ተመልሷል
+            </label>
+            {r.returned && (
+              <input
+                type="date"
+                value={r.returned_date}
+                onChange={(e) => update(i, { returned_date: e.target.value })}
+                aria-label={`Return date, item ${i + 1}`}
+                className={`${inputCls} flex-1 min-w-0`}
+              />
+            )}
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange([...value, { ...EMPTY_PROPERTY_ITEM, handed_by: defaultHandedBy, received_by: defaultReceivedBy }])}
+        className="h-11 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold flex items-center gap-1.5"
+      >
+        <Plus size={14} /> Add item · ንብረት ጨምር
+      </button>
     </div>
   );
 }

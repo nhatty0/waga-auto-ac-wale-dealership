@@ -5,6 +5,9 @@ import {
   Archive,
   ArrowLeft,
   Ban,
+  BriefcaseBusiness,
+  PackageCheck,
+  Users,
   QrCode,
   Send,
   CarFront,
@@ -37,6 +40,9 @@ import {
   DocSummary,
   DocType,
   LookupHit,
+  STAFF_DOC_TYPES,
+  VEHICLE_DOC_TYPES,
+  isStaffDoc,
   docApi,
   docDate,
   getDocToken,
@@ -51,6 +57,7 @@ import DocumentForm, { sendPassToGate } from "@/components/documents/DocumentFor
 import QrLinkModal from "@/components/QrLinkModal";
 import DocPrintModal from "@/components/documents/DocPrintModal";
 import { DownPaymentSheet, RentalAgreementSheet } from "@/components/documents/DocSheets";
+import { EmploymentContractSheet, PropertyHandoverSheet, STAFF_SHEET_CSS } from "@/components/documents/StaffSheets";
 import GatePassModal from "@/components/GatePassModal";
 import HandoverPrintModal from "@/components/HandoverPrintModal";
 import ReceivingSheetPrint from "@/components/ReceivingSheetPrint";
@@ -63,6 +70,8 @@ const ICONS: Record<DocType, typeof ClipboardList> = {
   handover: FileSignature,
   downpayment: HandCoins,
   rental: KeyRound,
+  employment: BriefcaseBusiness,
+  property: PackageCheck,
 };
 
 const ACCENT: Record<DocType, { tile: string; icon: string; chip: string }> = {
@@ -71,6 +80,8 @@ const ACCENT: Record<DocType, { tile: string; icon: string; chip: string }> = {
   handover: { tile: "hover:border-sky-500/60", icon: "bg-sky-500/15 text-sky-300", chip: "text-sky-300" },
   downpayment: { tile: "hover:border-violet-500/60", icon: "bg-violet-500/15 text-violet-300", chip: "text-violet-300" },
   rental: { tile: "hover:border-rose-500/60", icon: "bg-rose-500/15 text-rose-300", chip: "text-rose-300" },
+  employment: { tile: "hover:border-teal-500/60", icon: "bg-teal-500/15 text-teal-300", chip: "text-teal-300" },
+  property: { tile: "hover:border-orange-500/60", icon: "bg-orange-500/15 text-orange-300", chip: "text-orange-300" },
 };
 
 type StatusFilter = "active" | "draft" | "final" | "archived";
@@ -168,7 +179,10 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
   // ?new=TYPE (without a vehicle) opens a blank form straight away.
   const [form, setForm] = useState<FormState | null>(() => {
     const t = readParam("new") as DocType | null;
-    return t && DOC_TYPES.includes(t) && !readParam("vehicle") ? { type: t } : null;
+    if (!t || !DOC_TYPES.includes(t) || readParam("vehicle")) return null;
+    // ?new=employment&staff=ID (from a Team card): linked to that member; the form fills the name.
+    const staffId = Number(readParam("staff"));
+    return isStaffDoc(t) && staffId ? { type: t, prefill: { staff_user_id: staffId } } : { type: t };
   });
   const [print, setPrint] = useState<PrintState | null>(null);
   const [sheetIntakes, setSheetIntakes] = useState<{ list: LotIntake[]; day: string; stamp: boolean } | null>(null);
@@ -213,7 +227,7 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
           .catch(() => setForm({ type: newType, prefill: { vehicle_id: vehicleId } }));
       }
     }
-    if (openId || newType) setParams({ open: null, new: null, vehicle: null });
+    if (openId || newType) setParams({ open: null, new: null, vehicle: null, staff: null });
   }, [showToast]);
 
   // List
@@ -283,14 +297,17 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
 
   const share = async (it: DocItem) => {
     const info = DOC_INFO[it.type];
+    const staff = isStaffDoc(it.type);
     const lines = [
       `${info.am} / ${info.en}`,
       `ቁጥር: ${it.number}`,
       it.date ? `ቀን: ${docDate(it.date)}` : "",
-      it.title ? `መኪና: ${it.title}` : "",
+      it.title ? `${staff ? "የስራ መደብ" : "መኪና"}: ${it.title}` : "",
       it.plate_number ? `ሰሌዳ: ${it.plate_number}` : "",
       it.party_name ? `ስም: ${it.party_name}${it.party_phone ? ` (${it.party_phone})` : ""}` : "",
-      it.amount ? `መጠን: ${formatBirr(it.amount)} ብር` : "",
+      // Salaries stay out of shared text.
+      it.amount && !staff ? `መጠን: ${formatBirr(it.amount)} ብር` : "",
+      it.type === "property" && it.extra.item_count ? `ንብረቶች: ${it.extra.item_count} (${it.extra.holding} ያልተመለሰ)` : "",
       "",
       dealership?.name || "AC WALE MARKET",
       dealerPhonesText(dealership),
@@ -391,6 +408,53 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
   const sum = (t: DocType) => summary?.[t];
 
   // ------------------------------------------------------------ render
+  /** Tile grid for one group of document types (vehicle documents, staff documents). */
+  const tileGrid = (types: DocType[]) => (
+    <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {types.map((t) => {
+        const Icon = ICONS[t];
+        const s = sum(t);
+        return (
+          <li key={t} className="min-w-0">
+            <div className={`h-full bg-zinc-900 border border-zinc-800 ${ACCENT[t].tile} rounded-2xl p-4 flex flex-col gap-3 transition`}>
+              <button type="button" onClick={() => openType(t)} className="flex items-start gap-3 text-left min-w-0">
+                <span className={`h-12 w-12 shrink-0 rounded-xl flex items-center justify-center ${ACCENT[t].icon}`}>
+                  <Icon size={24} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-base font-black leading-snug">{DOC_INFO[t].am}</span>
+                  <span className="block text-xs text-zinc-400">{DOC_INFO[t].en}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-2xl font-black tabular-nums">{s ? s.active : "–"}</span>
+                  <span className="block text-[10px] text-zinc-500 whitespace-nowrap">
+                    {s?.draft ? `${s.draft} draft` : t === "intake" && s?.in_lot !== undefined ? `${s.in_lot} in lot` : "saved"}
+                  </span>
+                </span>
+              </button>
+              <div className="grid grid-cols-2 gap-2 mt-auto">
+                <button
+                  type="button"
+                  onClick={() => openType(t)}
+                  className="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-bold"
+                >
+                  Open list
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ type: t })}
+                  className="h-11 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-sm font-black flex items-center justify-center gap-1"
+                >
+                  <Plus size={16} /> New
+                </button>
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+
   return (
     <div className="space-y-5 min-w-0">
       {!view ? (
@@ -409,49 +473,15 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
               <RefreshCw size={16} />
             </button>
           </div>
-          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {DOC_TYPES.map((t) => {
-              const Icon = ICONS[t];
-              const s = sum(t);
-              return (
-                <li key={t} className="min-w-0">
-                  <div className={`h-full bg-zinc-900 border border-zinc-800 ${ACCENT[t].tile} rounded-2xl p-4 flex flex-col gap-3 transition`}>
-                    <button type="button" onClick={() => openType(t)} className="flex items-start gap-3 text-left min-w-0">
-                      <span className={`h-12 w-12 shrink-0 rounded-xl flex items-center justify-center ${ACCENT[t].icon}`}>
-                        <Icon size={24} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-base font-black leading-snug">{DOC_INFO[t].am}</span>
-                        <span className="block text-xs text-zinc-400">{DOC_INFO[t].en}</span>
-                      </span>
-                      <span className="shrink-0 text-right">
-                        <span className="block text-2xl font-black tabular-nums">{s ? s.active : "–"}</span>
-                        <span className="block text-[10px] text-zinc-500 whitespace-nowrap">
-                          {s?.draft ? `${s.draft} draft` : t === "intake" && s?.in_lot !== undefined ? `${s.in_lot} in lot` : "saved"}
-                        </span>
-                      </span>
-                    </button>
-                    <div className="grid grid-cols-2 gap-2 mt-auto">
-                      <button
-                        type="button"
-                        onClick={() => openType(t)}
-                        className="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-bold"
-                      >
-                        Open list
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setForm({ type: t })}
-                        className="h-11 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-sm font-black flex items-center justify-center gap-1"
-                      >
-                        <Plus size={16} /> New
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          {tileGrid(VEHICLE_DOC_TYPES)}
+          {/* Staff (HR) documents: a separate group, not linked to vehicles. */}
+          <div className="pt-3 mt-1 border-t border-zinc-800" data-staff-docs>
+            <h3 className="text-base font-black flex items-center gap-2">
+              <Users size={17} className="text-teal-300 shrink-0" /> የሰራተኛ ሰነዶች · Staff documents
+            </h3>
+            <p className="text-xs text-zinc-400 mb-3">Employment contracts and property handovers. Link each to a Team member to see it on their card.</p>
+            {tileGrid(STAFF_DOC_TYPES)}
+          </div>
         </>
       ) : (
         <>
@@ -497,7 +527,7 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Plate, name, phone or number…"
+                placeholder={isStaffDoc(view) ? "Name, phone or number…" : "Plate, name, phone or number…"}
                 aria-label="Search documents"
                 className="w-full h-11 rounded-xl bg-zinc-950 border border-zinc-700 pl-9 pr-9 text-sm focus:outline-none focus:border-amber-500"
               />
@@ -648,6 +678,35 @@ export default function DocumentCenter({ userName }: { userName?: string }) {
           onStampedPrint={stampedPrint(print.doc)}
         >
           {(stampSrc) => <RentalAgreementSheet number={print.doc.number} data={print.doc.data} dealership={dealership} stamp={stampSrc} />}
+        </DocPrintModal>
+      )}
+      {print && print.doc.type === "employment" && (
+        <DocPrintModal
+          title={DOC_INFO.employment.am}
+          number={print.doc.number}
+          autoPrint={print.auto}
+          onClose={() => setPrint(null)}
+          stampAllowed={print.doc.status === "final"}
+          initialStamp={print.stamp}
+          onStampedPrint={stampedPrint(print.doc)}
+          extraCss={STAFF_SHEET_CSS}
+        >
+          {(stampSrc) => <EmploymentContractSheet number={print.doc.number} data={print.doc.data} dealership={dealership} stamp={stampSrc} />}
+        </DocPrintModal>
+      )}
+      {print && print.doc.type === "property" && (
+        <DocPrintModal
+          title={DOC_INFO.property.am}
+          number={print.doc.number}
+          autoPrint={print.auto}
+          onClose={() => setPrint(null)}
+          stampAllowed={print.doc.status === "final"}
+          initialStamp={print.stamp}
+          onStampedPrint={stampedPrint(print.doc)}
+          extraCss={STAFF_SHEET_CSS}
+          landscape
+        >
+          {(stampSrc) => <PropertyHandoverSheet number={print.doc.number} data={print.doc.data} dealership={dealership} stamp={stampSrc} />}
         </DocPrintModal>
       )}
       {sheetIntakes && (
@@ -829,6 +888,10 @@ function DocRow({
         : "Released"
       : it.type === "gatepass"
       ? str(it.extra.release_reason)
+      : it.type === "property" && Number(it.extra.item_count) > 0
+      ? Number(it.extra.holding) > 0
+        ? `Holding ${it.extra.holding}/${it.extra.item_count}`
+        : `All ${it.extra.item_count} returned`
       : "";
   const passStatus = it.type === "gatepass" ? str(it.extra.pass_status) : "";
   return (
@@ -864,7 +927,11 @@ function DocRow({
         </div>
         <div className="shrink-0 text-right">
           <p className="text-xs font-bold text-zinc-300">{docDate(it.date)}</p>
-          {it.amount ? <p className="text-[11px] text-zinc-400 tabular-nums">{formatBirr(it.amount)} ብር</p> : null}
+          {it.amount ? (
+            <p className="text-[11px] text-zinc-400 tabular-nums">
+              {formatBirr(it.amount)} ብር{it.type === "employment" ? "/ወር" : ""}
+            </p>
+          ) : null}
         </div>
       </div>
       {archived && it.archived_by && <p className="text-[11px] text-red-300/80">Archived by {it.archived_by}</p>}

@@ -1,10 +1,14 @@
 /**
- * Document Center (/superadmin -> Documents): the five document types, their form layouts and
+ * Document Center (/superadmin -> Documents): the five vehicle document types plus the two staff
+ * (HR) documents, their form layouts and
  * the API client. Every endpoint is superadmin-only on the backend (403 for staff).
  */
 import { getApiBaseUrl } from "@/lib/api";
 
-export type DocType = "intake" | "gatepass" | "handover" | "downpayment" | "rental";
+export type VehicleDocType = "intake" | "gatepass" | "handover" | "downpayment" | "rental";
+/** Staff (HR) documents: not linked to vehicles, optionally linked to a Team member. */
+export type StaffDocType = "employment" | "property";
+export type DocType = VehicleDocType | StaffDocType;
 export type DocStatus = "draft" | "final" | "archived";
 export type DocData = Record<string, unknown>;
 
@@ -55,7 +59,22 @@ export interface LookupHit {
 
 export type DocSummary = Record<DocType, { active: number; draft: number; archived: number; in_lot?: number }>;
 
-export const DOC_TYPES: DocType[] = ["intake", "gatepass", "handover", "downpayment", "rental"];
+export const VEHICLE_DOC_TYPES: VehicleDocType[] = ["intake", "gatepass", "handover", "downpayment", "rental"];
+export const STAFF_DOC_TYPES: StaffDocType[] = ["employment", "property"];
+export const DOC_TYPES: DocType[] = [...VEHICLE_DOC_TYPES, ...STAFF_DOC_TYPES];
+export const isStaffDoc = (t: DocType): t is StaffDocType => (STAFF_DOC_TYPES as DocType[]).includes(t);
+
+/** One row of the property handover table (ንብረት መረካከቢያ ፎርም). */
+export interface PropertyItem {
+  item: string;
+  handed_by: string;
+  received_by: string;
+  time: string;
+  remarks: string;
+  returned: boolean;
+  returned_date: string;
+}
+export const EMPTY_PROPERTY_ITEM: PropertyItem = { item: "", handed_by: "", received_by: "", time: "", remarks: "", returned: false, returned_date: "" };
 
 export const DOC_INFO: Record<DocType, { am: string; en: string; short: string; prefix: string; accent: string }> = {
   intake: { am: "የዕለት መኪና መቀበያ", en: "Daily Intake", short: "Intake", prefix: "IN", accent: "emerald" },
@@ -63,6 +82,8 @@ export const DOC_INFO: Record<DocType, { am: string; en: string; short: string; 
   handover: { am: "የርክክብ ውል", en: "Handover Contract", short: "Handover", prefix: "AC-rec", accent: "sky" },
   downpayment: { am: "የቀብድ መቀበያ ፎርም", en: "Down-payment Receipt", short: "Down payment", prefix: "DP", accent: "violet" },
   rental: { am: "የመኪና ኪራይ ውል ስምምነት", en: "Car Rental Agreement", short: "Rental", prefix: "RA", accent: "rose" },
+  employment: { am: "የሰራተኛ የስራ ቅጥር የውል ስምምነት", en: "Employment Contract", short: "Contract", prefix: "EC", accent: "teal" },
+  property: { am: "ንብረት መረካከቢያ ፎርም", en: "Property Handover", short: "Property", prefix: "PH", accent: "orange" },
 };
 
 // ---------------------------------------------------------------- form layout
@@ -82,7 +103,7 @@ export interface FieldDef {
   readOnly?: boolean;
 }
 
-export type SectionSpecial = "vehicle" | "checklist" | "belongings" | "booking" | "publish" | "telegram";
+export type SectionSpecial = "vehicle" | "checklist" | "belongings" | "booking" | "publish" | "telegram" | "staff" | "items";
 
 export interface SectionDef {
   am: string;
@@ -310,6 +331,74 @@ export const DOC_FORMS: Record<DocType, SectionDef[]> = {
       ],
     },
   ],
+  employment: [
+    {
+      am: "ሰራተኛ", en: "Employee (pick a Team member to fill name and phone)", special: "staff", fields: [
+        { key: "employee_title", am: "አቶ/ወ/ሮ/ወ/ሪት", en: "Title", kind: "select", options: ["አቶ", "ወ/ሮ", "ወ/ሪት"] },
+        { key: "employee_name", am: "ሙሉ ስም", en: "Full name", required: true },
+        { key: "employee_phone", am: "ስልክ ቁጥር", en: "Phone", kind: "tel" },
+        { key: "employee_birth_year", am: "የትውልድ ዘመን", en: "Year of birth" },
+        { key: "employee_nationality", am: "ዜግነት", en: "Nationality" },
+        { key: "employee_marital_status", am: "የቤተሰብ ሁኔታ", en: "Marital status", kind: "select", options: ["", "ያላገባ/ች", "ያገባ/ች", "የተፋታ/ች", "የሞተበት/ባት"] },
+        { key: "employee_education", am: "የትምህርት ደረጃ", en: "Education level" },
+        ...address("employee", "ከተማ"),
+        { key: "employee_kebele", am: "ቀበሌ", en: "Kebele" },
+      ],
+    },
+    {
+      am: "ስራ እና ደመወዝ", en: "Job & pay (articles 1–4)", fields: [
+        { key: "job_position", am: "የስራ መደብ", en: "Job position (1.1, 2.1)", required: true },
+        { key: "work_place", am: "የሥራ ቦታ", en: "Work place (2.2)" },
+        { key: "start_date", am: "የተጀመረበት ቀን", en: "Start date (printed in E.C., ዓ/ም)", kind: "date" },
+        { key: "probation", am: "የሙከራ ጊዜ", en: "Probation (optional, e.g. 60 ቀን)", placeholder: "60 ቀን" },
+        { key: "salary", am: "ወርሃዊ ደመወዝ (በአሃዝ)", en: "Gross monthly salary, figures (ETB)", kind: "money", required: true },
+        { key: "salary_words", am: "በፊደል", en: "Salary in Amharic words (auto, editable)", kind: "textarea", wide: true },
+        { key: "daily_hours", am: "የቀን የስራ ሰዓት", en: "Hours per day (4.1)" },
+        { key: "weekly_hours", am: "የሳምንት የስራ ሰዓት", en: "Hours per week (4.1)" },
+      ],
+    },
+    {
+      am: "አሰሪ", en: "Employer", fields: [
+        { key: "employer_name", am: "አሰሪ", en: "Employer", wide: true },
+        ...address("employer", "ከተማ"),
+        { key: "employer_kebele", am: "ቀበሌ", en: "Kebele" },
+        { key: "employer_rep_name", am: "የአሰሪው ተወካይ ሙሉ ስም", en: "Signs for the employer: name" },
+        { key: "employer_rep_title", am: "ሃላፊነት", en: "Signs for the employer: title" },
+      ],
+    },
+    {
+      am: "ዋስ", en: "Guarantor", fields: [
+        { key: "guarantor_name", am: "ሙሉ ስም", en: "Full name", wide: true },
+        ...address("guarantor", "ከተማ"),
+        { key: "guarantor_kebele", am: "ቀበሌ", en: "Kebele" },
+        { key: "guarantor_phone", am: "ስልክ ቁጥር", en: "Phone", kind: "tel" },
+      ],
+    },
+    {
+      am: "ውሉ የተፈረመበት", en: "Signed (article 14)", fields: [
+        { key: "date", am: "ቀን", en: "Date (printed in E.C., ዓ.ም)", kind: "date" },
+        { key: "sign_city", am: "ከተማ", en: "City" },
+      ],
+    },
+  ],
+  property: [
+    {
+      am: "ሰራተኛ", en: "Staff member (pick a Team member to fill name and phone)", special: "staff", fields: [
+        { key: "staff_name", am: "ሙሉ ስም", en: "Full name", required: true },
+        { key: "staff_phone", am: "ስልክ", en: "Phone", kind: "tel" },
+        { key: "staff_position", am: "የስራ መደብ", en: "Position" },
+        { key: "date", am: "ቀን", en: "Date", kind: "date" },
+        { key: "note", am: "ማስታወሻ", en: "Note (optional)", kind: "textarea", wide: true },
+      ],
+    },
+    { am: "ንብረቶች", en: "Items (ተ.ቁ is automatic)", special: "items", fields: [] },
+    {
+      am: "ፊርማ", en: "Signatures at the bottom", fields: [
+        { key: "handover_by", am: "ያስረከበው (ድርጅቱ)", en: "Handed over by (company)" },
+        { key: "receiver_name", am: "የተረከበው ሰራተኛ", en: "Received by (staff)", placeholder: "= staff name" },
+      ],
+    },
+  ],
 };
 
 /** Field defaults for a new document of each type. */
@@ -339,6 +428,18 @@ export function newDocDefaults(type: DocType, opts: { userName?: string; dealerP
         lessor_name: "ኤሲ ዋለ መኪና መሸጫ", lessor_nationality: "ኢትዮጵያዊ", lessor_city: "አ/አ",
         lessor_subcity: "ቦሌ", lessor_woreda: "04", lessor_house_no: "አዲስ", lessor_mobile: opts.dealerPhone || "",
         checklist: {},
+      };
+    case "employment":
+      return {
+        date: today, employer_name: "ኤሲ ዋለ መኪና መሸጫ", employer_city: "አ/አ", employer_subcity: "ቦሌ",
+        employer_woreda: "04", employer_house_no: "አዲስ", employer_rep_name: opts.userName || "",
+        employee_title: "አቶ", employee_nationality: "ኢትዮጵያዊ", employee_city: "አ/አ",
+        daily_hours: "ስምንት", weekly_hours: "አርባ ስምንት", sign_city: "አዲስ አበባ",
+      };
+    case "property":
+      return {
+        date: today, handover_by: opts.userName || "",
+        items: [{ ...EMPTY_PROPERTY_ITEM, handed_by: opts.userName || "" }],
       };
   }
 }

@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { FileText } from "lucide-react";
 import PrintModalShell from "@/components/print/PrintModalShell";
-import ScaledPreview, { A4_PORTRAIT_PX } from "@/components/print/ScaledPreview";
+import ScaledPreview, { A4_LANDSCAPE_PX, A4_PORTRAIT_PX } from "@/components/print/ScaledPreview";
 import { StampToggle } from "@/components/print/Stamp";
 import { nextPaint, useDocStamp } from "@/lib/stamp";
 
@@ -121,12 +121,19 @@ interface DocPrintModalProps {
   initialStamp?: boolean;
   /** Called after a copy was sent to print WITH the stamp (records stamped / stamped_by). */
   onStampedPrint?: () => void;
+  /** Extra sheet CSS (e.g. STAFF_SHEET_CSS), added after DOC_SHEET_CSS on screen and in print. */
+  extraCss?: string;
+  /** A4 landscape sheet (preview width + @page size). */
+  landscape?: boolean;
   /** The sheet; given the stamp data: URL (or null) to place on the company's signature. */
   children: (stampSrc: string | null) => React.ReactNode;
 }
 
+/** @page size for landscape sheets (comes after DOC_SHEET_CSS, so it wins). */
+export const LANDSCAPE_PAGE_CSS = "@media print { @page { size: A4 landscape; margin: 9mm 10mm; } }";
+
 /** Print an element's HTML in a hidden iframe with only the sheet styles. */
-export function printSheet(el: HTMLElement, docTitle: string) {
+export function printSheet(el: HTMLElement, docTitle: string, extraCss = "") {
   document.getElementById("ds-print-frame")?.remove();
   const iframe = document.createElement("iframe");
   iframe.id = "ds-print-frame";
@@ -138,7 +145,7 @@ export function printSheet(el: HTMLElement, docTitle: string) {
   const safeTitle = docTitle.replace(/[<>&]/g, "");
   doc.open();
   doc.write(
-    `<!DOCTYPE html><html lang="am"><head><meta charset="utf-8"><base href="${window.location.origin}/"><title>${safeTitle}</title><style>${DOC_SHEET_CSS}</style></head><body>${el.outerHTML}</body></html>`
+    `<!DOCTYPE html><html lang="am"><head><meta charset="utf-8"><base href="${window.location.origin}/"><title>${safeTitle}</title><style>${DOC_SHEET_CSS}${extraCss}</style></head><body>${el.outerHTML}</body></html>`
   );
   doc.close();
   const go = () => {
@@ -160,8 +167,11 @@ export default function DocPrintModal({
   stampAllowed = false,
   initialStamp = true,
   onStampedPrint,
+  extraCss = "",
+  landscape = false,
   children,
 }: DocPrintModalProps) {
+  const css = extraCss + (landscape ? LANDSCAPE_PAGE_CSS : "");
   const sheetRef = useRef<HTMLDivElement>(null);
   const printed = useRef(false);
   const stamp = useDocStamp(stampAllowed, initialStamp);
@@ -171,7 +181,7 @@ export default function DocPrintModal({
     await nextPaint();
     const el = sheetRef.current?.querySelector<HTMLElement>(".ds-sheet");
     if (!el) return;
-    printSheet(el, `${number} ${title}`);
+    printSheet(el, `${number} ${title}`, css);
     if (stamp.src && el.querySelector("img.doc-stamp")) onStampedPrint?.();
   };
 
@@ -188,7 +198,7 @@ export default function DocPrintModal({
   return createPortal(
     <PrintModalShell
       title={title}
-      description="A4 · Print or save as PDF"
+      description={landscape ? "A4 landscape · Print or save as PDF" : "A4 · Print or save as PDF"}
       icon={<FileText size={20} className="text-amber-400" />}
       badge={<span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">{number}</span>}
       onClose={onClose}
@@ -201,11 +211,11 @@ export default function DocPrintModal({
           {headerActions}
         </>
       }
-      maxWidthClass="sm:max-w-4xl"
+      maxWidthClass={landscape ? "sm:max-w-6xl" : "sm:max-w-4xl"}
     >
-      <style>{DOC_SHEET_CSS}</style>
+      <style>{DOC_SHEET_CSS + extraCss}</style>
       <div className="p-3 sm:p-5 bg-zinc-800/40" ref={sheetRef}>
-        <ScaledPreview designWidth={A4_PORTRAIT_PX}>{children(stamp.src)}</ScaledPreview>
+        <ScaledPreview designWidth={landscape ? A4_LANDSCAPE_PX : A4_PORTRAIT_PX}>{children(stamp.src)}</ScaledPreview>
       </div>
     </PrintModalShell>,
     document.body
